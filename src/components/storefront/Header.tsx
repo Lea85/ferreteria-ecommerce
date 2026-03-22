@@ -11,6 +11,7 @@ import {
   Menu,
   Package,
   Search,
+  Settings,
   ShoppingCart,
   Tag,
   User,
@@ -117,6 +118,20 @@ export function Header() {
                 </Link>
               </Button>
             </nav>
+
+            {isLoggedIn && ((session.user as any)?.role === "ADMIN" || (session.user as any)?.role === "SUPER_ADMIN") ? (
+              <Button
+                variant="outline"
+                size="sm"
+                asChild
+                className="hidden gap-1.5 border-primary/30 text-primary hover:bg-primary hover:text-primary-foreground sm:inline-flex"
+              >
+                <Link href="/admin/dashboard">
+                  <Settings className="size-4" />
+                  Admin
+                </Link>
+              </Button>
+            ) : null}
 
             {isLoggedIn ? (
               <DropdownMenu>
@@ -260,6 +275,16 @@ export function Header() {
 
           {isLoggedIn ? (
             <>
+              {((session?.user as any)?.role === "ADMIN" || (session?.user as any)?.role === "SUPER_ADMIN") && (
+                <Link
+                  href="/admin/dashboard"
+                  className="flex items-center gap-2 rounded-md bg-primary/10 px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/20"
+                  onClick={() => setMobileOpen(false)}
+                >
+                  <Settings className="size-4" />
+                  Panel de administración
+                </Link>
+              )}
               <Link
                 href="/mi-cuenta/perfil"
                 className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium hover:bg-muted"
