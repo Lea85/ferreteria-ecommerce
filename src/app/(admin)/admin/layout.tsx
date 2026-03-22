@@ -15,7 +15,7 @@ export default async function AdminLayout({
   const user = bypass
     ? {
         name: "Administrador",
-        email: "dev@ferresanit.local",
+        email: "dev@ferrosan.local",
         role: "ADMIN" as const,
       }
     : session?.user;

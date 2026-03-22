@@ -1,4 +1,4 @@
-# FerreSanit — E-Commerce para Ferretería y Casa de Sanitarios
+# FerroSan — E-Commerce para Ferretería y Casa de Sanitarios
 
 Plataforma de e-commerce completa para ferretería y casa de sanitarios, con soporte B2C y B2B (gremios/mayoristas), sistema de precios dinámicos y adaptada al mercado argentino.
 
@@ -40,7 +40,7 @@ npm run dev
 
 | Rol | Email | Contraseña |
 |-----|-------|------------|
-| Admin | admin@ferresanit.com | admin123 |
+| Admin | admin@ferrosan.com | admin123 |
 | Consumidor | juan@example.com | user123 |
 | Gremio | carlos.plomero@example.com | user123 |
 | Mayorista | constructora@example.com | user123 |

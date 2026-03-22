@@ -74,7 +74,7 @@ export function Sidebar({ user }: SidebarProps) {
   return (
     <>
       <div className="fixed left-0 top-0 z-40 flex h-14 w-full items-center justify-between border-b border-border bg-card px-4 lg:hidden">
-        <span className="text-sm font-semibold text-primary">FerreSanit Admin</span>
+        <span className="text-sm font-semibold text-primary">FerroSan Admin</span>
         <Button
           type="button"
           variant="ghost"
@@ -104,7 +104,7 @@ export function Sidebar({ user }: SidebarProps) {
       >
         <div className="hidden h-16 items-center border-b border-border px-6 lg:flex">
           <Link href="/admin/dashboard" className="text-lg font-bold text-primary">
-            FerreSanit Admin
+            FerroSan Admin
           </Link>
         </div>
 

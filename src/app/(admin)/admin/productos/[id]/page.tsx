@@ -30,7 +30,7 @@ const MOCK_PRODUCT = {
   categoryIds: ["c1", "c5"],
   isActive: true,
   isFeatured: true,
-  metaTitle: "Grifería cocina Peirano Dalia | FerreSanit",
+  metaTitle: "Grifería cocina Peirano Dalia | FerroSan",
   metaDesc: "Monocomando para cocina con garantía oficial Peirano.",
   variants: [
     {

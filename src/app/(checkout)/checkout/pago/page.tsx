@@ -77,9 +77,9 @@ export default function CheckoutPagoPage() {
             <Separator className="my-3" />
             <p>Banco Galicia — Cuenta corriente en pesos</p>
             <p className="mt-1 font-mono text-xs">CBU: 00701234-0000000000123456</p>
-            <p className="font-mono text-xs">Alias: FERRESANIT.VENTAS</p>
+            <p className="font-mono text-xs">Alias: FERROSAN.VENTAS</p>
             <p className="mt-2 text-xs text-muted-foreground">
-              Enviá el comprobante a ventas@ferresanit.com.ar con tu número de
+              Enviá el comprobante a ventas@ferrosan.com.ar con tu número de
               pedido.
             </p>
           </div>

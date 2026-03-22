@@ -108,7 +108,7 @@ export default function PedidosPage() {
                     <Separator className="my-4" />
                     <p className="text-xs text-muted-foreground">
                       Seguimiento por email y WhatsApp. Ante dudas escribinos a
-                      ventas@ferresanit.com.ar
+                      ventas@ferrosan.com.ar
                     </p>
                   </CardContent>
                 </div>

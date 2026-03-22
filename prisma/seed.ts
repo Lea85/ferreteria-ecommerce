@@ -17,12 +17,12 @@ async function main() {
   // Admin user
   const adminPassword = await bcrypt.hash("admin123", 10);
   const admin = await prisma.user.upsert({
-    where: { email: "admin@ferresanit.com" },
+    where: { email: "admin@ferrosan.com" },
     update: {},
     create: {
-      email: "admin@ferresanit.com",
+      email: "admin@ferrosan.com",
       name: "Admin",
-      lastName: "FerreSanit",
+      lastName: "FerroSan",
       passwordHash: adminPassword,
       role: "ADMIN",
       customerType: "CONSUMER",
@@ -163,7 +163,7 @@ async function main() {
       shortDesc: "Monocomando para baño línea Puelo, terminación cromada",
       brandId: fv.id,
       isFeatured: true,
-      metaTitle: "Grifería FV Puelo Monocomando Baño | FerreSanit",
+      metaTitle: "Grifería FV Puelo Monocomando Baño | FerroSan",
       metaDesc: "Grifería FV Puelo monocomando para baño con terminación cromada. Comprá online con envío a todo el país.",
       categories: { create: [{ categoryId: griferias.id }] },
       variants: {
@@ -387,7 +387,7 @@ async function main() {
   await prisma.setting.upsert({
     where: { key: "store_name" },
     update: {},
-    create: { key: "store_name", value: "FerreSanit" },
+    create: { key: "store_name", value: "FerroSan" },
   });
   await prisma.setting.upsert({
     where: { key: "store_address" },

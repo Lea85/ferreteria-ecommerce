@@ -60,7 +60,7 @@ export const DEFAULT_PAGE_SIZE = 24;
 
 export const MAX_PAGE_SIZE = 100;
 
-export const SITE_NAME = "FerreSanit";
+export const SITE_NAME = "FerroSan";
 export const SITE_TAGLINE = "Ferretería y Casa de Sanitarios";
 export const FREE_SHIPPING_THRESHOLD = 100_000;
 
@@ -73,5 +73,5 @@ export const NAV_CATEGORIES = [
   { name: "Pinturería", slug: "pintureria" },
 ] as const;
 
-export const RECENT_SEARCHES_KEY = "ferresanit-recent-searches";
+export const RECENT_SEARCHES_KEY = "ferrosan-recent-searches";
 export const MAX_RECENT_SEARCHES = 8;

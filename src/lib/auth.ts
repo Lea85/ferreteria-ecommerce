@@ -66,7 +66,7 @@ export const {
     }),
   ],
   callbacks: {
-    authorized: authConfig.callbacks?.authorized,
+    ...authConfig.callbacks,
     async signIn({ user }) {
       if (!user?.id) return true;
 
@@ -98,10 +98,9 @@ export const {
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.sub ?? session.user.id;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const user = session.user as any;
-        if (token.role) user.role = token.role;
-        if (token.customerType) user.customerType = token.customerType;
+        const u = session.user as any;
+        if (token.role) u.role = token.role;
+        if (token.customerType) u.customerType = token.customerType;
       }
       return session;
     },
