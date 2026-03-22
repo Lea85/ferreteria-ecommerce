@@ -93,6 +93,7 @@ model User {
   reviews       Review[]
   accounts      Account[] // OAuth accounts
   sessions      Session[]
+  customerCategories UserCustomerCategory[]
 
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
@@ -485,34 +486,43 @@ model CartItem {
 
 model Order {
   id              String         @id @default(cuid())
-  orderNumber     String         @unique // "FER-2026-000001" formato legible
-  userId          String
+  orderNumber     String         @unique
+  userId          String?
   status          OrderStatus    @default(PENDING)
-  customerType    CustomerType   // Snapshot del tipo de cliente al momento de la compra
+  customerType    CustomerType?
   shippingMethod  ShippingMethod
   paymentMethod   PaymentMethod
 
-  // Dirección de envío (snapshot, no referencia para mantener historial)
+  // Datos de contacto
+  customerName    String?
+  customerEmail   String?
+  customerPhone   String?
+
+  // Dirección de envío
   shippingAddressId String?
   shippingAddress   Address? @relation(fields: [shippingAddressId], references: [id])
   shippingName      String?
   shippingStreet    String?
+  shippingFloor     String?
   shippingCity      String?
   shippingState     String?
   shippingPostalCode String?
+  shippingZip       String?
   shippingPhone     String?
 
   // Datos de facturación
-  billingTaxIdType String?
-  billingTaxId     String?
-  billingName      String?
-  billingCompany   String?
+  billingTaxIdType   String?
+  billingTaxId       String?
+  billingName        String?
+  billingDoc         String?
+  billingTaxCondition String?
+  billingCompany     String?
 
   // Montos (todos en ARS)
   subtotal      Decimal @db.Decimal(12, 2)
   discountTotal Decimal @db.Decimal(12, 2) @default(0)
   shippingCost  Decimal @db.Decimal(12, 2) @default(0)
-  taxTotal      Decimal @db.Decimal(12, 2) @default(0) // IVA
+  taxTotal      Decimal @db.Decimal(12, 2) @default(0)
   total         Decimal @db.Decimal(12, 2)
 
   // Cupón aplicado
@@ -521,13 +531,13 @@ model Order {
   couponDiscount Decimal? @db.Decimal(12, 2)
 
   // Datos de pago externo
-  paymentExternalId String? // ID de Mercado Pago
+  paymentExternalId String?
   paymentStatus     String?
-  transferProofUrl  String? // URL del comprobante de transferencia
+  transferProofUrl  String?
 
-  notes String? @db.Text // Notas del cliente
+  notes String? @db.Text
 
-  user   User       @relation(fields: [userId], references: [id])
+  user   User?      @relation(fields: [userId], references: [id])
   coupon Coupon?    @relation(fields: [couponId], references: [id])
   items  OrderItem[]
   statusHistory OrderStatusHistory[]
@@ -545,19 +555,20 @@ model Order {
 model OrderItem {
   id         String @id @default(cuid())
   orderId    String
-  variantId  String
-  productName String  // Snapshot del nombre
-  variantName String? // Snapshot de la variante
-  sku         String  // Snapshot del SKU
+  productId  String?
+  variantId  String?
+  productName String
+  variantName String?
+  sku         String?
   quantity    Int
-  unitPrice   Decimal @db.Decimal(12, 2) // Precio unitario final (con descuentos aplicados)
-  originalPrice Decimal @db.Decimal(12, 2) // Precio original antes de descuentos
+  unitPrice   Decimal @db.Decimal(12, 2)
+  originalPrice Decimal? @db.Decimal(12, 2)
+  subtotal    Decimal @db.Decimal(12, 2)
   discount    Decimal @db.Decimal(12, 2) @default(0)
-  total       Decimal @db.Decimal(12, 2)
-  appliedRules String? @db.Text // JSON con las reglas de descuento aplicadas
+  appliedRules String? @db.Text
 
   order   Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  variant ProductVariant @relation(fields: [variantId], references: [id])
+  variant ProductVariant? @relation(fields: [variantId], references: [id])
 
   @@index([orderId])
   @@map("order_items")
@@ -673,4 +684,39 @@ model Setting {
   updatedAt DateTime @updatedAt
 
   @@map("settings")
+}
+
+// ============================================================================
+// CATEGORIAS DE CLIENTES (beneficios)
+// ============================================================================
+
+model CustomerCategory {
+  id           String  @id @default(cuid())
+  name         String
+  slug         String  @unique
+  description  String?
+  benefitType  String  // DISCOUNT_PERCENT, DISCOUNT_AMOUNT, VOLUME_DISCOUNT, FREE_SHIPPING
+  benefitValue Float   @default(0)
+  minAmount    Float?  // monto minimo de compra
+  minQuantity  Int?    // cantidad minima para volumen
+  isActive     Boolean @default(true)
+
+  users        UserCustomerCategory[]
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("customer_categories")
+}
+
+model UserCustomerCategory {
+  id                 String           @id @default(cuid())
+  userId             String
+  customerCategoryId String
+
+  user               User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customerCategory   CustomerCategory @relation(fields: [customerCategoryId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, customerCategoryId])
+  @@map("user_customer_categories")
 }

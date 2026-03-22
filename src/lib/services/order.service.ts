@@ -208,7 +208,7 @@ export async function createOrder(data: {
             unitPrice: item.unitPrice,
             originalPrice: item.originalPrice,
             discount: item.discount,
-            total: item.total,
+            subtotal: item.total,
             appliedRules: item.appliedRules,
           })),
         },

@@ -5,8 +5,15 @@ import { prisma } from "@/lib/db";
 const PUBLIC_KEYS = [
   "google_maps_address",
   "whatsapp_number",
+  "whatsapp_message",
   "instagram_profile",
   "mercadolibre_url",
+  "bank_name",
+  "bank_account_type",
+  "bank_cbu",
+  "bank_alias",
+  "bank_holder",
+  "bank_email",
 ];
 
 export async function GET(request: Request) {

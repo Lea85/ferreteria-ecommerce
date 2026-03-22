@@ -1,8 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ExternalLink } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
@@ -13,14 +16,18 @@ function titleFromPath(pathname: string): string {
   if (pathname === "/admin/productos") return "Productos";
   if (pathname === "/admin/productos/nuevo") return "Nuevo producto";
   if (pathname.startsWith("/admin/productos/")) return "Editar producto";
-  if (pathname === "/admin/categorias") return "Categorías";
+  if (pathname === "/admin/categorias") return "Categorias";
+  if (pathname === "/admin/categorias-clientes") return "Categorias de clientes";
   if (pathname === "/admin/pedidos") return "Pedidos";
   if (pathname.startsWith("/admin/pedidos/")) return "Detalle del pedido";
   if (pathname === "/admin/usuarios") return "Clientes";
   if (pathname === "/admin/cupones") return "Cupones";
   if (pathname === "/admin/promociones") return "Promociones";
+  if (pathname === "/admin/campanas") return "Campanias";
   if (pathname === "/admin/reportes") return "Reportes";
-  return "Administración";
+  if (pathname === "/admin/newsletter") return "Newsletter";
+  if (pathname === "/admin/redes-sociales") return "Redes sociales";
+  return "Administracion";
 }
 
 function initials(name?: string | null, email?: string | null): string {
@@ -56,7 +63,19 @@ export function AdminHeader({ user, className }: AdminHeaderProps) {
           {title}
         </h1>
       </div>
+
       <div className="flex items-center gap-3">
+        <Button variant="outline" size="sm" asChild className="gap-2 hidden sm:inline-flex">
+          <Link href="/" target="_blank">
+            <ExternalLink className="size-4" />
+            Ver tienda
+          </Link>
+        </Button>
+        <Button variant="outline" size="icon" asChild className="sm:hidden">
+          <Link href="/" target="_blank" aria-label="Ver tienda">
+            <ExternalLink className="size-4" />
+          </Link>
+        </Button>
         <div className="hidden text-right sm:block">
           <p className="text-sm font-medium leading-none text-foreground">
             {user.name ?? "Administrador"}

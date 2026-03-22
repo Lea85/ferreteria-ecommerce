@@ -31,6 +31,7 @@ const nav = [
   { href: "/admin/categorias", label: "Categorías", icon: FolderTree },
   { href: "/admin/pedidos", label: "Pedidos", icon: ShoppingCart },
   { href: "/admin/usuarios", label: "Clientes", icon: Users },
+  { href: "/admin/categorias-clientes", label: "Cat. Clientes", icon: Tag },
   { href: "/admin/cupones", label: "Cupones", icon: Ticket },
   { href: "/admin/promociones", label: "Promociones", icon: Tag },
   { href: "/admin/campanas", label: "Campanias", icon: Image },
