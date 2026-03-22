@@ -14,6 +14,7 @@ const PUBLIC_KEYS = [
   "bank_alias",
   "bank_holder",
   "bank_email",
+  "contact_email",
 ];
 
 export async function GET(request: Request) {

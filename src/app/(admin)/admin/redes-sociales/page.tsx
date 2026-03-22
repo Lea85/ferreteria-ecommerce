@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  Building2, ChevronDown, Instagram, Loader2, MapPin, MessageCircle,
+  Building2, ChevronDown, Instagram, Loader2, Mail, MapPin, MessageCircle,
   Save, ShoppingBag, X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -42,7 +42,11 @@ const SECTIONS: SectionDef[] = [
     fields: [{ key: "mercadolibre_url", label: "URL de Mercado Libre", placeholder: "https://www.mercadolibre.com.ar/perfil/ferrosan" }],
   },
   {
-    key: "bank", title: "Datos bancarios (transferencia)", icon: <Building2 className="size-5 text-blue-600" />,
+    key: "contact", title: "Email de contacto", icon: <Mail className="size-5 text-blue-600" />,
+    fields: [{ key: "contact_email", label: "Email donde se reciben los mensajes del formulario de contacto", placeholder: "ventas@ferrosan.com.ar" }],
+  },
+  {
+    key: "bank", title: "Datos bancarios (transferencia)", icon: <Building2 className="size-5 text-indigo-600" />,
     fields: [
       { key: "bank_name", label: "Nombre del banco", placeholder: "Banco Galicia" },
       { key: "bank_account_type", label: "Tipo de cuenta", placeholder: "Cuenta corriente en pesos" },
