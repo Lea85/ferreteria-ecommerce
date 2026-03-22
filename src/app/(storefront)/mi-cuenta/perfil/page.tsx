@@ -1,6 +1,8 @@
 "use client";
 
 import { useSession } from "next-auth/react";
+import { useEffect, useState } from "react";
+import { Bell, BellOff, Loader2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,6 +20,17 @@ import type { CustomerType } from "@/lib/constants";
 
 export default function PerfilPage() {
   const { data: session, status } = useSession();
+  const [newsletterSubscribed, setNewsletterSubscribed] = useState<boolean | null>(null);
+  const [nlLoading, setNlLoading] = useState(false);
+
+  useEffect(() => {
+    if (status === "authenticated") {
+      fetch("/api/newsletter")
+        .then((r) => r.json())
+        .then((d) => setNewsletterSubscribed(d.subscribed))
+        .catch(() => setNewsletterSubscribed(false));
+    }
+  }, [status]);
 
   if (status === "loading") {
     return (
@@ -36,6 +49,23 @@ export default function PerfilPage() {
   const badgeLabel = customerType
     ? CUSTOMER_TYPE_LABELS[customerType]
     : "Consumidor final";
+
+  async function toggleNewsletter() {
+    setNlLoading(true);
+    try {
+      if (newsletterSubscribed) {
+        await fetch("/api/newsletter", { method: "DELETE" });
+        setNewsletterSubscribed(false);
+      } else {
+        await fetch("/api/newsletter", { method: "POST" });
+        setNewsletterSubscribed(true);
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setNlLoading(false);
+    }
+  }
 
   return (
     <div className="space-y-8">
@@ -81,6 +111,39 @@ export default function PerfilPage() {
               Guardar cambios
             </Button>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
+          <CardTitle className="text-lg">Newsletter</CardTitle>
+          {newsletterSubscribed !== null && (
+            <Badge variant={newsletterSubscribed ? "default" : "outline"}>
+              {newsletterSubscribed ? "Suscripto" : "No suscripto"}
+            </Badge>
+          )}
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground mb-4">
+            {newsletterSubscribed
+              ? "Estás recibiendo nuestras ofertas, novedades y tips por email."
+              : "No estás suscripto al newsletter. Activalo para recibir ofertas y novedades."}
+          </p>
+          <Button
+            variant={newsletterSubscribed ? "outline" : "default"}
+            onClick={toggleNewsletter}
+            disabled={nlLoading || newsletterSubscribed === null}
+            className="gap-2"
+          >
+            {nlLoading ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : newsletterSubscribed ? (
+              <BellOff className="size-4" />
+            ) : (
+              <Bell className="size-4" />
+            )}
+            {newsletterSubscribed ? "Cancelar suscripción" : "Suscribirme al newsletter"}
+          </Button>
         </CardContent>
       </Card>
 

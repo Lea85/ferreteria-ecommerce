@@ -84,6 +84,7 @@ model User {
   companyName   String?      // Razón social (para WHOLESALE)
   avatarUrl     String?
   image         String? // Auth.js (avatar OAuth); opcional si no se usa proveedor social
+  newsletterOptIn Boolean @default(false)
 
   addresses     Address[]
   orders        Order[]

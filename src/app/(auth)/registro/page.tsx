@@ -27,6 +27,14 @@ import {
 } from "@/components/ui/select";
 import { SITE_NAME } from "@/lib/constants";
 
+function RequiredLabel({ htmlFor, children }: { htmlFor: string; children: React.ReactNode }) {
+  return (
+    <Label htmlFor={htmlFor}>
+      {children} <span className="text-destructive">*</span>
+    </Label>
+  );
+}
+
 export default function RegistroPage() {
   const router = useRouter();
 
@@ -35,6 +43,7 @@ export default function RegistroPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [newsletterOptIn, setNewsletterOptIn] = useState(true);
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -81,6 +90,7 @@ export default function RegistroPage() {
           customerType: customerType === "pro" ? "TRADE" : "CONSUMER",
           cuit: customerType === "pro" ? cuit : undefined,
           company: customerType === "pro" ? company : undefined,
+          newsletterOptIn,
         }),
       });
 
@@ -144,16 +154,16 @@ export default function RegistroPage() {
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="name">Nombre</Label>
+              <RequiredLabel htmlFor="name">Nombre</RequiredLabel>
               <Input id="name" name="name" required disabled={loading} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="lastname">Apellido</Label>
+              <RequiredLabel htmlFor="lastname">Apellido</RequiredLabel>
               <Input id="lastname" name="lastname" required disabled={loading} />
             </div>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <RequiredLabel htmlFor="email">Email</RequiredLabel>
             <Input id="email" name="email" type="email" required disabled={loading} />
           </div>
           <div className="space-y-2">
@@ -161,7 +171,7 @@ export default function RegistroPage() {
             <Input id="phone" name="phone" type="tel" disabled={loading} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="password">Contraseña</Label>
+            <RequiredLabel htmlFor="password">Contraseña</RequiredLabel>
             <Input
               id="password"
               name="password"
@@ -172,7 +182,7 @@ export default function RegistroPage() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="password2">Confirmar contraseña</Label>
+            <RequiredLabel htmlFor="password2">Confirmar contraseña</RequiredLabel>
             <Input
               id="password2"
               name="password2"
@@ -184,13 +194,13 @@ export default function RegistroPage() {
           </div>
 
           <div className="space-y-2">
-            <Label>Tipo de cliente</Label>
+            <RequiredLabel htmlFor="customerType">Tipo de cliente</RequiredLabel>
             <Select
               value={customerType}
               onValueChange={(v) => setCustomerType(v as "consumer" | "pro")}
               disabled={loading}
             >
-              <SelectTrigger>
+              <SelectTrigger id="customerType">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -225,7 +235,19 @@ export default function RegistroPage() {
               disabled={loading}
             />
             <Label htmlFor="terms" className="cursor-pointer text-sm leading-snug">
-              Acepto los términos y condiciones y la política de privacidad.
+              Acepto los términos y condiciones y la política de privacidad. <span className="text-destructive">*</span>
+            </Label>
+          </div>
+
+          <div className="flex items-start gap-3">
+            <Checkbox
+              id="newsletter"
+              checked={newsletterOptIn}
+              onCheckedChange={(checked) => setNewsletterOptIn(checked === true)}
+              disabled={loading}
+            />
+            <Label htmlFor="newsletter" className="cursor-pointer text-sm leading-snug">
+              Quiero recibir ofertas, novedades y tips por email (newsletter).
             </Label>
           </div>
 
@@ -243,6 +265,10 @@ export default function RegistroPage() {
               "Crear cuenta"
             )}
           </Button>
+
+          <p className="text-xs text-muted-foreground text-center">
+            Los campos marcados con <span className="text-destructive">*</span> son obligatorios.
+          </p>
         </form>
       </CardContent>
       <CardFooter className="justify-center text-sm">

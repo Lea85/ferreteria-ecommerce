@@ -6,8 +6,10 @@ import { signOut } from "next-auth/react";
 import {
   BarChart3,
   FolderTree,
+  Globe,
   LayoutDashboard,
   LogOut,
+  Mail,
   Menu,
   Package,
   ShoppingCart,
@@ -31,6 +33,8 @@ const nav = [
   { href: "/admin/cupones", label: "Cupones", icon: Ticket },
   { href: "/admin/promociones", label: "Promociones", icon: Tag },
   { href: "/admin/reportes", label: "Reportes", icon: BarChart3 },
+  { href: "/admin/newsletter", label: "Newsletter", icon: Mail },
+  { href: "/admin/redes-sociales", label: "Redes sociales", icon: Globe },
 ];
 
 export type AdminSidebarUser = {

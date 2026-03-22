@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { name, lastName, email, password, phone, customerType, cuit, company } = body;
+    const { name, lastName, email, password, phone, customerType, cuit, company, newsletterOptIn } = body;
 
     if (!name || !email || !password) {
       return NextResponse.json(
@@ -50,6 +50,7 @@ export async function POST(request: Request) {
         taxIdType: isPro && cuit ? "CUIT" : null,
         taxId: isPro ? cuit?.trim() || null : null,
         companyName: isPro ? company?.trim() || null : null,
+        newsletterOptIn: newsletterOptIn === true,
       },
     });
 
