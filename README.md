@@ -1,36 +1,78 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# FerreSanit — E-Commerce para Ferretería y Casa de Sanitarios
 
-## Getting Started
+Plataforma de e-commerce completa para ferretería y casa de sanitarios, con soporte B2C y B2B (gremios/mayoristas), sistema de precios dinámicos y adaptada al mercado argentino.
 
-First, run the development server:
+## Stack Tecnológico
+
+- **Frontend/Backend**: Next.js 16 (App Router) + TypeScript
+- **UI**: Tailwind CSS 4 + shadcn/ui + Lucide Icons
+- **Base de datos**: PostgreSQL (Supabase)
+- **ORM**: Prisma 7
+- **Auth**: Auth.js v5 (Credentials + Google OAuth)
+- **Estado**: Zustand (carrito) + TanStack Query
+- **Pagos**: Mercado Pago (configuración pendiente)
+- **Deploy**: Vercel
+
+## Inicio Rápido
 
 ```bash
+# Instalar dependencias
+npm install
+
+# Configurar variables de entorno
+cp .env.example .env.local
+# Editar .env.local con tus credenciales de Supabase
+
+# Generar cliente Prisma
+npx prisma generate
+
+# Crear tablas en Supabase
+npx prisma db push
+
+# Cargar datos de ejemplo
+npx tsx prisma/seed.ts
+
+# Iniciar desarrollo
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Usuarios de Prueba (después del seed)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Rol | Email | Contraseña |
+|-----|-------|------------|
+| Admin | admin@ferresanit.com | admin123 |
+| Consumidor | juan@example.com | user123 |
+| Gremio | carlos.plomero@example.com | user123 |
+| Mayorista | constructora@example.com | user123 |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Variables de Entorno
 
-## Learn More
+Ver `.env.example` para la lista completa. Las mínimas necesarias:
 
-To learn more about Next.js, take a look at the following resources:
+- `DATABASE_URL` — Connection string de Supabase (pooler, modo Transaction)
+- `DIRECT_URL` — Connection string directa de Supabase (para migraciones)
+- `AUTH_SECRET` — Secreto para Auth.js
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Estructura del Proyecto
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+src/
+├── app/
+│   ├── (storefront)/    # Tienda pública (home, productos, carrito, checkout)
+│   ├── (admin)/         # Panel de administración
+│   ├── (auth)/          # Login y registro
+│   ├── (checkout)/      # Proceso de compra
+│   └── api/             # API routes (auth, webhooks)
+├── components/
+│   ├── ui/              # Componentes shadcn/ui
+│   ├── storefront/      # Componentes de la tienda
+│   └── admin/           # Componentes del admin
+├── lib/
+│   ├── services/        # Lógica de negocio (pricing, stock, orders)
+│   ├── validators/      # Schemas Zod
+│   ├── auth.ts          # Configuración Auth.js
+│   ├── db.ts            # Cliente Prisma
+│   └── constants.ts     # Constantes y labels
+├── stores/              # Zustand stores (carrito)
+└── types/               # TypeScript types
+```

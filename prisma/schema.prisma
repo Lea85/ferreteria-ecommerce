@@ -1,0 +1,674 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum CustomerType {
+  CONSUMER  // Consumidor final - precio de lista
+  TRADE     // Gremio / Instalador - descuento automático
+  WHOLESALE // Mayorista / Empresa - precios diferenciados
+}
+
+enum UserRole {
+  CUSTOMER
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum OrderStatus {
+  PENDING            // Pedido creado, esperando pago
+  PAYMENT_PENDING    // Transferencia subida, esperando validación
+  PAYMENT_APPROVED   // Pago confirmado
+  PREPARING          // En preparación
+  SHIPPED            // Despachado
+  DELIVERED          // Entregado
+  CANCELLED          // Cancelado
+  REFUNDED           // Reembolsado
+}
+
+enum PaymentMethod {
+  MERCADO_PAGO
+  BANK_TRANSFER
+  CASH_ON_PICKUP
+}
+
+enum ShippingMethod {
+  STORE_PICKUP       // Retiro en sucursal
+  OWN_DELIVERY       // Flete propio
+  CARRIER            // Correo (Andreani, etc.)
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+enum PriceRuleType {
+  ROLE               // Descuento por tipo de cliente
+  VOLUME             // Descuento por cantidad
+  PROMO              // Promoción temporal
+}
+
+enum PriceRuleScope {
+  ALL_PRODUCTS       // Aplica a todo el catálogo
+  SPECIFIC_PRODUCTS  // Aplica a productos seleccionados
+  SPECIFIC_CATEGORIES // Aplica a categorías seleccionadas
+  SPECIFIC_BRANDS    // Aplica a marcas seleccionadas
+}
+
+// ============================================================================
+// USUARIOS Y AUTENTICACIÓN
+// ============================================================================
+
+model User {
+  id            String       @id @default(cuid())
+  email         String       @unique
+  emailVerified DateTime? // Auth.js / OAuth
+  passwordHash  String?
+  name          String
+  lastName      String?
+  phone         String?
+  customerType  CustomerType @default(CONSUMER)
+  role          UserRole     @default(CUSTOMER)
+  isApproved    Boolean      @default(true) // false para TRADE/WHOLESALE hasta que admin apruebe
+  taxIdType     String?      // "DNI" | "CUIT" | "CUIL"
+  taxId         String?      // Número de documento
+  companyName   String?      // Razón social (para WHOLESALE)
+  avatarUrl     String?
+  image         String? // Auth.js (avatar OAuth); opcional si no se usa proveedor social
+
+  addresses     Address[]
+  orders        Order[]
+  favorites     Favorite[]
+  cartItems     CartItem[]
+  reviews       Review[]
+  accounts      Account[] // OAuth accounts
+  sessions      Session[]
+
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([email])
+  @@index([customerType])
+  @@map("users")
+}
+
+// Requerido por @auth/prisma-adapter (sesión en DB si se usa estrategia database; JWT no lo usa pero el adapter lo expone)
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String  // "oauth" | "credentials"
+  provider          String  // "google" | "credentials"
+  providerAccountId String
+  refreshToken      String?
+  accessToken       String?
+  expiresAt         Int?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Address {
+  id           String  @id @default(cuid())
+  userId       String
+  label        String? // "Casa", "Trabajo", etc.
+  street       String
+  number       String
+  floor        String?
+  apartment    String?
+  city         String
+  state        String  // Provincia
+  postalCode   String
+  country      String  @default("AR")
+  isDefault    Boolean @default(false)
+  instructions String? // Instrucciones de entrega
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("addresses")
+}
+
+// ============================================================================
+// CATÁLOGO: CATEGORÍAS, MARCAS Y ATRIBUTOS
+// ============================================================================
+
+model Category {
+  id          String  @id @default(cuid())
+  name        String
+  slug        String  @unique
+  description String?
+  imageUrl    String?
+  parentId    String?
+  position    Int     @default(0)
+  isActive    Boolean @default(true)
+  metaTitle   String?
+  metaDesc    String?
+
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+
+  products          ProductCategory[]
+  priceRuleCategories PriceRuleCategory[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([parentId])
+  @@index([slug])
+  @@map("categories")
+}
+
+model Brand {
+  id       String  @id @default(cuid())
+  name     String
+  slug     String  @unique
+  logoUrl  String?
+  isActive Boolean @default(true)
+
+  products        Product[]
+  priceRuleBrands PriceRuleBrand[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("brands")
+}
+
+model Attribute {
+  id       String @id @default(cuid())
+  name     String @unique // "Color", "Medida", "Material"
+  position Int    @default(0)
+
+  values AttributeValue[]
+
+  @@map("attributes")
+}
+
+model AttributeValue {
+  id          String @id @default(cuid())
+  attributeId String
+  value       String // "Rojo", "1/2 pulgada", "Acero Inoxidable"
+  position    Int    @default(0)
+
+  attribute Attribute              @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  variants  VariantAttributeValue[]
+
+  @@unique([attributeId, value])
+  @@map("attribute_values")
+}
+
+// ============================================================================
+// PRODUCTOS Y VARIANTES
+// ============================================================================
+
+model Product {
+  id           String  @id @default(cuid())
+  name         String
+  slug         String  @unique
+  description  String? @db.Text
+  shortDesc    String?
+  brandId      String?
+  isActive     Boolean @default(true)
+  isFeatured   Boolean @default(false) // Producto destacado en home
+  metaTitle    String?
+  metaDesc     String?
+
+  brand      Brand?           @relation(fields: [brandId], references: [id])
+  categories ProductCategory[]
+  variants   ProductVariant[]
+  images     ProductImage[]
+  reviews    Review[]
+  relatedTo  ProductRelation[] @relation("RelatedFrom")
+  relatedBy  ProductRelation[] @relation("RelatedTo")
+  priceRuleProducts PriceRuleProduct[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([slug])
+  @@index([brandId])
+  @@index([isFeatured])
+  @@map("products")
+}
+
+model ProductCategory {
+  productId  String
+  categoryId String
+
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([productId, categoryId])
+  @@map("product_categories")
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  url       String
+  altText   String?
+  position  Int     @default(0)
+  isPrimary Boolean @default(false)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@map("product_images")
+}
+
+model ProductVariant {
+  id            String  @id @default(cuid())
+  productId     String
+  sku           String  @unique
+  name          String? // "Rojo - Grande" (generado automático o manual)
+  price         Decimal @db.Decimal(12, 2) // Precio base (consumidor final)
+  comparePrice  Decimal? @db.Decimal(12, 2) // Precio anterior (para mostrar tachado)
+  costPrice     Decimal? @db.Decimal(12, 2) // Costo (solo visible para admin)
+  stock         Int     @default(0)
+  lowStockThreshold Int @default(5) // Umbral para alerta de bajo stock
+  weight        Decimal? @db.Decimal(8, 2) // Peso en kg (para cálculo de envío)
+  barcode       String?
+  isActive      Boolean @default(true)
+
+  product    Product                 @relation(fields: [productId], references: [id], onDelete: Cascade)
+  attributes VariantAttributeValue[]
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId])
+  @@index([sku])
+  @@index([stock])
+  @@map("product_variants")
+}
+
+model VariantAttributeValue {
+  variantId        String
+  attributeValueId String
+
+  variant        ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  attributeValue AttributeValue @relation(fields: [attributeValueId], references: [id], onDelete: Cascade)
+
+  @@id([variantId, attributeValueId])
+  @@map("variant_attribute_values")
+}
+
+// Cross-selling / Up-selling
+model ProductRelation {
+  id            String @id @default(cuid())
+  fromProductId String
+  toProductId   String
+  type          String // "CROSS_SELL" | "UP_SELL" | "COMPLEMENTARY"
+  position      Int    @default(0)
+
+  fromProduct Product @relation("RelatedFrom", fields: [fromProductId], references: [id], onDelete: Cascade)
+  toProduct   Product @relation("RelatedTo", fields: [toProductId], references: [id], onDelete: Cascade)
+
+  @@unique([fromProductId, toProductId, type])
+  @@map("product_relations")
+}
+
+model Review {
+  id        String @id @default(cuid())
+  productId String
+  userId    String
+  rating    Int    // 1-5
+  comment   String? @db.Text
+  isVisible Boolean @default(true)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([productId, userId])
+  @@map("reviews")
+}
+
+// ============================================================================
+// SISTEMA DE PRECIOS Y DESCUENTOS (Price Rules)
+// ============================================================================
+
+model PriceRule {
+  id            String         @id @default(cuid())
+  name          String         // "Descuento Gremios 15%", "Promo Hot Sale", etc.
+  description   String?
+  type          PriceRuleType  // ROLE, VOLUME, PROMO
+  scope         PriceRuleScope @default(ALL_PRODUCTS)
+  customerType  CustomerType?  // Solo para type = ROLE (a qué tipo aplica)
+  minQuantity   Int?           // Solo para type = VOLUME (cantidad mínima)
+  discountType  DiscountType   // PERCENTAGE o FIXED_AMOUNT
+  discountValue Decimal        @db.Decimal(10, 2) // % o monto fijo
+  priority      Int            @default(0) // Mayor prioridad = se evalúa primero
+  isActive      Boolean        @default(true)
+  startsAt      DateTime?      // Fecha de inicio (null = siempre activa)
+  endsAt        DateTime?      // Fecha de fin (null = sin vencimiento)
+  isStackable   Boolean        @default(false) // ¿Se puede acumular con otras reglas?
+
+  products   PriceRuleProduct[]
+  categories PriceRuleCategory[]
+  brands     PriceRuleBrand[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type, isActive])
+  @@index([customerType])
+  @@index([startsAt, endsAt])
+  @@map("price_rules")
+}
+
+// Alcance de la regla: a qué productos aplica
+model PriceRuleProduct {
+  priceRuleId String
+  productId   String
+
+  priceRule PriceRule @relation(fields: [priceRuleId], references: [id], onDelete: Cascade)
+  product  Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([priceRuleId, productId])
+  @@map("price_rule_products")
+}
+
+model PriceRuleCategory {
+  priceRuleId String
+  categoryId  String
+
+  priceRule PriceRule @relation(fields: [priceRuleId], references: [id], onDelete: Cascade)
+  category  Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([priceRuleId, categoryId])
+  @@map("price_rule_categories")
+}
+
+model PriceRuleBrand {
+  priceRuleId String
+  brandId     String
+
+  priceRule PriceRule @relation(fields: [priceRuleId], references: [id], onDelete: Cascade)
+  brand     Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@id([priceRuleId, brandId])
+  @@map("price_rule_brands")
+}
+
+// ============================================================================
+// CUPONES
+// ============================================================================
+
+model Coupon {
+  id            String       @id @default(cuid())
+  code          String       @unique
+  description   String?
+  discountType  DiscountType
+  discountValue Decimal      @db.Decimal(10, 2)
+  minPurchase   Decimal?     @db.Decimal(12, 2) // Compra mínima requerida
+  maxUses       Int?         // Límite de usos totales (null = ilimitado)
+  maxUsesPerUser Int?        // Límite por usuario
+  usedCount     Int          @default(0)
+  isActive      Boolean      @default(true)
+  startsAt      DateTime?
+  expiresAt     DateTime?
+  appliesToCustomerType CustomerType? // null = todos los tipos
+
+  orders Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([code])
+  @@map("coupons")
+}
+
+// ============================================================================
+// CARRITO
+// ============================================================================
+
+model CartItem {
+  id        String @id @default(cuid())
+  userId    String
+  variantId String
+  quantity  Int    @default(1)
+
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, variantId])
+  @@index([userId])
+  @@map("cart_items")
+}
+
+// ============================================================================
+// PEDIDOS
+// ============================================================================
+
+model Order {
+  id              String         @id @default(cuid())
+  orderNumber     String         @unique // "FER-2026-000001" formato legible
+  userId          String
+  status          OrderStatus    @default(PENDING)
+  customerType    CustomerType   // Snapshot del tipo de cliente al momento de la compra
+  shippingMethod  ShippingMethod
+  paymentMethod   PaymentMethod
+
+  // Dirección de envío (snapshot, no referencia para mantener historial)
+  shippingAddressId String?
+  shippingAddress   Address? @relation(fields: [shippingAddressId], references: [id])
+  shippingName      String?
+  shippingStreet    String?
+  shippingCity      String?
+  shippingState     String?
+  shippingPostalCode String?
+  shippingPhone     String?
+
+  // Datos de facturación
+  billingTaxIdType String?
+  billingTaxId     String?
+  billingName      String?
+  billingCompany   String?
+
+  // Montos (todos en ARS)
+  subtotal      Decimal @db.Decimal(12, 2)
+  discountTotal Decimal @db.Decimal(12, 2) @default(0)
+  shippingCost  Decimal @db.Decimal(12, 2) @default(0)
+  taxTotal      Decimal @db.Decimal(12, 2) @default(0) // IVA
+  total         Decimal @db.Decimal(12, 2)
+
+  // Cupón aplicado
+  couponId    String?
+  couponCode  String?
+  couponDiscount Decimal? @db.Decimal(12, 2)
+
+  // Datos de pago externo
+  paymentExternalId String? // ID de Mercado Pago
+  paymentStatus     String?
+  transferProofUrl  String? // URL del comprobante de transferencia
+
+  notes String? @db.Text // Notas del cliente
+
+  user   User       @relation(fields: [userId], references: [id])
+  coupon Coupon?    @relation(fields: [couponId], references: [id])
+  items  OrderItem[]
+  statusHistory OrderStatusHistory[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([orderNumber])
+  @@index([createdAt])
+  @@map("orders")
+}
+
+model OrderItem {
+  id         String @id @default(cuid())
+  orderId    String
+  variantId  String
+  productName String  // Snapshot del nombre
+  variantName String? // Snapshot de la variante
+  sku         String  // Snapshot del SKU
+  quantity    Int
+  unitPrice   Decimal @db.Decimal(12, 2) // Precio unitario final (con descuentos aplicados)
+  originalPrice Decimal @db.Decimal(12, 2) // Precio original antes de descuentos
+  discount    Decimal @db.Decimal(12, 2) @default(0)
+  total       Decimal @db.Decimal(12, 2)
+  appliedRules String? @db.Text // JSON con las reglas de descuento aplicadas
+
+  order   Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variant ProductVariant @relation(fields: [variantId], references: [id])
+
+  @@index([orderId])
+  @@map("order_items")
+}
+
+model OrderStatusHistory {
+  id        String      @id @default(cuid())
+  orderId   String
+  fromStatus OrderStatus?
+  toStatus   OrderStatus
+  note      String?
+  changedBy String?     // ID del admin que cambió el estado
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+  @@map("order_status_history")
+}
+
+// ============================================================================
+// FAVORITOS
+// ============================================================================
+
+model Favorite {
+  id        String @id @default(cuid())
+  userId    String
+  productId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+  @@map("favorites")
+}
+
+// ============================================================================
+// CONFIGURACIÓN DE ENVÍOS
+// ============================================================================
+
+model ShippingZone {
+  id          String  @id @default(cuid())
+  name        String  // "CABA", "GBA Norte", etc.
+  isActive    Boolean @default(true)
+
+  postalCodes ShippingZonePostalCode[]
+  rates       ShippingRate[]
+
+  @@map("shipping_zones")
+}
+
+model ShippingZonePostalCode {
+  id             String @id @default(cuid())
+  shippingZoneId String
+  postalCode     String
+  // Puede ser código exacto o rango: "1000" o "1000-1999"
+
+  zone ShippingZone @relation(fields: [shippingZoneId], references: [id], onDelete: Cascade)
+
+  @@unique([shippingZoneId, postalCode])
+  @@index([postalCode])
+  @@map("shipping_zone_postal_codes")
+}
+
+model ShippingRate {
+  id             String  @id @default(cuid())
+  shippingZoneId String
+  minWeight      Decimal? @db.Decimal(8, 2) // Peso mínimo en kg
+  maxWeight      Decimal? @db.Decimal(8, 2) // Peso máximo en kg
+  price          Decimal  @db.Decimal(12, 2)
+  estimatedDays  String?  // "2-4 días hábiles"
+
+  zone ShippingZone @relation(fields: [shippingZoneId], references: [id], onDelete: Cascade)
+
+  @@map("shipping_rates")
+}
+
+// ============================================================================
+// BANNERS Y CONTENIDO PROMOCIONAL
+// ============================================================================
+
+model Banner {
+  id        String   @id @default(cuid())
+  title     String?
+  subtitle  String?
+  imageUrl  String
+  linkUrl   String?
+  position  String   // "HOME_HERO", "HOME_SECONDARY", "CATEGORY_TOP"
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  startsAt  DateTime?
+  endsAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([position, isActive])
+  @@map("banners")
+}
+
+// ============================================================================
+// CONFIGURACIÓN GENERAL
+// ============================================================================
+
+model Setting {
+  id    String @id @default(cuid())
+  key   String @unique // "store_name", "store_address", "iva_rate", etc.
+  value String @db.Text
+
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}

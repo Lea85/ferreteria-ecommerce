@@ -1,0 +1,76 @@
+"use client";
+
+import { usePathname } from "next/navigation";
+
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
+
+import type { AdminSidebarUser } from "./Sidebar";
+
+function titleFromPath(pathname: string): string {
+  if (pathname === "/admin/dashboard") return "Dashboard";
+  if (pathname === "/admin/productos") return "Productos";
+  if (pathname === "/admin/productos/nuevo") return "Nuevo producto";
+  if (pathname.startsWith("/admin/productos/")) return "Editar producto";
+  if (pathname === "/admin/categorias") return "Categorías";
+  if (pathname === "/admin/pedidos") return "Pedidos";
+  if (pathname.startsWith("/admin/pedidos/")) return "Detalle del pedido";
+  if (pathname === "/admin/usuarios") return "Clientes";
+  if (pathname === "/admin/cupones") return "Cupones";
+  if (pathname === "/admin/promociones") return "Promociones";
+  if (pathname === "/admin/reportes") return "Reportes";
+  return "Administración";
+}
+
+function initials(name?: string | null, email?: string | null): string {
+  if (name) {
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2)
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    return name.slice(0, 2).toUpperCase();
+  }
+  if (email) return email.slice(0, 2).toUpperCase();
+  return "AD";
+}
+
+export type AdminHeaderProps = {
+  user: AdminSidebarUser;
+  className?: string;
+};
+
+export function AdminHeader({ user, className }: AdminHeaderProps) {
+  const pathname = usePathname();
+  const title = titleFromPath(pathname);
+
+  return (
+    <header
+      className={cn(
+        "sticky top-14 z-20 flex h-14 items-center justify-between gap-4 border-b border-border bg-card/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-card/80 lg:top-0 lg:z-10 lg:h-16 lg:px-8",
+        className,
+      )}
+    >
+      <div className="flex min-w-0 items-center gap-3">
+        <Separator orientation="vertical" className="hidden h-6 lg:block" />
+        <h1 className="truncate text-lg font-semibold tracking-tight text-foreground">
+          {title}
+        </h1>
+      </div>
+      <div className="flex items-center gap-3">
+        <div className="hidden text-right sm:block">
+          <p className="text-sm font-medium leading-none text-foreground">
+            {user.name ?? "Administrador"}
+          </p>
+          <p className="mt-1 truncate text-xs text-muted-foreground">
+            {user.email}
+          </p>
+        </div>
+        <Avatar className="size-9 border border-border">
+          <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
+            {initials(user.name, user.email)}
+          </AvatarFallback>
+        </Avatar>
+      </div>
+    </header>
+  );
+}
