@@ -1,5 +1,7 @@
 "use client";
 
+import { useSession } from "next-auth/react";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,7 +12,31 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
+import { CUSTOMER_TYPE_LABELS } from "@/lib/constants";
+import type { CustomerType } from "@/lib/constants";
+
 export default function PerfilPage() {
+  const { data: session, status } = useSession();
+
+  if (status === "loading") {
+    return (
+      <div className="space-y-8">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+
+  const user = session?.user;
+  const nameParts = (user?.name ?? "").split(" ");
+  const firstName = nameParts[0] ?? "";
+  const lastName = nameParts.slice(1).join(" ") ?? "";
+  const customerType = (user as any)?.customerType as CustomerType | undefined;
+  const badgeLabel = customerType
+    ? CUSTOMER_TYPE_LABELS[customerType]
+    : "Consumidor final";
+
   return (
     <div className="space-y-8">
       <div>
@@ -23,18 +49,18 @@ export default function PerfilPage() {
       <Card>
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
           <CardTitle className="text-lg">Datos de la cuenta</CardTitle>
-          <Badge variant="secondary">Consumidor final</Badge>
+          <Badge variant="secondary">{badgeLabel}</Badge>
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="nombre">Nombre</Label>
-                <Input id="nombre" defaultValue="Lucas" />
+                <Input id="nombre" defaultValue={firstName} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="apellido">Apellido</Label>
-                <Input id="apellido" defaultValue="Ferro" />
+                <Input id="apellido" defaultValue={lastName} />
               </div>
             </div>
             <div className="space-y-2">
@@ -42,16 +68,14 @@ export default function PerfilPage() {
               <Input
                 id="email"
                 type="email"
-                defaultValue="lucas.ferro@email.com"
+                defaultValue={user?.email ?? ""}
+                readOnly
+                className="bg-muted/50"
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="phone">Teléfono</Label>
-              <Input id="phone" type="tel" defaultValue="+54 11 6000-0000" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="tax">CUIT / DNI</Label>
-              <Input id="tax" defaultValue="20-12345678-9" />
+              <Input id="phone" type="tel" />
             </div>
             <Button type="submit" className="bg-primary">
               Guardar cambios

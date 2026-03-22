@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useSession, signOut } from "next-auth/react";
 import {
   ChevronDown,
   Heart,
+  LogIn,
   LogOut,
   Menu,
   Package,
@@ -12,6 +14,7 @@ import {
   ShoppingCart,
   Tag,
   User,
+  UserPlus,
   X,
 } from "lucide-react";
 
@@ -33,10 +36,13 @@ import { CartDrawer } from "./CartDrawer";
 import { SearchBar } from "./SearchBar";
 
 export function Header() {
+  const { data: session, status } = useSession();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const itemCount = useCartStore((s) => s.getItemCount());
   const openCart = useCartStore((s) => s.openCart);
+
+  const isLoggedIn = status === "authenticated" && !!session?.user;
 
   return (
     <>
@@ -112,36 +118,62 @@ export function Header() {
               </Button>
             </nav>
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="hidden sm:inline-flex"
-                  aria-label="Mi cuenta"
-                >
-                  <User className="size-5" />
+            {isLoggedIn ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="hidden sm:inline-flex"
+                    aria-label="Mi cuenta"
+                  >
+                    <User className="size-5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52">
+                  <DropdownMenuLabel>
+                    {session.user.name || session.user.email}
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link href="/mi-cuenta/perfil">Perfil</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/mi-cuenta/pedidos">Pedidos</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/mi-cuenta/favoritos">Favoritos</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-destructive"
+                    onClick={() => signOut({ callbackUrl: "/" })}
+                  >
+                    <LogOut className="mr-2 size-4" />
+                    Cerrar sesión
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <div className="hidden items-center gap-1 sm:flex">
+                <Button variant="ghost" size="sm" asChild>
+                  <Link href="/login" className="gap-1.5">
+                    <LogIn className="size-4" />
+                    Ingresar
+                  </Link>
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52">
-                <DropdownMenuLabel>Mi cuenta</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href="/mi-cuenta/perfil">Perfil</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/mi-cuenta/pedidos">Pedidos</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/mi-cuenta/favoritos">Favoritos</Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-destructive">
-                  <LogOut className="mr-2 size-4" />
-                  Cerrar sesión
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                <Button
+                  size="sm"
+                  asChild
+                  className="bg-store-orange text-store-orange-foreground hover:bg-store-orange/90"
+                >
+                  <Link href="/registro" className="gap-1.5">
+                    <UserPlus className="size-4" />
+                    Registrarse
+                  </Link>
+                </Button>
+              </div>
+            )}
 
             <Button
               type="button"
@@ -225,21 +257,55 @@ export function Header() {
             <Tag className="size-4" />
             Ofertas
           </Link>
-          <Link
-            href="/mi-cuenta/favoritos"
-            className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium hover:bg-muted"
-            onClick={() => setMobileOpen(false)}
-          >
-            <Heart className="size-4" />
-            Favoritos
-          </Link>
-          <Link
-            href="/login"
-            className="mt-4 rounded-md bg-primary px-3 py-2 text-center text-sm font-semibold text-primary-foreground"
-            onClick={() => setMobileOpen(false)}
-          >
-            Iniciar sesión
-          </Link>
+
+          {isLoggedIn ? (
+            <>
+              <Link
+                href="/mi-cuenta/perfil"
+                className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium hover:bg-muted"
+                onClick={() => setMobileOpen(false)}
+              >
+                <User className="size-4" />
+                Mi cuenta
+              </Link>
+              <Link
+                href="/mi-cuenta/favoritos"
+                className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium hover:bg-muted"
+                onClick={() => setMobileOpen(false)}
+              >
+                <Heart className="size-4" />
+                Favoritos
+              </Link>
+              <button
+                type="button"
+                className="mt-4 flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-destructive hover:bg-muted"
+                onClick={() => {
+                  setMobileOpen(false);
+                  signOut({ callbackUrl: "/" });
+                }}
+              >
+                <LogOut className="size-4" />
+                Cerrar sesión
+              </button>
+            </>
+          ) : (
+            <>
+              <Link
+                href="/login"
+                className="mt-4 rounded-md bg-primary px-3 py-2 text-center text-sm font-semibold text-primary-foreground"
+                onClick={() => setMobileOpen(false)}
+              >
+                Iniciar sesión
+              </Link>
+              <Link
+                href="/registro"
+                className="mt-2 rounded-md border border-primary px-3 py-2 text-center text-sm font-semibold text-primary"
+                onClick={() => setMobileOpen(false)}
+              >
+                Crear cuenta
+              </Link>
+            </>
+          )}
         </nav>
       </aside>
     </>
