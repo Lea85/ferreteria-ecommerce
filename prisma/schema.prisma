@@ -647,8 +647,9 @@ model Banner {
   subtitle  String?
   imageUrl  String
   linkUrl   String?
+  ctaText   String?  @default("Ver más")
   position  String   // "HOME_HERO", "HOME_SECONDARY", "CATEGORY_TOP"
-  sortOrder Int      @default(0)
+  sortOrder Int      @default(0) // used as campaign priority (lower = higher priority)
   isActive  Boolean  @default(true)
   startsAt  DateTime?
   endsAt    DateTime?
