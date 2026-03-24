@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Building2, CreditCard, Download, ExternalLink, FileText, Loader2, X } from "lucide-react";
+import { Building2, CreditCard, Download, FileText, Loader2, Printer } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -202,10 +202,20 @@ export default function CheckoutPagoPage() {
                 </div>
               </div>
               <div className="flex items-center justify-between border-t border-border pt-4">
-                <Button variant="outline" size="sm" className="gap-2" onClick={() => downloadAsText(tycDoc.title, tycDoc.content)}>
-                  <Download className="size-4" />
-                  Descargar documento
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" className="gap-2" onClick={() => downloadAsText(tycDoc.title, tycDoc.content)}>
+                    <Download className="size-4" />
+                    Descargar
+                  </Button>
+                  <Button variant="outline" size="sm" className="gap-2" onClick={() => {
+                    const w = window.open("", "_blank"); if (!w) return;
+                    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${tycDoc.title}</title><style>body{font-family:Arial,sans-serif;max-width:800px;margin:40px auto;padding:0 20px;color:#222;line-height:1.6}h1{border-bottom:2px solid #333;padding-bottom:8px}pre{white-space:pre-wrap;font-family:inherit}@media print{body{margin:20px}}</style></head><body><h1>${tycDoc.title}</h1><pre>${tycDoc.content}</pre><script>window.print();<\/script></body></html>`);
+                    w.document.close();
+                  }}>
+                    <Printer className="size-4" />
+                    Imprimir
+                  </Button>
+                </div>
                 <Button size="sm" onClick={() => { setTycOpen(false); if (!accepted) setAccepted(true); }}>
                   Aceptar y cerrar
                 </Button>

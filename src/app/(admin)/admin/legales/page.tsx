@@ -1,6 +1,6 @@
 "use client";
 
-import { Edit, FileText, Loader2, Plus, Trash2 } from "lucide-react";
+import { Download, Edit, FileText, Loader2, Plus, Printer, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -22,6 +22,28 @@ type LegalDoc = {
 
 type FormState = { title: string; slug: string; content: string; isActive: boolean };
 const EMPTY: FormState = { title: "", slug: "", content: "", isActive: true };
+
+function printDocument(title: string, content: string) {
+  const w = window.open("", "_blank");
+  if (!w) return;
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title>
+    <style>body{font-family:Arial,sans-serif;max-width:800px;margin:40px auto;padding:0 20px;color:#222;line-height:1.6}
+    h1{border-bottom:2px solid #333;padding-bottom:8px}pre{white-space:pre-wrap;font-family:inherit}
+    @media print{body{margin:20px}}</style></head>
+    <body><h1>${title}</h1><pre>${content}</pre>
+    <script>window.print();<\/script></body></html>`);
+  w.document.close();
+}
+
+function downloadDocument(title: string, content: string) {
+  const blob = new Blob([`${title}\n${"=".repeat(title.length)}\n\n${content}`], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${title.toLowerCase().replace(/\s+/g, "-")}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 export default function AdminLegalesPage() {
   const [docs, setDocs] = useState<LegalDoc[]>([]);
@@ -109,8 +131,10 @@ export default function AdminLegalesPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   {d.isActive ? <Badge variant="default">Activo</Badge> : <Badge variant="destructive">Inactivo</Badge>}
-                  <Button variant="ghost" size="icon" onClick={() => openEdit(d)}><Edit className="size-4" /></Button>
-                  <Button variant="ghost" size="icon" onClick={() => handleDelete(d.id)}><Trash2 className="size-4 text-destructive" /></Button>
+                  <Button variant="ghost" size="icon" title="Imprimir" onClick={() => printDocument(d.title, d.content)}><Printer className="size-4" /></Button>
+                  <Button variant="ghost" size="icon" title="Descargar" onClick={() => downloadDocument(d.title, d.content)}><Download className="size-4" /></Button>
+                  <Button variant="ghost" size="icon" title="Editar" onClick={() => openEdit(d)}><Edit className="size-4" /></Button>
+                  <Button variant="ghost" size="icon" title="Eliminar" onClick={() => handleDelete(d.id)}><Trash2 className="size-4 text-destructive" /></Button>
                 </div>
               </CardHeader>
               <CardContent>

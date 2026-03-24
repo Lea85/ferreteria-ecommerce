@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
-import { Clock, Shield, Wrench } from "lucide-react";
+import { Clock, Download, Printer, Shield, Wrench } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -161,10 +161,26 @@ export function RentalSection() {
 
       {/* Dialog T&C alquiler */}
       <Dialog open={termsDialog} onOpenChange={setTermsDialog}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
           <DialogHeader><DialogTitle>Terminos y Condiciones de Alquiler</DialogTitle></DialogHeader>
-          <div className="prose prose-sm max-w-none pt-2 whitespace-pre-wrap text-sm text-muted-foreground">
-            {termsContent}
+          <div className="flex-1 overflow-y-auto rounded-md border border-border bg-muted/30 p-4">
+            <div className="prose prose-sm max-w-none whitespace-pre-wrap text-sm text-foreground leading-relaxed">
+              {termsContent}
+            </div>
+          </div>
+          <div className="flex items-center justify-between border-t border-border pt-4">
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" className="gap-2" onClick={() => {
+                const blob = new Blob([`Terminos y Condiciones de Alquiler\n${"=".repeat(40)}\n\n${termsContent}`], { type: "text/plain;charset=utf-8" });
+                const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "terminos-condiciones-alquiler.txt"; a.click(); URL.revokeObjectURL(url);
+              }}><Download className="size-4" />Descargar</Button>
+              <Button variant="outline" size="sm" className="gap-2" onClick={() => {
+                const w = window.open("", "_blank"); if (!w) return;
+                w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>T&C Alquiler</title><style>body{font-family:Arial,sans-serif;max-width:800px;margin:40px auto;padding:0 20px;color:#222;line-height:1.6}h1{border-bottom:2px solid #333;padding-bottom:8px}pre{white-space:pre-wrap;font-family:inherit}@media print{body{margin:20px}}</style></head><body><h1>Terminos y Condiciones de Alquiler</h1><pre>${termsContent}</pre><script>window.print();<\/script></body></html>`);
+                w.document.close();
+              }}><Printer className="size-4" />Imprimir</Button>
+            </div>
+            <Button size="sm" onClick={() => { setTermsDialog(false); setAcceptedTerms(true); }}>Aceptar y cerrar</Button>
           </div>
         </DialogContent>
       </Dialog>
