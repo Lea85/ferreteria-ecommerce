@@ -6,10 +6,11 @@ import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { SITE_NAME } from "@/lib/constants";
+import { useStoreConfig } from "@/contexts/store-config";
 
 export function NewsletterForm() {
   const { data: session, status } = useSession();
+  const { storeName } = useStoreConfig();
   const [subscribed, setSubscribed] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
@@ -69,7 +70,7 @@ export function NewsletterForm() {
         </div>
         <h2 className="text-xl font-bold text-emerald-900">¡Suscripción exitosa!</h2>
         <p className="mt-2 text-sm text-emerald-700">
-          Vas a recibir las mejores ofertas y novedades de {SITE_NAME}.
+          Vas a recibir las mejores ofertas y novedades de {storeName}.
         </p>
       </div>
     );
@@ -102,7 +103,7 @@ export function NewsletterForm() {
           )}
         </Button>
         <p className="mt-4 text-xs text-muted-foreground">
-          Al suscribirte aceptás recibir comunicaciones de {SITE_NAME}.
+          Al suscribirte aceptás recibir comunicaciones de {storeName}.
         </p>
       </div>
     );
@@ -139,7 +140,7 @@ export function NewsletterForm() {
         </Button>
       </form>
       <p className="mt-4 text-center text-xs text-muted-foreground">
-        Al suscribirte aceptás recibir comunicaciones de {SITE_NAME}.
+        Al suscribirte aceptás recibir comunicaciones de {storeName}.
       </p>
     </div>
   );

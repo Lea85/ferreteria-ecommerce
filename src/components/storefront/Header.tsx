@@ -29,7 +29,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { NAV_CATEGORIES, SITE_NAME } from "@/lib/constants";
+import { NAV_CATEGORIES } from "@/lib/constants";
+import { useStoreConfig } from "@/contexts/store-config";
 import { useCartStore } from "@/stores/cart.store";
 import { cn } from "@/lib/utils";
 
@@ -38,6 +39,7 @@ import { SearchBar } from "./SearchBar";
 
 export function Header() {
   const { data: session, status } = useSession();
+  const { storeName, logoUrl } = useStoreConfig();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const itemCount = useCartStore((s) => s.getItemCount());
@@ -64,10 +66,14 @@ export function Header() {
             href="/"
             className="flex shrink-0 items-center gap-2 font-bold tracking-tight text-primary"
           >
-            <span className="flex size-9 items-center justify-center rounded-lg bg-primary text-sm text-primary-foreground">
-              FS
-            </span>
-            <span className="hidden text-lg sm:inline">{SITE_NAME}</span>
+            {logoUrl ? (
+              <img src={logoUrl} alt={storeName} className="size-9 rounded-lg object-contain" />
+            ) : (
+              <span className="flex size-9 items-center justify-center rounded-lg bg-primary text-sm text-primary-foreground">
+                {storeName.slice(0, 2).toUpperCase()}
+              </span>
+            )}
+            <span className="hidden text-lg sm:inline">{storeName}</span>
           </Link>
 
           <div
@@ -232,7 +238,7 @@ export function Header() {
         )}
       >
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <span className="font-semibold text-primary">{SITE_NAME}</span>
+          <span className="font-semibold text-primary">{storeName}</span>
           <Button
             type="button"
             variant="ghost"

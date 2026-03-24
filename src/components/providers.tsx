@@ -6,6 +6,8 @@ import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { useState } from "react";
 import { Toaster } from "sonner";
 
+import { StoreConfigProvider } from "@/contexts/store-config";
+
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
     () =>
@@ -22,9 +24,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <SessionProvider>
       <QueryClientProvider client={queryClient}>
-        <NuqsAdapter>
-          {children}
-        </NuqsAdapter>
+        <StoreConfigProvider>
+          <NuqsAdapter>
+            {children}
+          </NuqsAdapter>
+        </StoreConfigProvider>
         <Toaster richColors position="top-center" closeButton />
       </QueryClientProvider>
     </SessionProvider>

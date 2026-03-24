@@ -18,10 +18,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { SITE_NAME } from "@/lib/constants";
+import { useStoreConfig } from "@/contexts/store-config";
 
 function LoginForm() {
   const router = useRouter();
+  const { storeName, logoUrl } = useStoreConfig();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") ?? "/";
   const errorParam = searchParams.get("error");
@@ -71,8 +72,9 @@ function LoginForm() {
   return (
     <Card className="w-full max-w-md border-border shadow-lg">
       <CardHeader className="space-y-1 text-center">
+        {logoUrl && <img src={logoUrl} alt={storeName} className="mx-auto size-14 rounded-lg object-contain mb-2" />}
         <CardTitle className="text-2xl font-bold text-primary">
-          {SITE_NAME}
+          {storeName}
         </CardTitle>
         <CardDescription>Iniciá sesión en tu cuenta</CardDescription>
       </CardHeader>

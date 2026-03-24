@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
 const PUBLIC_KEYS = [
+  "store_name",
+  "store_logo_url",
   "google_maps_address",
   "whatsapp_number",
   "whatsapp_message",

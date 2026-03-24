@@ -9,11 +9,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { SITE_NAME } from "@/lib/constants";
+import { useStoreConfig } from "@/contexts/store-config";
 
 type Settings = Record<string, string>;
 
 export function Footer() {
+  const { storeName } = useStoreConfig();
   const [s, setS] = useState<Settings>({ google_maps_address: "Av. Caseros 2421, CABA" });
   const [contactForm, setContactForm] = useState({ name: "", email: "", phone: "", message: "" });
   const [sending, setSending] = useState(false);
@@ -71,7 +72,7 @@ export function Footer() {
         <div className="grid gap-8 lg:grid-cols-3">
           {/* Columna 1: Redes sociales + nav */}
           <div>
-            <h3 className="text-lg font-bold text-foreground">{SITE_NAME}</h3>
+            <h3 className="text-lg font-bold text-foreground">{storeName}</h3>
             <p className="mt-2 text-sm text-muted-foreground">
               Ferreteria y casa de sanitarios. Todo lo que necesitas para tu obra y tu hogar.
             </p>
@@ -186,7 +187,7 @@ export function Footer() {
         </div>
 
         <div className="mt-8 border-t border-border pt-6 text-center text-xs text-muted-foreground">
-          {new Date().getFullYear()} {SITE_NAME}. Todos los derechos reservados.
+          {new Date().getFullYear()} {storeName}. Todos los derechos reservados.
         </div>
       </div>
     </footer>

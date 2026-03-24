@@ -6,10 +6,7 @@ import { FeaturedProducts } from "@/components/storefront/FeaturedProducts";
 import { HeroBanner } from "@/components/storefront/HeroBanner";
 import { NewsletterForm } from "@/components/storefront/NewsletterForm";
 import { RentalSection } from "@/components/storefront/RentalSection";
-import {
-  FREE_SHIPPING_THRESHOLD,
-  SITE_NAME,
-} from "@/lib/constants";
+import { FREE_SHIPPING_THRESHOLD } from "@/lib/constants";
 import {
   MOCK_BRANDS,
   MOCK_CATEGORIES_GRID,

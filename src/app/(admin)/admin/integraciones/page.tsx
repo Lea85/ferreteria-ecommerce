@@ -1,8 +1,8 @@
 "use client";
 
 import {
-  Building2, ChevronDown, Instagram, Loader2, Mail, MapPin, MessageCircle,
-  Save, ShoppingBag, X,
+  Building2, ChevronDown, ImageIcon, Instagram, Loader2, Mail, MapPin, MessageCircle,
+  Save, ShoppingBag, Store, X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -22,6 +22,13 @@ type SectionDef = {
 };
 
 const SECTIONS: SectionDef[] = [
+  {
+    key: "identity", title: "Identidad de la tienda", icon: <Store className="size-5 text-primary" />,
+    fields: [
+      { key: "store_name", label: "Nombre de la tienda", placeholder: "FerroSan" },
+      { key: "store_logo_url", label: "URL del logo (tambien se usa como favicon)", placeholder: "https://ejemplo.com/logo.png" },
+    ],
+  },
   {
     key: "maps", title: "Google Maps", icon: <MapPin className="size-5 text-primary" />,
     fields: [{ key: "google_maps_address", label: "Direccion", placeholder: "Av. Caseros 2421, CABA" }],
@@ -119,8 +126,8 @@ export default function AdminRedesSocialesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-foreground">Redes sociales y configuracion</h1>
-        <p className="text-sm text-muted-foreground">Hace click en una seccion para expandirla y editar su informacion.</p>
+        <h1 className="text-xl font-bold text-foreground">Integraciones</h1>
+        <p className="text-sm text-muted-foreground">Configura la identidad de la tienda, redes sociales y datos de pago.</p>
       </div>
 
       <div className="space-y-3">
@@ -144,6 +151,15 @@ export default function AdminRedesSocialesPage() {
                         value={settings[field.key] || ""}
                         onChange={(e) => setSettings((s) => ({ ...s, [field.key]: e.target.value }))}
                         placeholder={field.placeholder} />
+                      {field.key === "store_logo_url" && settings.store_logo_url && (
+                        <div className="flex items-center gap-4 rounded-lg border border-border bg-muted/30 p-3">
+                          <img src={settings.store_logo_url} alt="Logo preview" className="size-16 rounded-lg object-contain border border-border bg-white p-1" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                          <div className="text-xs text-muted-foreground">
+                            <p className="font-medium text-foreground">Vista previa del logo</p>
+                            <p>Se mostrara en el header de la tienda y como favicon del navegador.</p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                   <div className="flex justify-end gap-3 pt-2">

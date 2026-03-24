@@ -25,7 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { SITE_NAME } from "@/lib/constants";
+import { useStoreConfig } from "@/contexts/store-config";
 
 function RequiredLabel({ htmlFor, children }: { htmlFor: string; children: React.ReactNode }) {
   return (
@@ -37,6 +37,7 @@ function RequiredLabel({ htmlFor, children }: { htmlFor: string; children: React
 
 export default function RegistroPage() {
   const router = useRouter();
+  const { storeName } = useStoreConfig();
 
   const [customerType, setCustomerType] = useState<"consumer" | "pro">("consumer");
   const [loading, setLoading] = useState(false);
@@ -138,7 +139,7 @@ export default function RegistroPage() {
         <CardTitle className="text-2xl font-bold text-primary">
           Crear cuenta
         </CardTitle>
-        <CardDescription>Registrate en {SITE_NAME}</CardDescription>
+        <CardDescription>Registrate en {storeName}</CardDescription>
       </CardHeader>
       <CardContent>
         {error && (
