@@ -95,11 +95,19 @@ export function ProductForm({
 
   type WarehouseOption = { id: string; code: string; display: string };
   const [warehouseLocations, setWarehouseLocations] = useState<WarehouseOption[]>([]);
+  const [allSuppliers, setAllSuppliers] = useState<{ id: string; name: string }[]>([]);
+  const [selectedSupplierIds, setSelectedSupplierIds] = useState<Set<string>>(
+    new Set((initialData as any)?.supplierIds || []),
+  );
 
   useEffect(() => {
     fetch("/api/admin/warehouse/locations")
       .then((r) => r.json())
       .then((d) => { if (d.locations) setWarehouseLocations(d.locations); })
+      .catch(() => {});
+    fetch("/api/admin/suppliers?limit=200")
+      .then((r) => r.json())
+      .then((d) => { if (d.suppliers) setAllSuppliers(d.suppliers); })
       .catch(() => {});
   }, []);
 
@@ -170,7 +178,7 @@ export function ProductForm({
   return (
     <form
       className={cn("space-y-8", className)}
-      onSubmit={form.handleSubmit(onSubmit)}
+      onSubmit={form.handleSubmit((data) => onSubmit({ ...data, supplierIds: Array.from(selectedSupplierIds) } as any))}
     >
       <Card className="border-border shadow-sm">
         <CardHeader>
@@ -307,6 +315,34 @@ export function ProductForm({
           </div>
         </CardContent>
       </Card>
+
+      {allSuppliers.length > 0 && (
+        <Card className="border-border shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-lg text-primary">Proveedores</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
+              {allSuppliers.map((s) => (
+                <label key={s.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                  <Checkbox
+                    checked={selectedSupplierIds.has(s.id)}
+                    onCheckedChange={(checked) => {
+                      setSelectedSupplierIds((prev) => {
+                        const next = new Set(prev);
+                        if (checked) next.add(s.id);
+                        else next.delete(s.id);
+                        return next;
+                      });
+                    }}
+                  />
+                  {s.name}
+                </label>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="border-border shadow-sm">
         <CardHeader>

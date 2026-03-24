@@ -32,6 +32,9 @@ function titleFromPath(pathname: string): string {
   if (pathname === "/admin/newsletter") return "Newsletter";
   if (pathname === "/admin/integraciones") return "Integraciones";
   if (pathname === "/admin/alquileres") return "Alquiler de herramientas";
+  if (pathname === "/admin/proveedores") return "Proveedores";
+  if (pathname === "/admin/proveedores/pedidos") return "Pedidos a proveedores";
+  if (pathname.startsWith("/admin/proveedores/pedidos/")) return "Detalle de pedido";
   if (pathname === "/admin/legales") return "Legales";
   return "Administracion";
 }

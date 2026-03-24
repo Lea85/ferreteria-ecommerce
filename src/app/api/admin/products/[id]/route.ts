@@ -20,6 +20,7 @@ export async function GET(
       include: {
         brand: { select: { id: true, name: true } },
         categories: { select: { categoryId: true } },
+        suppliers: { select: { supplierId: true } },
         variants: {
           select: { id: true, name: true, sku: true, price: true, comparePrice: true, stock: true, weight: true, isActive: true },
           orderBy: { price: "asc" },
@@ -44,6 +45,7 @@ export async function GET(
       brandId: product.brand?.id || "",
       warehouseLocationId: product.warehouseLocationId || "",
       categoryIds: product.categories.map((c) => c.categoryId),
+      supplierIds: product.suppliers.map((s) => s.supplierId),
       isActive: product.isActive,
       isFeatured: product.isFeatured,
       metaTitle: product.metaTitle || "",
@@ -97,6 +99,15 @@ export async function PUT(
         },
       },
     });
+
+    if (body.supplierIds && Array.isArray(body.supplierIds)) {
+      await prisma.productSupplier.deleteMany({ where: { productId: id } });
+      if (body.supplierIds.length > 0) {
+        await prisma.productSupplier.createMany({
+          data: body.supplierIds.map((sid: string) => ({ productId: id, supplierId: sid })),
+        });
+      }
+    }
 
     if (body.variants && Array.isArray(body.variants)) {
       for (const v of body.variants) {

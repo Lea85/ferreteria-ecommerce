@@ -21,6 +21,7 @@ import {
   Tag,
   Ticket,
   TrendingUp,
+  Truck,
   Users,
   Warehouse,
   Wrench,
@@ -51,6 +52,15 @@ const nav: NavItem[] = [
   { href: "/admin/promociones", label: "Promociones", icon: Tag },
   { href: "/admin/campanas", label: "Campanias", icon: Image },
   { href: "/admin/alquileres", label: "Alquileres", icon: Wrench },
+  {
+    href: "/admin/proveedores",
+    label: "Proveedores",
+    icon: Truck,
+    children: [
+      { href: "/admin/proveedores", label: "Listado", icon: Truck },
+      { href: "/admin/proveedores/pedidos", label: "Pedidos", icon: ShoppingCart },
+    ],
+  },
   {
     href: "/admin/reportes",
     label: "Reportes",
