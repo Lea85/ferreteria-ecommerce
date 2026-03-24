@@ -22,16 +22,17 @@ const CATEGORIES = [
 ];
 
 const MOCK_PRODUCT = {
-  name: "Grifería monocomando cocina Peirano Dalia",
+  name: "Griferia monocomando cocina Peirano Dalia",
   slug: "griferia-monocomando-cocina-peirano-dalia",
   description:
-    "Monocomando mesada con cartucho cerámico 35 mm. Acabado cromo. Incluye flexible y herrajes.",
+    "Monocomando mesada con cartucho ceramico 35 mm. Acabado cromo. Incluye flexible y herrajes.",
   brandId: "b1",
+  warehouseLocationId: "",
   categoryIds: ["c1", "c5"],
   isActive: true,
   isFeatured: true,
-  metaTitle: "Grifería cocina Peirano Dalia | FerroSan",
-  metaDesc: "Monocomando para cocina con garantía oficial Peirano.",
+  metaTitle: "Griferia cocina Peirano Dalia | FerroSan",
+  metaDesc: "Monocomando para cocina con garantia oficial Peirano.",
   variants: [
     {
       id: "v1",

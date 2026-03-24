@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, Trash2 } from "lucide-react";
+import { MapPin, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { useForm, useFieldArray, type Resolver } from "react-hook-form";
 import { z } from "zod";
@@ -53,6 +53,7 @@ const productSchema = z.object({
   slug: z.string().min(2, "Slug requerido"),
   description: z.string().optional(),
   brandId: z.string().optional(),
+  warehouseLocationId: z.string().optional(),
   categoryIds: z.array(z.string()).min(1, "Elegí al menos una categoría"),
   isActive: z.boolean(),
   isFeatured: z.boolean(),
@@ -92,12 +93,23 @@ export function ProductForm({
   const fileInputId = useId();
   const [slugTouched, setSlugTouched] = useState(!!initialData?.slug);
 
+  type WarehouseOption = { id: string; code: string; display: string };
+  const [warehouseLocations, setWarehouseLocations] = useState<WarehouseOption[]>([]);
+
+  useEffect(() => {
+    fetch("/api/admin/warehouse/locations")
+      .then((r) => r.json())
+      .then((d) => { if (d.locations) setWarehouseLocations(d.locations); })
+      .catch(() => {});
+  }, []);
+
   const defaultValues = useMemo(
     (): ProductFormValues => ({
       name: initialData?.name ?? "",
       slug: initialData?.slug ?? "",
       description: initialData?.description ?? "",
       brandId: initialData?.brandId ?? "",
+      warehouseLocationId: (initialData as any)?.warehouseLocationId ?? "",
       categoryIds: initialData?.categoryIds?.length
         ? initialData.categoryIds
         : [],
@@ -219,6 +231,31 @@ export function ProductForm({
                 {brands.map((b) => (
                   <SelectItem key={b.id} value={b.id}>
                     {b.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2">
+              <MapPin className="size-4 text-muted-foreground" />
+              Ubicacion en almacen
+            </Label>
+            <Select
+              value={form.watch("warehouseLocationId") || "__none__"}
+              onValueChange={(v) =>
+                form.setValue("warehouseLocationId", v === "__none__" ? "" : v)
+              }
+            >
+              <SelectTrigger className="border-border">
+                <SelectValue placeholder="Sin ubicacion asignada" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Sin ubicacion asignada</SelectItem>
+                {warehouseLocations.map((l) => (
+                  <SelectItem key={l.id} value={l.id}>
+                    <span className="font-mono font-bold">{l.code}</span>
+                    <span className="ml-2 text-muted-foreground">{l.display}</span>
                   </SelectItem>
                 ))}
               </SelectContent>

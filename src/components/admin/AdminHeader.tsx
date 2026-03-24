@@ -18,6 +18,7 @@ function titleFromPath(pathname: string): string {
   if (pathname.startsWith("/admin/productos/")) return "Editar producto";
   if (pathname === "/admin/categorias") return "Categorias";
   if (pathname === "/admin/categorias-clientes") return "Categorias de clientes";
+  if (pathname === "/admin/almacen") return "Almacen";
   if (pathname === "/admin/pedidos") return "Pedidos";
   if (pathname.startsWith("/admin/pedidos/")) return "Detalle del pedido";
   if (pathname === "/admin/usuarios") return "Clientes";

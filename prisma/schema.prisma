@@ -245,12 +245,14 @@ model Product {
   description  String? @db.Text
   shortDesc    String?
   brandId      String?
+  warehouseLocationId String?
   isActive     Boolean @default(true)
-  isFeatured   Boolean @default(false) // Producto destacado en home
+  isFeatured   Boolean @default(false)
   metaTitle    String?
   metaDesc     String?
 
   brand      Brand?           @relation(fields: [brandId], references: [id])
+  warehouseLocation WarehouseLocation? @relation(fields: [warehouseLocationId], references: [id])
   categories ProductCategory[]
   variants   ProductVariant[]
   images     ProductImage[]
@@ -264,6 +266,7 @@ model Product {
 
   @@index([slug])
   @@index([brandId])
+  @@index([warehouseLocationId])
   @@index([isFeatured])
   @@map("products")
 }
@@ -719,4 +722,42 @@ model UserCustomerCategory {
 
   @@unique([userId, customerCategoryId])
   @@map("user_customer_categories")
+}
+
+// ============================================================================
+// ALMACEN / WAREHOUSE
+// ============================================================================
+
+model WarehouseSector {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  description String?
+  isActive    Boolean @default(true)
+
+  locations   WarehouseLocation[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("warehouse_sectors")
+}
+
+model WarehouseLocation {
+  id        String  @id @default(cuid())
+  sectorId  String
+  code      String  @unique
+  shelf     String
+  row       String
+  col       String
+  label     String?
+  isActive  Boolean @default(true)
+
+  sector    WarehouseSector @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+  products  Product[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sectorId])
+  @@map("warehouse_locations")
 }
