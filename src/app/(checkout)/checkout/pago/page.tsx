@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Building2, CreditCard, Loader2 } from "lucide-react";
+import { Building2, CreditCard, Download, ExternalLink, FileText, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { cn, formatPrice } from "@/lib/utils";
@@ -20,11 +21,24 @@ type BankData = {
   bank_alias?: string; bank_holder?: string; bank_email?: string;
 };
 
+function downloadAsText(title: string, content: string) {
+  const blob = new Blob([`${title}\n${"=".repeat(title.length)}\n\n${content}`], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${title.toLowerCase().replace(/\s+/g, "-")}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function CheckoutPagoPage() {
   const [method, setMethod] = useState<"mp" | "transfer">("transfer");
   const [accepted, setAccepted] = useState(false);
   const [bank, setBank] = useState<BankData>({});
   const [submitting, setSubmitting] = useState(false);
+  const [tycOpen, setTycOpen] = useState(false);
+  const [tycDoc, setTycDoc] = useState<{ title: string; content: string } | null>(null);
+  const [tycLoading, setTycLoading] = useState(false);
   const subtotal = useCartStore((s) => s.getSubtotal());
   const items = useCartStore((s) => s.items);
   const clearCart = useCartStore((s) => s.clearCart);
@@ -36,6 +50,22 @@ export default function CheckoutPagoPage() {
       .then((d) => { if (d.settings) setBank(d.settings); })
       .catch(() => {});
   }, []);
+
+  async function openTyC() {
+    setTycOpen(true);
+    if (tycDoc) return;
+    setTycLoading(true);
+    try {
+      const res = await fetch("/api/legals/public?slug=terminos-compra");
+      const data = await res.json();
+      if (data.document) setTycDoc({ title: data.document.title, content: data.document.content });
+      else setTycDoc({ title: "Terminos y Condiciones", content: "El documento no esta disponible en este momento." });
+    } catch {
+      setTycDoc({ title: "Terminos y Condiciones", content: "Error al cargar el documento." });
+    } finally {
+      setTycLoading(false);
+    }
+  }
 
   async function handleConfirm() {
     if (!accepted) return;
@@ -131,7 +161,11 @@ export default function CheckoutPagoPage() {
         <div className="mt-6 flex items-start gap-3">
           <Checkbox id="terms" checked={accepted} onCheckedChange={(v) => setAccepted(Boolean(v))} />
           <Label htmlFor="terms" className="cursor-pointer text-sm leading-snug">
-            Acepto los terminos y condiciones y la politica de privacidad. <span className="text-destructive">*</span>
+            Acepto los{" "}
+            <button type="button" onClick={openTyC} className="inline font-semibold text-primary underline underline-offset-2 hover:text-primary/80">
+              terminos y condiciones
+            </button>
+            {" "}y la politica de privacidad. <span className="text-destructive">*</span>
           </Label>
         </div>
 
@@ -145,6 +179,41 @@ export default function CheckoutPagoPage() {
         </div>
       </div>
       <CheckoutOrderSummary />
+
+      {/* Dialog de Terminos y Condiciones */}
+      <Dialog open={tycOpen} onOpenChange={setTycOpen}>
+        <DialogContent className="max-h-[85vh] max-w-2xl overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="size-5 text-primary" />
+              {tycDoc?.title || "Terminos y Condiciones"}
+            </DialogTitle>
+          </DialogHeader>
+
+          {tycLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="size-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : tycDoc ? (
+            <>
+              <div className="flex-1 overflow-y-auto rounded-md border border-border bg-muted/30 p-4">
+                <div className="prose prose-sm max-w-none text-foreground whitespace-pre-wrap text-sm leading-relaxed">
+                  {tycDoc.content}
+                </div>
+              </div>
+              <div className="flex items-center justify-between border-t border-border pt-4">
+                <Button variant="outline" size="sm" className="gap-2" onClick={() => downloadAsText(tycDoc.title, tycDoc.content)}>
+                  <Download className="size-4" />
+                  Descargar documento
+                </Button>
+                <Button size="sm" onClick={() => { setTycOpen(false); if (!accepted) setAccepted(true); }}>
+                  Aceptar y cerrar
+                </Button>
+              </div>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
