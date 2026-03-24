@@ -20,11 +20,11 @@ export type ProductCardProduct = {
   id: string;
   name: string;
   slug: string;
-  brand: string;
-  category?: string;
-  image: string;
+  brand: string | null;
+  category?: string | null;
+  image: string | null;
   price: number;
-  comparePrice?: number;
+  comparePrice?: number | null;
   stock: number;
 };
 
@@ -56,7 +56,7 @@ export function ProductCard({ product, className }: ProductCardProps) {
           className="relative block aspect-square overflow-hidden bg-muted"
         >
           <Image
-            src={product.image}
+            src={product.image || "/placeholder-product.webp"}
             alt=""
             fill
             className="object-cover transition-transform duration-500 group-hover:scale-105"
@@ -90,9 +90,9 @@ export function ProductCard({ product, className }: ProductCardProps) {
         </Button>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-1 p-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          {product.brand}
-        </p>
+        {product.brand && (
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{product.brand}</p>
+        )}
         <Link href={`/productos/${product.slug}`}>
           <h3 className="line-clamp-2 min-h-[2.5rem] text-sm font-semibold leading-snug text-foreground hover:text-primary">
             {product.name}
@@ -120,7 +120,7 @@ export function ProductCard({ product, className }: ProductCardProps) {
               variantId: `${product.id}-default`,
               name: product.name,
               slug: product.slug,
-              image: product.image,
+              image: product.image || "/placeholder-product.webp",
               price: product.price,
               quantity: 1,
               sku: `FS-${product.id}`,

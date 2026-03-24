@@ -27,10 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import {
-  MOCK_BRAND_NAMES,
-  MOCK_CATEGORIES_GRID,
-} from "@/lib/mock-data";
+// brands and categories loaded dynamically
 
 export const storefrontFilterParsers = {
   min: parseAsInteger,
@@ -76,12 +73,22 @@ export function FacetedFilters() {
   });
 
   const [draft, setDraft] = useState<Draft>(() => parseDraftFromQuery(query));
+  const [brandList, setBrandList] = useState<string[]>([]);
+  const [catList, setCatList] = useState<{ id: string; name: string; slug: string }[]>([]);
 
   useEffect(() => {
     setDraft(parseDraftFromQuery(query));
   }, [query.min, query.max, query.marcas, query.category, query.stock]);
 
-  const brandList = useMemo(() => MOCK_BRAND_NAMES, []);
+  useEffect(() => {
+    fetch("/api/storefront/home")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.brands) setBrandList(d.brands.map((b: any) => b.name));
+        if (d.categories) setCatList(d.categories);
+      })
+      .catch(() => {});
+  }, []);
 
   function apply() {
     void setPage(1);
@@ -191,7 +198,7 @@ export function FacetedFilters() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todas</SelectItem>
-                  {MOCK_CATEGORIES_GRID.map((c) => (
+                  {catList.map((c) => (
                     <SelectItem key={c.id} value={c.slug}>
                       {c.name}
                     </SelectItem>
@@ -283,7 +290,7 @@ export function FacetedFilters() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas</SelectItem>
-              {MOCK_CATEGORIES_GRID.map((c) => (
+              {catList.map((c) => (
                 <SelectItem key={c.id} value={c.slug}>
                   {c.name}
                 </SelectItem>

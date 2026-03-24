@@ -11,7 +11,7 @@ import {
   MAX_RECENT_SEARCHES,
   RECENT_SEARCHES_KEY,
 } from "@/lib/constants";
-import { MOCK_SEARCH_SUGGESTIONS } from "@/lib/mock-data";
+// suggestions loaded dynamically
 import { cn } from "@/lib/utils";
 
 function loadRecent(): string[] {
@@ -89,10 +89,8 @@ export function SearchBar({ className, variant = "header" }: SearchBarProps) {
 
   const suggestions = useMemo(() => {
     const q = local.trim().toLowerCase();
-    const pool = [...MOCK_SEARCH_SUGGESTIONS, ...recent];
     if (!q) return recent.slice(0, 6);
-    return pool
-      .filter((s, i, a) => a.indexOf(s) === i)
+    return recent
       .filter((s) => s.toLowerCase().includes(q))
       .slice(0, 8);
   }, [local, recent]);

@@ -2,84 +2,71 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { ProductForm, type ProductFormValues } from "@/components/admin/ProductForm";
-
-const BRANDS = [
-  { id: "b1", name: "Peirano" },
-  { id: "b2", name: "Ferrum" },
-  { id: "b3", name: "Tramontina" },
-  { id: "b4", name: "Tigre" },
-];
-
-const CATEGORIES = [
-  { id: "c1", name: "Griferías" },
-  { id: "c2", name: "Inodoros" },
-  { id: "c3", name: "Herramientas" },
-  { id: "c4", name: "Cañerías PVC" },
-  { id: "c5", name: "Pinturas" },
-];
-
-const MOCK_PRODUCT = {
-  name: "Griferia monocomando cocina Peirano Dalia",
-  slug: "griferia-monocomando-cocina-peirano-dalia",
-  description:
-    "Monocomando mesada con cartucho ceramico 35 mm. Acabado cromo. Incluye flexible y herrajes.",
-  brandId: "b1",
-  warehouseLocationId: "",
-  categoryIds: ["c1", "c5"],
-  isActive: true,
-  isFeatured: true,
-  metaTitle: "Griferia cocina Peirano Dalia | FerroSan",
-  metaDesc: "Monocomando para cocina con garantia oficial Peirano.",
-  variants: [
-    {
-      id: "v1",
-      sku: "PEI-MC-COC-DAL",
-      price: 189_900,
-      comparePrice: 215_000,
-      stock: 8,
-      weight: 1.2,
-    },
-    {
-      id: "v2",
-      sku: "PEI-MC-COC-DAL-N",
-      price: 199_500,
-      comparePrice: null,
-      stock: 4,
-      weight: 1.25,
-    },
-  ],
-};
 
 export default function EditarProductoPage() {
   const params = useParams();
   const id = params?.id as string;
 
+  const [product, setProduct] = useState<any>(null);
+  const [brands, setBrands] = useState<{ id: string; name: string }[]>([]);
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`/api/admin/products/${id}`)
+      .then((r) => r.json())
+      .then((d) => {
+        setProduct(d.product);
+        setBrands(d.brands || []);
+        setCategories(d.categories || []);
+      })
+      .catch(() => toast.error("Error al cargar producto"))
+      .finally(() => setLoading(false));
+  }, [id]);
+
   async function handleSubmit(data: ProductFormValues) {
-    await new Promise((r) => setTimeout(r, 400));
-    toast.success("Cambios guardados (simulación)", {
-      description: `ID ${id} · ${data.name}`,
+    const res = await fetch(`/api/admin/products/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
     });
+    if (!res.ok) {
+      toast.error("Error al guardar cambios");
+      return;
+    }
+    toast.success("Cambios guardados correctamente", { description: data.name });
+  }
+
+  if (loading) {
+    return <div className="flex items-center justify-center py-20"><Loader2 className="size-8 animate-spin text-muted-foreground" /></div>;
+  }
+
+  if (!product) {
+    return (
+      <div className="py-20 text-center">
+        <h1 className="text-xl font-bold">Producto no encontrado</h1>
+        <Link href="/admin/productos" className="mt-4 text-sm text-primary hover:underline">Volver a productos</Link>
+      </div>
+    );
   }
 
   return (
     <div className="space-y-6">
       <nav className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-        <Link href="/admin/productos" className="hover:text-primary">
-          Productos
-        </Link>
+        <Link href="/admin/productos" className="hover:text-primary">Productos</Link>
         <span aria-hidden>/</span>
-        <span className="font-medium text-foreground">
-          Editar {MOCK_PRODUCT.name}
-        </span>
+        <span className="font-medium text-foreground">Editar {product.name}</span>
       </nav>
 
       <ProductForm
-        initialData={MOCK_PRODUCT}
-        brands={BRANDS}
-        categories={CATEGORIES}
+        initialData={product}
+        brands={brands}
+        categories={categories}
         onSubmit={handleSubmit}
         submitLabel="Guardar cambios"
       />

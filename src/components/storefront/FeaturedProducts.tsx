@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 
-import type { MockProductCard } from "@/lib/mock-data";
-
 import { ProductCard } from "./ProductCard";
 
+type ProductItem = {
+  id: string; name: string; slug: string; brand: string | null;
+  image: string | null; price: number; comparePrice?: number | null; stock: number;
+};
+
 type FeaturedProductsProps = {
-  products: MockProductCard[];
+  products: ProductItem[];
 };
 
 export function FeaturedProducts({ products }: FeaturedProductsProps) {

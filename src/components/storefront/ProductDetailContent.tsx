@@ -15,15 +15,33 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { MockProductDetail } from "@/lib/mock-data";
 import { cn, formatPrice } from "@/lib/utils";
 import { useCartStore } from "@/stores/cart.store";
 
 import { ProductCard } from "./ProductCard";
 import { ProductGallery } from "./ProductGallery";
 
+type ProductVariant = {
+  id: string; name?: string | null; sku: string; price: number;
+  comparePrice?: number; stock: number; color?: string | null; size?: string | null;
+};
+
+type Complementary = {
+  id: string; name: string; slug: string; brand: string | null;
+  image: string; price: number; comparePrice?: number; stock: number;
+};
+
+type ProductDetail = {
+  id: string; name: string; slug: string; description: string;
+  brand: string | null; category: string | null; image: string;
+  images: string[]; variants: ProductVariant[];
+  specs: { label: string; value: string }[];
+  rating: number; reviewCount: number;
+  complementary: Complementary[];
+};
+
 type ProductDetailContentProps = {
-  product: MockProductDetail;
+  product: ProductDetail;
 };
 
 export function ProductDetailContent({ product }: ProductDetailContentProps) {

@@ -1,27 +1,44 @@
-import { Suspense } from "react";
-import { notFound } from "next/navigation";
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
+import { Loader2 } from "lucide-react";
 
 import { ProductDetailContent } from "@/components/storefront/ProductDetailContent";
-import { getMockProductBySlug } from "@/lib/mock-data";
 
-type ProductDetailPageProps = {
-  params: Promise<{ slug: string }>;
-};
+export default function ProductDetailPage() {
+  const { slug } = useParams<{ slug: string }>();
+  const [product, setProduct] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
 
-export default async function ProductDetailPage({
-  params,
-}: ProductDetailPageProps) {
-  const { slug } = await params;
-  const product = getMockProductBySlug(slug);
-  if (!product) notFound();
+  useEffect(() => {
+    if (!slug) return;
+    fetch(`/api/products/${slug}`)
+      .then((r) => {
+        if (!r.ok) { setNotFound(true); return null; }
+        return r.json();
+      })
+      .then((d) => {
+        if (d?.product) setProduct(d.product);
+        else setNotFound(true);
+      })
+      .catch(() => setNotFound(true))
+      .finally(() => setLoading(false));
+  }, [slug]);
 
-  return (
-    <Suspense
-      fallback={
-        <div className="mx-auto max-w-7xl px-4 py-8">Cargando producto...</div>
-      }
-    >
-      <ProductDetailContent product={product} />
-    </Suspense>
-  );
+  if (loading) {
+    return <div className="flex items-center justify-center py-20"><Loader2 className="size-8 animate-spin text-muted-foreground" /></div>;
+  }
+
+  if (notFound || !product) {
+    return (
+      <div className="mx-auto max-w-7xl px-4 py-20 text-center">
+        <h1 className="text-2xl font-bold">Producto no encontrado</h1>
+        <p className="mt-2 text-muted-foreground">El producto que buscas no existe o fue dado de baja.</p>
+      </div>
+    );
+  }
+
+  return <ProductDetailContent product={product} />;
 }

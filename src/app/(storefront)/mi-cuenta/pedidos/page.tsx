@@ -1,121 +1,90 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { Loader2, Package, ShoppingBag } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatPrice } from "@/lib/utils";
-import { cn } from "@/lib/utils";
 
-const MOCK_ORDERS = [
-  {
-    id: "FER-2025-004521",
-    date: "12 mar 2025",
-    status: "En preparación",
-    statusVariant: "secondary" as const,
-    total: 94_500,
-    items: ["Pileta cocina inox", "Kit instalación inodoro"],
-  },
-  {
-    id: "FER-2025-004388",
-    date: "28 feb 2025",
-    status: "Despachado",
-    statusVariant: "default" as const,
-    total: 18_900,
-    items: ["Kit instalación inodoro"],
-  },
-  {
-    id: "FER-2025-004102",
-    date: "05 feb 2025",
-    status: "Entregado",
-    statusVariant: "outline" as const,
-    total: 412_000,
-    items: ["Termotanque 80L"],
-  },
-];
+const STATUS_LABELS: Record<string, string> = {
+  PENDING: "Pendiente", PAYMENT_PENDING: "Pago pendiente", PAYMENT_APPROVED: "Pago aprobado",
+  PREPARING: "Preparando", SHIPPED: "Enviado", DELIVERED: "Entregado", CANCELLED: "Cancelado",
+};
 
-export default function PedidosPage() {
-  const [openId, setOpenId] = useState<string | null>(null);
+const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+  PENDING: "outline", PAYMENT_PENDING: "outline", PAYMENT_APPROVED: "secondary",
+  PREPARING: "secondary", SHIPPED: "default", DELIVERED: "default", CANCELLED: "destructive",
+};
+
+type OrderItem = { name: string; quantity: number; price: number; subtotal: number };
+type Order = { id: string; orderNumber: string; status: string; total: number; createdAt: string; itemCount: number; items: OrderItem[] };
+
+export default function MisPedidosPage() {
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/user/orders")
+      .then((r) => r.json())
+      .then((d) => setOrders(d.orders || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return <div className="flex items-center justify-center py-20"><Loader2 className="size-8 animate-spin text-muted-foreground" /></div>;
+  }
+
+  if (orders.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <ShoppingBag className="size-16 text-muted-foreground/30 mb-4" />
+        <h2 className="text-xl font-bold text-foreground">Aun no tenes pedidos</h2>
+        <p className="mt-2 text-sm text-muted-foreground">Cuando realices una compra, tus pedidos apareceran aca.</p>
+        <Button asChild className="mt-6"><Link href="/productos">Ir a la tienda</Link></Button>
+      </div>
+    );
+  }
 
   return (
-    <div>
-      <h2 className="text-xl font-bold text-foreground">Mis pedidos</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Historial y estado de tus compras.
-      </p>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-xl font-bold text-foreground">Mis pedidos</h1>
+        <p className="text-sm text-muted-foreground">{orders.length} pedido{orders.length !== 1 ? "s" : ""}</p>
+      </div>
 
-      <div className="mt-6 space-y-4">
-        {MOCK_ORDERS.map((order) => {
-          const expanded = openId === order.id;
-          return (
-            <Card key={order.id} className="overflow-hidden">
-              <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-4 pb-2">
-                <div>
-                  <CardTitle className="text-base font-mono text-primary">
-                    {order.id}
-                  </CardTitle>
-                  <p className="text-sm text-muted-foreground">{order.date}</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <Badge variant={order.statusVariant}>{order.status}</Badge>
-                  <span className="text-lg font-bold text-foreground">
-                    {formatPrice(order.total)}
-                  </span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() =>
-                      setOpenId(expanded ? null : order.id)
-                    }
-                  >
-                    {expanded ? (
-                      <>
-                        Ocultar <ChevronUp className="ml-1 size-4" />
-                      </>
-                    ) : (
-                      <>
-                        Ver detalle <ChevronDown className="ml-1 size-4" />
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </CardHeader>
-              <div
-                className={cn(
-                  "grid transition-all",
-                  expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
-                )}
-              >
-                <div className="overflow-hidden">
-                  <CardContent className="border-t border-border pt-4">
-                    <p className="text-sm font-medium text-foreground">
-                      Productos
-                    </p>
-                    <ul className="mt-2 list-inside list-disc text-sm text-muted-foreground">
-                      {order.items.map((it) => (
-                        <li key={it}>{it}</li>
-                      ))}
-                    </ul>
-                    <Separator className="my-4" />
-                    <p className="text-xs text-muted-foreground">
-                      Seguimiento por email y WhatsApp. Ante dudas escribinos a
-                      ventas@ferrosan.com.ar
-                    </p>
-                  </CardContent>
-                </div>
+      <div className="space-y-4">
+        {orders.map((o) => (
+          <Card key={o.id} className="border-border shadow-sm">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <div>
+                <CardTitle className="text-sm font-mono text-primary">{o.orderNumber}</CardTitle>
+                <p className="text-xs text-muted-foreground">{new Date(o.createdAt).toLocaleDateString("es-AR", { day: "numeric", month: "long", year: "numeric" })}</p>
               </div>
-            </Card>
-          );
-        })}
+              <div className="flex items-center gap-3">
+                <Badge variant={STATUS_VARIANT[o.status] || "outline"}>{STATUS_LABELS[o.status] || o.status}</Badge>
+                <span className="text-base font-bold">{formatPrice(o.total)}</span>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-1.5">
+                {o.items.map((item, i) => (
+                  <div key={i} className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2">
+                      <Package className="size-4 text-muted-foreground" />
+                      <span>{item.name}</span>
+                      <span className="text-muted-foreground">x{item.quantity}</span>
+                    </div>
+                    <span className="text-muted-foreground">{formatPrice(item.subtotal)}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
     </div>
   );

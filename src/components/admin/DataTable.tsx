@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, ChevronsUpDown } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronsUpDown, Loader2 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,12 @@ export type DataTableColumn<T> = {
 export type DataTablePagination = {
   page: number;
   pageSize: number;
+  /** With `fromServer`, total rows in the full result set (API). Otherwise ignored for counts. */
   total: number;
+  /** With `fromServer`, optional page count from API */
+  totalPages?: number;
+  /** When true, `data` is already one page from the server (no client slice). */
+  fromServer?: boolean;
   onPageChange?: (page: number) => void;
 };
 
@@ -37,11 +42,14 @@ export type DataTableProps<T extends { id: string }> = {
   data: T[];
   searchPlaceholder?: string;
   searchKeys?: (keyof T)[];
+  /** Controlled search: disables client-side text filtering; parent loads data from API */
+  externalSearch?: { value: string; onChange: (value: string) => void };
   pagination?: DataTablePagination;
   getRowId?: (row: T) => string;
   onRowClick?: (row: T) => void;
   actionsHeader?: string;
   renderActions?: (row: T) => ReactNode;
+  isLoading?: boolean;
 };
 
 function getCellValue<T>(row: T, col: DataTableColumn<T>): unknown {
@@ -55,19 +63,25 @@ export function DataTable<T extends { id: string }>({
   data,
   searchPlaceholder = "Buscar…",
   searchKeys,
+  externalSearch,
   pagination,
   getRowId = (row) => row.id,
   onRowClick,
   actionsHeader = "Acciones",
   renderActions,
+  isLoading = false,
 }: DataTableProps<T>) {
-  const [search, setSearch] = useState("");
+  const [internalSearch, setInternalSearch] = useState("");
   const [sortCol, setSortCol] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
+  const searchValue = externalSearch?.value ?? internalSearch;
+  const setSearchValue = externalSearch?.onChange ?? setInternalSearch;
+
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    if (externalSearch) return data;
+    const q = internalSearch.trim().toLowerCase();
     if (!q) return data;
     return data.filter((row) => {
       if (searchKeys?.length) {
@@ -80,7 +94,7 @@ export function DataTable<T extends { id: string }>({
       }
       return JSON.stringify(row).toLowerCase().includes(q);
     });
-  }, [data, search, searchKeys]);
+  }, [data, internalSearch, searchKeys, externalSearch]);
 
   const sorted = useMemo(() => {
     if (!sortCol) return filtered;
@@ -105,14 +119,22 @@ export function DataTable<T extends { id: string }>({
 
   const page = pagination?.page ?? 1;
   const pageSize = pagination?.pageSize ?? 10;
-  const displayTotal = sorted.length;
-  const totalPages = Math.max(1, Math.ceil(displayTotal / pageSize));
+  const isServerPaginated = Boolean(pagination?.fromServer);
+  const displayTotal = isServerPaginated ? pagination!.total : sorted.length;
+  const totalPages = isServerPaginated
+    ? Math.max(
+        1,
+        pagination!.totalPages ??
+          Math.ceil(Math.max(pagination!.total, 0) / pageSize),
+      )
+    : Math.max(1, Math.ceil(displayTotal / pageSize));
 
   const pageRows = useMemo(() => {
     if (!pagination) return sorted;
+    if (isServerPaginated) return sorted;
     const start = (page - 1) * pageSize;
     return sorted.slice(start, start + pageSize);
-  }, [sorted, pagination, page, pageSize]);
+  }, [sorted, pagination, page, pageSize, isServerPaginated]);
 
   const allVisibleIds = pageRows.map(getRowId);
   const allSelected =
@@ -159,8 +181,8 @@ export function DataTable<T extends { id: string }>({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Input
           placeholder={searchPlaceholder}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={searchValue}
+          onChange={(e) => setSearchValue(e.target.value)}
           className="max-w-sm border-border bg-background"
         />
       </div>
@@ -198,7 +220,16 @@ export function DataTable<T extends { id: string }>({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {pageRows.length === 0 ? (
+            {isLoading ? (
+              <TableRow>
+                <TableCell
+                  colSpan={columns.length + 1 + (renderActions ? 1 : 0)}
+                  className="h-32 text-center text-muted-foreground"
+                >
+                  <Loader2 className="mx-auto size-8 animate-spin" />
+                </TableCell>
+              </TableRow>
+            ) : pageRows.length === 0 ? (
               <TableRow>
                 <TableCell
                   colSpan={columns.length + 1 + (renderActions ? 1 : 0)}
