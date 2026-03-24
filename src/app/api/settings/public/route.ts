@@ -8,6 +8,7 @@ const PUBLIC_KEYS = [
   "google_maps_address",
   "whatsapp_number",
   "whatsapp_message",
+  "whatsapp_floating",
   "instagram_profile",
   "mercadolibre_url",
   "bank_name",

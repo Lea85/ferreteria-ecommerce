@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
 type Settings = Record<string, string>;
@@ -38,6 +39,7 @@ const SECTIONS: SectionDef[] = [
     fields: [
       { key: "whatsapp_number", label: "Numero de WhatsApp", placeholder: "5491112345678" },
       { key: "whatsapp_message", label: "Mensaje precargado", placeholder: "Hola, queria consultar por: " },
+      { key: "whatsapp_floating", label: "Mostrar siempre (boton flotante en la tienda)", placeholder: "true" },
     ],
   },
   {
@@ -144,24 +146,35 @@ export default function AdminRedesSocialesPage() {
 
               {isOpen && (
                 <div className="border-t border-border px-5 pb-5 pt-4 space-y-4">
-                  {section.fields.map((field) => (
-                    <div key={field.key} className="space-y-2">
-                      <Label htmlFor={field.key}>{field.label}</Label>
-                      <Input id={field.key}
-                        value={settings[field.key] || ""}
-                        onChange={(e) => setSettings((s) => ({ ...s, [field.key]: e.target.value }))}
-                        placeholder={field.placeholder} />
-                      {field.key === "store_logo_url" && settings.store_logo_url && (
-                        <div className="flex items-center gap-4 rounded-lg border border-border bg-muted/30 p-3">
-                          <img src={settings.store_logo_url} alt="Logo preview" className="size-16 rounded-lg object-contain border border-border bg-white p-1" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                          <div className="text-xs text-muted-foreground">
-                            <p className="font-medium text-foreground">Vista previa del logo</p>
-                            <p>Se mostrara en el header de la tienda y como favicon del navegador.</p>
-                          </div>
+                  {section.fields.map((field) => {
+                    const isToggle = field.placeholder === "true";
+                    if (isToggle) {
+                      return (
+                        <div key={field.key} className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-4 py-3">
+                          <Label htmlFor={field.key} className="cursor-pointer">{field.label}</Label>
+                          <Switch id={field.key} checked={settings[field.key] === "true"} onCheckedChange={(v) => setSettings((s) => ({ ...s, [field.key]: v ? "true" : "false" }))} />
                         </div>
-                      )}
-                    </div>
-                  ))}
+                      );
+                    }
+                    return (
+                      <div key={field.key} className="space-y-2">
+                        <Label htmlFor={field.key}>{field.label}</Label>
+                        <Input id={field.key}
+                          value={settings[field.key] || ""}
+                          onChange={(e) => setSettings((s) => ({ ...s, [field.key]: e.target.value }))}
+                          placeholder={field.placeholder} />
+                        {field.key === "store_logo_url" && settings.store_logo_url && (
+                          <div className="flex items-center gap-4 rounded-lg border border-border bg-muted/30 p-3">
+                            <img src={settings.store_logo_url} alt="Logo preview" className="size-16 rounded-lg object-contain border border-border bg-white p-1" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                            <div className="text-xs text-muted-foreground">
+                              <p className="font-medium text-foreground">Vista previa del logo</p>
+                              <p>Se mostrara en el header de la tienda y como favicon del navegador.</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                   <div className="flex justify-end gap-3 pt-2">
                     <Button variant="outline" onClick={cancelSection} className="gap-2" disabled={saving}>
                       <X className="size-4" />Cancelar
