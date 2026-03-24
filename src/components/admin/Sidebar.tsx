@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
   BarChart3,
+  FileText,
   FolderTree,
   Globe,
   Image,
@@ -18,6 +19,7 @@ import {
   Ticket,
   Users,
   Warehouse,
+  Wrench,
   X,
 } from "lucide-react";
 import { useState } from "react";
@@ -37,9 +39,11 @@ const nav = [
   { href: "/admin/cupones", label: "Cupones", icon: Ticket },
   { href: "/admin/promociones", label: "Promociones", icon: Tag },
   { href: "/admin/campanas", label: "Campanias", icon: Image },
+  { href: "/admin/alquileres", label: "Alquileres", icon: Wrench },
   { href: "/admin/reportes", label: "Reportes", icon: BarChart3 },
   { href: "/admin/newsletter", label: "Newsletter", icon: Mail },
   { href: "/admin/redes-sociales", label: "Redes sociales", icon: Globe },
+  { href: "/admin/legales", label: "Legales", icon: FileText },
 ];
 
 export type AdminSidebarUser = {

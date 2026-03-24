@@ -761,3 +761,55 @@ model WarehouseLocation {
   @@index([sectorId])
   @@map("warehouse_locations")
 }
+
+// ============================================================================
+// ALQUILER DE HERRAMIENTAS
+// ============================================================================
+
+model RentalTool {
+  id           String  @id @default(cuid())
+  name         String
+  slug         String  @unique
+  description  String? @db.Text
+  imageUrl     String?
+  deposit      Decimal? @db.Decimal(12, 2)
+  availableQty Int     @default(1)
+  isActive     Boolean @default(true)
+
+  periods      RentalPeriod[]
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("rental_tools")
+}
+
+model RentalPeriod {
+  id           String  @id @default(cuid())
+  rentalToolId String
+  label        String
+  days         Int
+  price        Decimal @db.Decimal(12, 2)
+
+  rentalTool   RentalTool @relation(fields: [rentalToolId], references: [id], onDelete: Cascade)
+
+  @@index([rentalToolId])
+  @@map("rental_periods")
+}
+
+// ============================================================================
+// DOCUMENTOS LEGALES
+// ============================================================================
+
+model LegalDocument {
+  id        String  @id @default(cuid())
+  slug      String  @unique
+  title     String
+  content   String  @db.Text
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("legal_documents")
+}

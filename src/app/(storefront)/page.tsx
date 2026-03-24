@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { FeaturedProducts } from "@/components/storefront/FeaturedProducts";
 import { HeroBanner } from "@/components/storefront/HeroBanner";
 import { NewsletterForm } from "@/components/storefront/NewsletterForm";
+import { RentalSection } from "@/components/storefront/RentalSection";
 import {
   FREE_SHIPPING_THRESHOLD,
   SITE_NAME,
@@ -56,6 +57,8 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      <RentalSection />
 
       <section className="py-10 md:py-14">
         <div className="mx-auto max-w-7xl px-4">

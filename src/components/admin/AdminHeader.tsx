@@ -28,6 +28,8 @@ function titleFromPath(pathname: string): string {
   if (pathname === "/admin/reportes") return "Reportes";
   if (pathname === "/admin/newsletter") return "Newsletter";
   if (pathname === "/admin/redes-sociales") return "Redes sociales";
+  if (pathname === "/admin/alquileres") return "Alquiler de herramientas";
+  if (pathname === "/admin/legales") return "Legales";
   return "Administracion";
 }
 
