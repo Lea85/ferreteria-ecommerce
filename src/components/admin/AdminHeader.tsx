@@ -26,8 +26,11 @@ function titleFromPath(pathname: string): string {
   if (pathname === "/admin/promociones") return "Promociones";
   if (pathname === "/admin/campanas") return "Campanias";
   if (pathname === "/admin/reportes") return "Reportes";
+  if (pathname === "/admin/reportes/sitio") return "Analisis del sitio";
+  if (pathname === "/admin/reportes/ventas") return "Analisis de ventas";
+  if (pathname === "/admin/reportes/clientes") return "Analisis de clientes";
   if (pathname === "/admin/newsletter") return "Newsletter";
-  if (pathname === "/admin/redes-sociales") return "Redes sociales";
+  if (pathname === "/admin/integraciones") return "Integraciones";
   if (pathname === "/admin/alquileres") return "Alquiler de herramientas";
   if (pathname === "/admin/legales") return "Legales";
   return "Administracion";
