@@ -59,6 +59,7 @@ export function ProductCard({ product, className }: ProductCardProps) {
             src={product.image || "/placeholder-product.webp"}
             alt=""
             fill
+            unoptimized={!!(product.image && product.image.startsWith("http"))}
             className="object-cover transition-transform duration-500 group-hover:scale-105"
             sizes="(max-width:640px) 45vw, (max-width:1024px) 33vw, 25vw"
           />

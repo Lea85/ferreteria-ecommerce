@@ -54,7 +54,7 @@ export default function HomePage() {
                   {categories.map((c) => (
                     <Link key={c.id} href={`/productos?category=${c.slug}`} className="group overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-shadow hover:shadow-md">
                       <div className="relative aspect-[4/3] overflow-hidden bg-muted">
-                        <Image src={c.image} alt={c.name} fill className="object-cover transition-transform duration-500 group-hover:scale-105" sizes="(max-width:640px) 50vw, 25vw" />
+                        <Image src={c.image} alt={c.name} fill unoptimized={c.image.startsWith("http")} className="object-cover transition-transform duration-500 group-hover:scale-105" sizes="(max-width:640px) 50vw, 25vw" />
                       </div>
                       <div className="p-3 text-center"><span className="text-sm font-semibold text-foreground group-hover:text-primary">{c.name}</span></div>
                     </Link>
@@ -75,7 +75,7 @@ export default function HomePage() {
                   {brands.map((b) => (
                     <Link key={b.id} href={`/productos?marcas=${encodeURIComponent(b.name)}`} className="flex flex-col items-center rounded-xl border border-border bg-card p-4 text-center shadow-sm transition-shadow hover:shadow-md">
                       <div className="relative mb-3 size-16 overflow-hidden rounded-full bg-muted">
-                        <Image src={b.logo} alt={b.name} fill className="object-cover" sizes="64px" />
+                        <Image src={b.logo} alt={b.name} fill unoptimized={b.logo.startsWith("http")} className="object-cover" sizes="64px" />
                       </div>
                       <span className="text-sm font-semibold text-primary">{b.name}</span>
                     </Link>

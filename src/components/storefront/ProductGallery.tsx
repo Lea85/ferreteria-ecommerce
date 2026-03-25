@@ -23,6 +23,7 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
             alt={productName}
             fill
             priority
+            unoptimized={main.startsWith("http")}
             className="object-cover transition-transform duration-300 md:group-hover:scale-110"
             sizes="(max-width:1024px) 100vw, 50vw"
           />
@@ -46,6 +47,7 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
                 src={src}
                 alt=""
                 fill
+                unoptimized={src.startsWith("http")}
                 className="object-cover"
                 sizes="80px"
               />

@@ -76,6 +76,7 @@ export default function CarritoPage() {
                   src={line.image}
                   alt=""
                   fill
+                  unoptimized={line.image.startsWith("http")}
                   className="object-cover"
                   sizes="112px"
                 />

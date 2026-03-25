@@ -82,6 +82,7 @@ export function CartDrawer() {
                       src={line.image}
                       alt=""
                       fill
+                      unoptimized={line.image.startsWith("http")}
                       className="object-cover"
                       sizes="80px"
                     />

@@ -84,6 +84,7 @@ export function HeroBanner() {
               alt=""
               fill
               priority={i === 0}
+              unoptimized={s.imageUrl.startsWith("http")}
               className="object-cover"
               sizes="100vw"
             />

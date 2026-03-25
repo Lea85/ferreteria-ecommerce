@@ -81,7 +81,7 @@ export function RentalSection() {
               <Card key={t.id} className="group border-border shadow-sm transition-shadow hover:shadow-md cursor-pointer" onClick={() => openTool(t)}>
                 <div className="relative h-44 overflow-hidden rounded-t-xl bg-muted">
                   {t.imageUrl ? (
-                    <Image src={t.imageUrl} alt={t.name} fill className="object-cover transition-transform duration-500 group-hover:scale-105" sizes="(max-width:640px) 100vw, 25vw" />
+                    <Image src={t.imageUrl} alt={t.name} fill unoptimized={t.imageUrl.startsWith("http")} className="object-cover transition-transform duration-500 group-hover:scale-105" sizes="(max-width:640px) 100vw, 25vw" />
                   ) : (
                     <div className="flex size-full items-center justify-center"><Wrench className="size-12 text-muted-foreground/30" /></div>
                   )}
@@ -115,7 +115,7 @@ export function RentalSection() {
             <div className="space-y-4 pt-2">
               {selectedTool.imageUrl && (
                 <div className="relative h-48 overflow-hidden rounded-xl bg-muted">
-                  <Image src={selectedTool.imageUrl} alt="" fill className="object-cover" sizes="400px" />
+                  <Image src={selectedTool.imageUrl} alt="" fill unoptimized={selectedTool.imageUrl.startsWith("http")} className="object-cover" sizes="400px" />
                 </div>
               )}
               {selectedTool.description && <p className="text-sm text-muted-foreground">{selectedTool.description}</p>}

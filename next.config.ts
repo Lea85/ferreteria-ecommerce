@@ -13,6 +13,21 @@ const nextConfig: NextConfig = {
         hostname: "*.supabase.co",
         pathname: "/**",
       },
+      {
+        protocol: "https",
+        hostname: "www.lusqtoff.com.ar",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
+        hostname: "lusqtoff.com.ar",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
+        hostname: "placehold.co",
+        pathname: "/**",
+      },
     ],
   },
 };
