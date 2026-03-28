@@ -104,6 +104,7 @@ export function ProductForm({
 }: ProductFormProps) {
   const fileInputId = useId();
   const [slugTouched, setSlugTouched] = useState(!!initialData?.slug);
+  const [submitting, setSubmitting] = useState(false);
 
   type WarehouseOption = { id: string; code: string; display: string };
   const [warehouseLocations, setWarehouseLocations] = useState<WarehouseOption[]>([]);
@@ -363,16 +364,55 @@ export function ProductForm({
     });
   }
 
+  async function handleFormSubmit(data: ProductFormValues) {
+    setSubmitting(true);
+    try {
+      await onSubmit({
+        ...data,
+        images,
+        supplierIds: Array.from(selectedSupplierIds),
+      } as any);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function handleFormError(errors: any) {
+    const messages: string[] = [];
+    if (errors.name) messages.push(`Nombre: ${errors.name.message}`);
+    if (errors.slug) messages.push(`Slug: ${errors.slug.message}`);
+    if (errors.categoryIds) messages.push(`Categorías: ${errors.categoryIds.message || "Elegí al menos una"}`);
+    if (errors.variants) {
+      if (errors.variants.message) {
+        messages.push(`Variantes: ${errors.variants.message}`);
+      } else if (Array.isArray(errors.variants)) {
+        for (let i = 0; i < errors.variants.length; i++) {
+          const ve = errors.variants[i];
+          if (ve?.sku) messages.push(`Variante ${i + 1} - SKU: ${ve.sku.message}`);
+          if (ve?.price) messages.push(`Variante ${i + 1} - Precio: ${ve.price.message}`);
+        }
+      }
+    }
+    toast.error("Faltan datos obligatorios", {
+      description: messages.length > 0 ? messages.join(" · ") : "Revisá los campos marcados con *",
+    });
+  }
+
+  const { isValid } = form.formState;
+  const nameVal = form.watch("name");
+  const slugVal = form.watch("slug");
+  const variantsVal = form.watch("variants");
+  const canSubmit = !submitting
+    && nameVal?.trim().length >= 2
+    && slugVal?.trim().length >= 2
+    && categoryIds.length > 0
+    && variantsVal?.length > 0
+    && variantsVal.every((v) => v.sku?.trim().length > 0);
+
   return (
     <form
       className={cn("space-y-8", className)}
-      onSubmit={form.handleSubmit((data) =>
-        onSubmit({
-          ...data,
-          images,
-          supplierIds: Array.from(selectedSupplierIds),
-        } as any),
-      )}
+      onSubmit={form.handleSubmit(handleFormSubmit, handleFormError)}
     >
       <Card className="border-border shadow-sm">
         <CardHeader>
@@ -380,14 +420,14 @@ export function ProductForm({
         </CardHeader>
         <CardContent className="grid gap-6 md:grid-cols-2">
           <div className="space-y-2 md:col-span-2">
-            <Label htmlFor="name">Nombre</Label>
+            <Label htmlFor="name">Nombre <span className="text-destructive">*</span></Label>
             <Input id="name" {...form.register("name")} className="border-border" />
             {form.formState.errors.name && (
               <p className="text-sm text-destructive">{form.formState.errors.name.message}</p>
             )}
           </div>
           <div className="space-y-2 md:col-span-2">
-            <Label htmlFor="slug">Slug (URL)</Label>
+            <Label htmlFor="slug">Slug (URL) <span className="text-destructive">*</span></Label>
             <Input
               id="slug"
               {...form.register("slug")}
@@ -449,7 +489,7 @@ export function ProductForm({
             </Select>
           </div>
           <div className="space-y-2 md:col-span-2">
-            <Label>Categorías</Label>
+            <Label>Categorías <span className="text-destructive">*</span></Label>
             <div className="grid gap-2 rounded-md border border-border bg-muted/30 p-4 sm:grid-cols-2 lg:grid-cols-3">
               {categories.map((c) => (
                 <label key={c.id} className="flex cursor-pointer items-center gap-2 text-sm">
@@ -609,8 +649,8 @@ export function ProductForm({
             <TableHeader>
               <TableRow className="bg-muted/40">
                 {selectedAttributes.length > 0 && <TableHead>Atributos</TableHead>}
-                <TableHead>SKU</TableHead>
-                <TableHead>Precio</TableHead>
+                <TableHead>SKU <span className="text-destructive">*</span></TableHead>
+                <TableHead>Precio <span className="text-destructive">*</span></TableHead>
                 <TableHead>Precio comparación</TableHead>
                 <TableHead>Stock</TableHead>
                 <TableHead>Peso (kg)</TableHead>
@@ -787,8 +827,22 @@ export function ProductForm({
         </CardContent>
       </Card>
 
-      <div className="flex justify-end gap-3">
-        <Button type="submit" className="min-w-[160px]">{submitLabel}</Button>
+      <div className="flex flex-col items-end gap-2">
+        {!canSubmit && !submitting && (
+          <p className="text-xs text-muted-foreground">
+            Completá los campos obligatorios (<span className="text-destructive">*</span>) para habilitar el botón.
+          </p>
+        )}
+        <Button type="submit" className="min-w-[160px]" disabled={!canSubmit}>
+          {submitting ? (
+            <>
+              <Spinner className="mr-2 size-4 animate-spin" />
+              Guardando...
+            </>
+          ) : (
+            submitLabel
+          )}
+        </Button>
       </div>
 
       {process.env.NODE_ENV === "development" && slugWatch && (

@@ -36,7 +36,7 @@ export async function POST(request: Request) {
 
     if (!supabaseAdmin) {
       return NextResponse.json(
-        { error: "Almacenamiento no configurado. Configurá NEXT_PUBLIC_SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY." },
+        { error: "La subida de archivos no está disponible. Usá la opción 'Agregar URL' para pegar un enlace de imagen. Para habilitar subida de archivos, configurá SUPABASE_SERVICE_ROLE_KEY en las variables de entorno." },
         { status: 500 },
       );
     }
