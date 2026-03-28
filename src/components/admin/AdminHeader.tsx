@@ -14,6 +14,7 @@ import type { AdminSidebarUser } from "./Sidebar";
 function titleFromPath(pathname: string): string {
   if (pathname === "/admin/dashboard") return "Dashboard";
   if (pathname === "/admin/productos") return "Productos";
+  if (pathname === "/admin/productos/atributos") return "Administrar Sub Categorías";
   if (pathname === "/admin/productos/nuevo") return "Nuevo producto";
   if (pathname.startsWith("/admin/productos/")) return "Editar producto";
   if (pathname === "/admin/categorias") return "Categorias";

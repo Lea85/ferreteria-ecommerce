@@ -24,8 +24,10 @@ export type ProductCardProduct = {
   category?: string | null;
   image: string | null;
   price: number;
+  maxPrice?: number | null;
   comparePrice?: number | null;
   stock: number;
+  variantCount?: number;
 };
 
 type ProductCardProps = {
@@ -100,14 +102,25 @@ export function ProductCard({ product, className }: ProductCardProps) {
           </h3>
         </Link>
         <div className="mt-auto flex flex-wrap items-baseline gap-2 pt-2">
-          <span className="text-lg font-bold text-primary">
-            {formatPrice(product.price)}
-          </span>
-          {onSale ? (
+          {product.maxPrice ? (
+            <span className="text-lg font-bold text-primary">
+              Desde {formatPrice(product.price)} a {formatPrice(product.maxPrice)}
+            </span>
+          ) : (
+            <span className="text-lg font-bold text-primary">
+              {formatPrice(product.price)}
+            </span>
+          )}
+          {onSale && !product.maxPrice ? (
             <span className="text-sm text-muted-foreground line-through">
               {formatPrice(product.comparePrice!)}
             </span>
           ) : null}
+          {(product.variantCount ?? 0) > 1 && (
+            <Badge variant="outline" className="text-[10px]">
+              {product.variantCount} variantes
+            </Badge>
+          )}
         </div>
       </CardContent>
       <CardFooter className="p-4 pt-0">

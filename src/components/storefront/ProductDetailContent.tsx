@@ -21,9 +21,17 @@ import { useCartStore } from "@/stores/cart.store";
 import { ProductCard } from "./ProductCard";
 import { ProductGallery } from "./ProductGallery";
 
+type VariantAttribute = {
+  typeId: string;
+  typeName: string;
+  valueId: string;
+  value: string;
+};
+
 type ProductVariant = {
   id: string; name?: string | null; sku: string; price: number;
-  comparePrice?: number; stock: number; color?: string | null; size?: string | null;
+  comparePrice?: number; stock: number;
+  attributes?: VariantAttribute[];
 };
 
 type Complementary = {
@@ -43,6 +51,106 @@ type ProductDetail = {
 type ProductDetailContentProps = {
   product: ProductDetail;
 };
+
+function VariantSelector({
+  variants,
+  selectedId,
+  onSelect,
+}: {
+  variants: ProductVariant[];
+  selectedId: string;
+  onSelect: (id: string) => void;
+}) {
+  const hasAttributes = variants.some((v) => v.attributes && v.attributes.length > 0);
+
+  if (!hasAttributes) {
+    return (
+      <div className="space-y-2">
+        <Label>Variante</Label>
+        <Select value={selectedId} onValueChange={onSelect}>
+          <SelectTrigger>
+            <SelectValue placeholder="Elegí una opción" />
+          </SelectTrigger>
+          <SelectContent>
+            {variants.map((v) => (
+              <SelectItem key={v.id} value={v.id}>
+                {v.name || v.sku} — {formatPrice(v.price)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    );
+  }
+
+  const attrTypes = new Map<string, { name: string; values: Map<string, string> }>();
+  for (const v of variants) {
+    for (const a of v.attributes || []) {
+      if (!attrTypes.has(a.typeId)) {
+        attrTypes.set(a.typeId, { name: a.typeName, values: new Map() });
+      }
+      attrTypes.get(a.typeId)!.values.set(a.valueId, a.value);
+    }
+  }
+
+  const selectedVariant = variants.find((v) => v.id === selectedId);
+  const selectedValueIds = new Set(
+    selectedVariant?.attributes?.map((a) => a.valueId) || [],
+  );
+
+  function selectAttrValue(typeId: string, valueId: string) {
+    const targetValueIds = new Map<string, string>();
+    for (const [tId] of attrTypes) {
+      if (tId === typeId) {
+        targetValueIds.set(tId, valueId);
+      } else {
+        const current = selectedVariant?.attributes?.find((a) => a.typeId === tId);
+        if (current) targetValueIds.set(tId, current.valueId);
+      }
+    }
+
+    const match = variants.find((v) => {
+      if (!v.attributes) return false;
+      return Array.from(targetValueIds.entries()).every(([, vId]) =>
+        v.attributes!.some((a) => a.valueId === vId),
+      );
+    });
+
+    if (match) {
+      onSelect(match.id);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {Array.from(attrTypes.entries()).map(([typeId, type]) => (
+        <div key={typeId} className="space-y-2">
+          <Label className="text-sm font-medium">{type.name}</Label>
+          <div className="flex flex-wrap gap-2">
+            {Array.from(type.values.entries()).map(([valId, valLabel]) => (
+              <button
+                key={valId}
+                type="button"
+                className={cn(
+                  "rounded-md border px-3 py-1.5 text-sm transition-colors",
+                  selectedValueIds.has(valId)
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-background hover:border-primary/50",
+                )}
+                onClick={() => selectAttrValue(typeId, valId)}
+              >
+                {valLabel}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+      <p className="text-xs text-muted-foreground">
+        SKU: {selectedVariant?.sku} — {formatPrice(selectedVariant?.price ?? 0)}
+      </p>
+    </div>
+  );
+}
 
 export function ProductDetailContent({ product }: ProductDetailContentProps) {
   const [variantId, setVariantId] = useState(product.variants[0]?.id ?? "");
@@ -114,28 +222,11 @@ export function ProductDetailContent({ product }: ProductDetailContentProps) {
           <Separator className="my-6" />
 
           {product.variants.length > 1 ? (
-            <div className="space-y-2">
-              <Label>Variante</Label>
-              <Select
-                value={variantId}
-                onValueChange={(id) => {
-                  setVariantId(id);
-                  setQty(1);
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Elegí una opción" />
-                </SelectTrigger>
-                <SelectContent>
-                  {product.variants.map((v) => (
-                    <SelectItem key={v.id} value={v.id}>
-                      {[v.color, v.size].filter(Boolean).join(" · ") || v.sku}{" "}
-                      — {formatPrice(v.price)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <VariantSelector
+              variants={product.variants}
+              selectedId={variantId}
+              onSelect={(id) => { setVariantId(id); setQty(1); }}
+            />
           ) : null}
 
           <div className="mt-6 flex flex-wrap items-center gap-4">
@@ -193,9 +284,9 @@ export function ProductDetailContent({ product }: ProductDetailContentProps) {
                 price: variant.price,
                 quantity: qty,
                 sku: variant.sku,
-                variantLabel: [variant.color, variant.size]
-                  .filter(Boolean)
-                  .join(" · "),
+                variantLabel: variant.attributes
+                  ? variant.attributes.map((a) => a.value).join(" · ")
+                  : variant.name || "",
               });
               openCart();
             }}

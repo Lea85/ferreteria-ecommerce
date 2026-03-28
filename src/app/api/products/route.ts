@@ -53,7 +53,7 @@ export async function GET(request: Request) {
         include: {
           brand: { select: { name: true } },
           categories: { select: { category: { select: { name: true, slug: true } } }, take: 1 },
-          variants: { where: { isActive: true }, select: { id: true, sku: true, price: true, comparePrice: true, stock: true, name: true }, orderBy: { price: "asc" }, take: 1 },
+          variants: { where: { isActive: true }, select: { id: true, sku: true, price: true, comparePrice: true, stock: true, name: true }, orderBy: { price: "asc" } },
           images: { select: { url: true, altText: true }, orderBy: { position: "asc" }, take: 1 },
         },
         orderBy,
@@ -65,6 +65,10 @@ export async function GET(request: Request) {
 
     const mapped = products.map((p) => {
       const v = p.variants[0];
+      const prices = p.variants.map((vr) => Number(vr.price));
+      const minP = prices.length > 0 ? Math.min(...prices) : 0;
+      const maxP = prices.length > 0 ? Math.max(...prices) : 0;
+      const totalStock = p.variants.reduce((sum, vr) => sum + vr.stock, 0);
       return {
         id: p.id,
         name: p.name,
@@ -73,9 +77,11 @@ export async function GET(request: Request) {
         category: p.categories[0]?.category?.name || null,
         categorySlug: p.categories[0]?.category?.slug || null,
         image: p.images[0]?.url || null,
-        price: v ? Number(v.price) : 0,
+        price: minP,
+        maxPrice: maxP !== minP ? maxP : null,
         comparePrice: v?.comparePrice ? Number(v.comparePrice) : null,
-        stock: v?.stock ?? 0,
+        stock: totalStock,
+        variantCount: p.variants.length,
         isFeatured: p.isFeatured,
       };
     });

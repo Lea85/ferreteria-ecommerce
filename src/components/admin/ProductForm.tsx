@@ -1,11 +1,13 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { MapPin, Plus, Trash2 } from "lucide-react";
+import { Copy, MapPin, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { useForm, useFieldArray, type Resolver } from "react-hook-form";
+import { toast } from "sonner";
 import { z } from "zod";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -46,6 +48,7 @@ const variantSchema = z.object({
   comparePrice: z.coerce.number().min(0).optional().nullable(),
   stock: z.coerce.number().int().min(0),
   weight: z.coerce.number().min(0).optional().nullable(),
+  attributeValueIds: z.array(z.string()).optional(),
 });
 
 const productSchema = z.object({
@@ -82,6 +85,9 @@ export type ProductFormProps = {
   className?: string;
 };
 
+type AttrValue = { id: string; value: string; position: number };
+type Attribute = { id: string; name: string; position: number; values: AttrValue[] };
+
 export function ProductForm({
   initialData,
   brands,
@@ -100,6 +106,10 @@ export function ProductForm({
     new Set((initialData as any)?.supplierIds || []),
   );
 
+  const [allAttributes, setAllAttributes] = useState<Attribute[]>([]);
+  const [selectedAttrIds, setSelectedAttrIds] = useState<Set<string>>(new Set());
+  const [basePrice, setBasePrice] = useState<string>("");
+
   useEffect(() => {
     fetch("/api/admin/warehouse/locations")
       .then((r) => r.json())
@@ -109,7 +119,29 @@ export function ProductForm({
       .then((r) => r.json())
       .then((d) => { if (d.suppliers) setAllSuppliers(d.suppliers); })
       .catch(() => {});
-  }, []);
+    fetch("/api/admin/product-attributes")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.attributes) {
+          setAllAttributes(d.attributes);
+          if (initialData?.variants) {
+            const usedAttrIds = new Set<string>();
+            for (const v of initialData.variants) {
+              if (v.attributeValueIds) {
+                for (const avId of v.attributeValueIds) {
+                  const attr = d.attributes.find((a: Attribute) =>
+                    a.values.some((val: AttrValue) => val.id === avId),
+                  );
+                  if (attr) usedAttrIds.add(attr.id);
+                }
+              }
+            }
+            setSelectedAttrIds(usedAttrIds);
+          }
+        }
+      })
+      .catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const defaultValues = useMemo(
     (): ProductFormValues => ({
@@ -118,23 +150,14 @@ export function ProductForm({
       description: initialData?.description ?? "",
       brandId: initialData?.brandId ?? "",
       warehouseLocationId: (initialData as any)?.warehouseLocationId ?? "",
-      categoryIds: initialData?.categoryIds?.length
-        ? initialData.categoryIds
-        : [],
+      categoryIds: initialData?.categoryIds?.length ? initialData.categoryIds : [],
       isActive: initialData?.isActive ?? true,
       isFeatured: initialData?.isFeatured ?? false,
       metaTitle: initialData?.metaTitle ?? "",
       metaDesc: initialData?.metaDesc ?? "",
-      variants:
-        initialData?.variants?.length ? initialData.variants : [
-            {
-              sku: "",
-              price: 0,
-              comparePrice: null,
-              stock: 0,
-              weight: null,
-            },
-          ],
+      variants: initialData?.variants?.length
+        ? initialData.variants
+        : [{ sku: "", price: 0, comparePrice: null, stock: 0, weight: null, attributeValueIds: [] }],
     }),
     [initialData],
   );
@@ -144,7 +167,7 @@ export function ProductForm({
     defaultValues,
   });
 
-  const { fields, append, remove } = useFieldArray({
+  const { fields, append, remove, replace } = useFieldArray({
     control: form.control,
     name: "variants",
   });
@@ -175,10 +198,106 @@ export function ProductForm({
     form.setValue("categoryIds", next, { shouldValidate: true });
   }
 
+  function toggleAttributeType(attrId: string) {
+    setSelectedAttrIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(attrId)) next.delete(attrId);
+      else next.add(attrId);
+      return next;
+    });
+  }
+
+  const selectedAttributes = useMemo(
+    () => allAttributes.filter((a) => selectedAttrIds.has(a.id)),
+    [allAttributes, selectedAttrIds],
+  );
+
+  function generateCombinations() {
+    if (selectedAttributes.length === 0) {
+      toast.error("Seleccioná al menos un atributo");
+      return;
+    }
+
+    const attrsWithValues = selectedAttributes.filter((a) => a.values.length > 0);
+    if (attrsWithValues.length === 0) {
+      toast.error("Los atributos seleccionados no tienen valores definidos");
+      return;
+    }
+
+    const combos: { label: string; valueIds: string[] }[] = [];
+    const base = nameWatch || "PROD";
+    const baseSku = slugify(base).toUpperCase().slice(0, 10);
+
+    function cartesian(arrays: AttrValue[][]): AttrValue[][] {
+      if (arrays.length === 0) return [[]];
+      const [first, ...rest] = arrays;
+      const restCombos = cartesian(rest);
+      const result: AttrValue[][] = [];
+      for (const item of first) {
+        for (const combo of restCombos) {
+          result.push([item, ...combo]);
+        }
+      }
+      return result;
+    }
+
+    const valueSets = attrsWithValues.map((a) => a.values);
+    const allCombos = cartesian(valueSets);
+
+    for (let i = 0; i < allCombos.length; i++) {
+      const combo = allCombos[i];
+      const label = combo.map((v) => v.value).join(" / ");
+      const valueIds = combo.map((v) => v.id);
+      combos.push({ label, valueIds });
+    }
+
+    const price = parseFloat(basePrice) || 0;
+    const newVariants = combos.map((c, i) => ({
+      sku: `${baseSku}-${String(i + 1).padStart(3, "0")}`,
+      price,
+      comparePrice: null as number | null,
+      stock: 0,
+      weight: null as number | null,
+      attributeValueIds: c.valueIds,
+    }));
+
+    replace(newVariants);
+    toast.success(`${newVariants.length} variantes generadas`);
+  }
+
+  function applyPriceToAll() {
+    const price = parseFloat(basePrice);
+    if (isNaN(price) || price < 0) {
+      toast.error("Ingresá un precio válido");
+      return;
+    }
+    const current = form.getValues("variants");
+    const updated = current.map((v) => ({ ...v, price }));
+    replace(updated);
+    toast.success("Precio aplicado a todas las variantes");
+  }
+
+  function getVariantAttributeLabels(attributeValueIds?: string[]): string {
+    if (!attributeValueIds || attributeValueIds.length === 0) return "";
+    const labels: string[] = [];
+    for (const avId of attributeValueIds) {
+      for (const attr of allAttributes) {
+        const val = attr.values.find((v) => v.id === avId);
+        if (val) {
+          labels.push(val.value);
+          break;
+        }
+      }
+    }
+    return labels.join(" / ");
+  }
+
   return (
     <form
       className={cn("space-y-8", className)}
-      onSubmit={form.handleSubmit((data) => onSubmit({ ...data, supplierIds: Array.from(selectedSupplierIds) } as any))}
+      onSubmit={form.handleSubmit((data) =>
+        onSubmit({ ...data, supplierIds: Array.from(selectedSupplierIds) } as any),
+      )}
     >
       <Card className="border-border shadow-sm">
         <CardHeader>
@@ -189,9 +308,7 @@ export function ProductForm({
             <Label htmlFor="name">Nombre</Label>
             <Input id="name" {...form.register("name")} className="border-border" />
             {form.formState.errors.name && (
-              <p className="text-sm text-destructive">
-                {form.formState.errors.name.message}
-              </p>
+              <p className="text-sm text-destructive">{form.formState.errors.name.message}</p>
             )}
           </div>
           <div className="space-y-2 md:col-span-2">
@@ -206,9 +323,7 @@ export function ProductForm({
               }}
             />
             {form.formState.errors.slug && (
-              <p className="text-sm text-destructive">
-                {form.formState.errors.slug.message}
-              </p>
+              <p className="text-sm text-destructive">{form.formState.errors.slug.message}</p>
             )}
             <p className="text-xs text-muted-foreground">
               Se genera desde el nombre; podés editarlo manualmente.
@@ -216,20 +331,13 @@ export function ProductForm({
           </div>
           <div className="space-y-2 md:col-span-2">
             <Label htmlFor="description">Descripción</Label>
-            <Textarea
-              id="description"
-              rows={5}
-              {...form.register("description")}
-              className="border-border"
-            />
+            <Textarea id="description" rows={5} {...form.register("description")} className="border-border" />
           </div>
           <div className="space-y-2">
             <Label>Marca</Label>
             <Select
               value={form.watch("brandId") || "__none__"}
-              onValueChange={(v) =>
-                form.setValue("brandId", v === "__none__" ? "" : v)
-              }
+              onValueChange={(v) => form.setValue("brandId", v === "__none__" ? "" : v)}
             >
               <SelectTrigger className="border-border">
                 <SelectValue placeholder="Seleccionar marca" />
@@ -237,9 +345,7 @@ export function ProductForm({
               <SelectContent>
                 <SelectItem value="__none__">Sin marca</SelectItem>
                 {brands.map((b) => (
-                  <SelectItem key={b.id} value={b.id}>
-                    {b.name}
-                  </SelectItem>
+                  <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -251,9 +357,7 @@ export function ProductForm({
             </Label>
             <Select
               value={form.watch("warehouseLocationId") || "__none__"}
-              onValueChange={(v) =>
-                form.setValue("warehouseLocationId", v === "__none__" ? "" : v)
-              }
+              onValueChange={(v) => form.setValue("warehouseLocationId", v === "__none__" ? "" : v)}
             >
               <SelectTrigger className="border-border">
                 <SelectValue placeholder="Sin ubicacion asignada" />
@@ -273,45 +377,29 @@ export function ProductForm({
             <Label>Categorías</Label>
             <div className="grid gap-2 rounded-md border border-border bg-muted/30 p-4 sm:grid-cols-2 lg:grid-cols-3">
               {categories.map((c) => (
-                <label
-                  key={c.id}
-                  className="flex cursor-pointer items-center gap-2 text-sm"
-                >
-                  <Checkbox
-                    checked={categoryIds.includes(c.id)}
-                    onCheckedChange={() => toggleCategory(c.id)}
-                  />
+                <label key={c.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                  <Checkbox checked={categoryIds.includes(c.id)} onCheckedChange={() => toggleCategory(c.id)} />
                   {c.name}
                 </label>
               ))}
             </div>
             {form.formState.errors.categoryIds && (
-              <p className="text-sm text-destructive">
-                {form.formState.errors.categoryIds.message as string}
-              </p>
+              <p className="text-sm text-destructive">{form.formState.errors.categoryIds.message as string}</p>
             )}
           </div>
           <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
             <div>
               <p className="text-sm font-medium">Activo</p>
-              <p className="text-xs text-muted-foreground">
-                Visible en la tienda
-              </p>
+              <p className="text-xs text-muted-foreground">Visible en la tienda</p>
             </div>
-            <Switch
-              checked={form.watch("isActive")}
-              onCheckedChange={(v) => form.setValue("isActive", v)}
-            />
+            <Switch checked={form.watch("isActive")} onCheckedChange={(v) => form.setValue("isActive", v)} />
           </div>
           <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
             <div>
               <p className="text-sm font-medium">Destacado</p>
               <p className="text-xs text-muted-foreground">Home y listados</p>
             </div>
-            <Switch
-              checked={form.watch("isFeatured")}
-              onCheckedChange={(v) => form.setValue("isFeatured", v)}
-            />
+            <Switch checked={form.watch("isFeatured")} onCheckedChange={(v) => form.setValue("isFeatured", v)} />
           </div>
         </CardContent>
       </Card>
@@ -344,6 +432,69 @@ export function ProductForm({
         </Card>
       )}
 
+      {allAttributes.length > 0 && (
+        <Card className="border-border shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-lg text-primary">Sub Categorías (Atributos)</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Seleccioná los atributos que aplican a este producto. Luego podés generar todas las
+              combinaciones como variantes.
+            </p>
+            <div className="grid gap-2 rounded-md border border-border bg-muted/30 p-4 sm:grid-cols-2 lg:grid-cols-3">
+              {allAttributes.map((attr) => (
+                <label key={attr.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                  <Checkbox
+                    checked={selectedAttrIds.has(attr.id)}
+                    onCheckedChange={() => toggleAttributeType(attr.id)}
+                  />
+                  <span className="font-medium">{attr.name}</span>
+                  <span className="text-xs text-muted-foreground">
+                    ({attr.values.length} {attr.values.length === 1 ? "valor" : "valores"})
+                  </span>
+                </label>
+              ))}
+            </div>
+
+            {selectedAttributes.length > 0 && (
+              <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
+                <p className="text-sm font-medium">Valores seleccionados:</p>
+                {selectedAttributes.map((attr) => (
+                  <div key={attr.id} className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-semibold text-muted-foreground">{attr.name}:</span>
+                    {attr.values.map((v) => (
+                      <Badge key={v.id} variant="secondary" className="text-xs">
+                        {v.value}
+                      </Badge>
+                    ))}
+                  </div>
+                ))}
+                <div className="flex flex-col gap-3 border-t border-border pt-3 sm:flex-row sm:items-end">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Precio base para todas las variantes</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      className="w-40"
+                      value={basePrice}
+                      onChange={(e) => setBasePrice(e.target.value)}
+                    />
+                  </div>
+                  <Button type="button" variant="default" size="sm" className="gap-1" onClick={generateCombinations}>
+                    <RefreshCw className="size-4" /> Generar combinaciones
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" className="gap-1" onClick={applyPriceToAll}>
+                    <Copy className="size-4" /> Aplicar precio a todas
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       <Card className="border-border shadow-sm">
         <CardHeader>
           <CardTitle className="text-lg text-primary">SEO</CardTitle>
@@ -355,12 +506,7 @@ export function ProductForm({
           </div>
           <div className="space-y-2 md:col-span-2">
             <Label htmlFor="metaDesc">Meta descripción</Label>
-            <Textarea
-              id="metaDesc"
-              rows={3}
-              {...form.register("metaDesc")}
-              className="border-border"
-            />
+            <Textarea id="metaDesc" rows={3} {...form.register("metaDesc")} className="border-border" />
           </div>
         </CardContent>
       </Card>
@@ -374,28 +520,20 @@ export function ProductForm({
             size="sm"
             className="gap-1"
             onClick={() =>
-              append({
-                sku: "",
-                price: 0,
-                comparePrice: null,
-                stock: 0,
-                weight: null,
-              })
+              append({ sku: "", price: 0, comparePrice: null, stock: 0, weight: null, attributeValueIds: [] })
             }
           >
-            <Plus className="size-4" />
-            Agregar variante
+            <Plus className="size-4" /> Agregar variante
           </Button>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           {form.formState.errors.variants?.message && (
-            <p className="mb-2 text-sm text-destructive">
-              {String(form.formState.errors.variants.message)}
-            </p>
+            <p className="mb-2 text-sm text-destructive">{String(form.formState.errors.variants.message)}</p>
           )}
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/40">
+                {selectedAttributes.length > 0 && <TableHead>Atributos</TableHead>}
                 <TableHead>SKU</TableHead>
                 <TableHead>Precio</TableHead>
                 <TableHead>Precio comparación</TableHead>
@@ -405,59 +543,70 @@ export function ProductForm({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {fields.map((field, index) => (
-                <TableRow key={field.id}>
-                  <TableCell>
-                    <Input
-                      {...form.register(`variants.${index}.sku`)}
-                      className="h-9 min-w-[120px] border-border"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      {...form.register(`variants.${index}.price`)}
-                      className="h-9 w-28 border-border"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      {...form.register(`variants.${index}.comparePrice`)}
-                      className="h-9 w-28 border-border"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      type="number"
-                      {...form.register(`variants.${index}.stock`)}
-                      className="h-9 w-24 border-border"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      {...form.register(`variants.${index}.weight`)}
-                      className="h-9 w-24 border-border"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      disabled={fields.length <= 1}
-                      onClick={() => remove(index)}
-                      aria-label="Eliminar variante"
-                    >
-                      <Trash2 className="size-4 text-destructive" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {fields.map((field, index) => {
+                const attrLabels = getVariantAttributeLabels(
+                  form.watch(`variants.${index}.attributeValueIds`),
+                );
+                return (
+                  <TableRow key={field.id}>
+                    {selectedAttributes.length > 0 && (
+                      <TableCell>
+                        {attrLabels ? (
+                          <span className="text-xs font-medium text-muted-foreground">{attrLabels}</span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground/50">Sin atributos</span>
+                        )}
+                      </TableCell>
+                    )}
+                    <TableCell>
+                      <Input {...form.register(`variants.${index}.sku`)} className="h-9 min-w-[120px] border-border" />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        {...form.register(`variants.${index}.price`)}
+                        className="h-9 w-28 border-border"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        {...form.register(`variants.${index}.comparePrice`)}
+                        className="h-9 w-28 border-border"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        type="number"
+                        {...form.register(`variants.${index}.stock`)}
+                        className="h-9 w-24 border-border"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        {...form.register(`variants.${index}.weight`)}
+                        className="h-9 w-24 border-border"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        disabled={fields.length <= 1}
+                        onClick={() => remove(index)}
+                        aria-label="Eliminar variante"
+                      >
+                        <Trash2 className="size-4 text-destructive" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent>
@@ -478,20 +627,12 @@ export function ProductForm({
               </p>
             </div>
           </Label>
-          <input
-            id={fileInputId}
-            type="file"
-            accept="image/*"
-            multiple
-            className="sr-only"
-          />
+          <input id={fileInputId} type="file" accept="image/*" multiple className="sr-only" />
         </CardContent>
       </Card>
 
       <div className="flex justify-end gap-3">
-        <Button type="submit" className="min-w-[160px]">
-          {submitLabel}
-        </Button>
+        <Button type="submit" className="min-w-[160px]">{submitLabel}</Button>
       </div>
 
       {process.env.NODE_ENV === "development" && slugWatch && (

@@ -22,7 +22,11 @@ export async function GET(
         categories: { select: { categoryId: true } },
         suppliers: { select: { supplierId: true } },
         variants: {
-          select: { id: true, name: true, sku: true, price: true, comparePrice: true, stock: true, weight: true, isActive: true },
+          select: {
+            id: true, name: true, sku: true, price: true, comparePrice: true,
+            stock: true, weight: true, isActive: true,
+            attributes: { select: { attributeValueId: true } },
+          },
           orderBy: { price: "asc" },
         },
         images: { select: { id: true, url: true, altText: true, position: true }, orderBy: { position: "asc" } },
@@ -58,6 +62,7 @@ export async function GET(
         stock: v.stock,
         weight: v.weight ? Number(v.weight) : null,
         name: v.name || "",
+        attributeValueIds: v.attributes.map((a) => a.attributeValueId),
       })),
     };
 
@@ -110,7 +115,18 @@ export async function PUT(
     }
 
     if (body.variants && Array.isArray(body.variants)) {
+      const existingVariantIds = (
+        await prisma.productVariant.findMany({ where: { productId: id }, select: { id: true } })
+      ).map((v) => v.id);
+      const incomingIds = body.variants.filter((v: any) => v.id).map((v: any) => v.id);
+      const toDelete = existingVariantIds.filter((eid) => !incomingIds.includes(eid));
+      if (toDelete.length > 0) {
+        await prisma.variantAttributeValue.deleteMany({ where: { variantId: { in: toDelete } } });
+        await prisma.productVariant.deleteMany({ where: { id: { in: toDelete } } });
+      }
+
       for (const v of body.variants) {
+        let variantId: string;
         if (v.id) {
           await prisma.productVariant.update({
             where: { id: v.id },
@@ -123,8 +139,9 @@ export async function PUT(
               name: v.name || null,
             },
           });
+          variantId = v.id;
         } else {
-          await prisma.productVariant.create({
+          const created = await prisma.productVariant.create({
             data: {
               productId: id,
               sku: v.sku,
@@ -135,6 +152,19 @@ export async function PUT(
               name: v.name || null,
             },
           });
+          variantId = created.id;
+        }
+
+        if (Array.isArray(v.attributeValueIds)) {
+          await prisma.variantAttributeValue.deleteMany({ where: { variantId } });
+          if (v.attributeValueIds.length > 0) {
+            await prisma.variantAttributeValue.createMany({
+              data: v.attributeValueIds.map((avId: string) => ({
+                variantId,
+                attributeValueId: avId,
+              })),
+            });
+          }
         }
       }
     }

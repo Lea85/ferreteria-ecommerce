@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, Edit, ImageIcon, Loader2, Upload } from "lucide-react";
+import { Download, Edit, ImageIcon, Layers, Loader2, Upload } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -293,6 +293,12 @@ export default function AdminProductosPage() {
           >
             <Edit className="size-4" />
             Modificación masiva
+          </Button>
+          <Button asChild variant="outline" size="sm" className="gap-2">
+            <Link href="/admin/productos/atributos">
+              <Layers className="size-4" />
+              Administrar Sub Categorías
+            </Link>
           </Button>
           <Button asChild>
             <Link href="/admin/productos/nuevo">Nuevo producto</Link>

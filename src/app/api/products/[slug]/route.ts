@@ -16,7 +16,16 @@ export async function GET(
         categories: { select: { category: { select: { name: true, slug: true } } } },
         variants: {
           where: { isActive: true },
-          select: { id: true, name: true, sku: true, price: true, comparePrice: true, stock: true },
+          select: {
+            id: true, name: true, sku: true, price: true, comparePrice: true, stock: true,
+            attributes: {
+              select: {
+                attributeValue: {
+                  select: { id: true, value: true, attribute: { select: { id: true, name: true } } },
+                },
+              },
+            },
+          },
           orderBy: { price: "asc" },
         },
         images: { select: { url: true, altText: true }, orderBy: { position: "asc" } },
@@ -59,6 +68,12 @@ export async function GET(
         price: Number(v.price),
         comparePrice: v.comparePrice ? Number(v.comparePrice) : undefined,
         stock: v.stock,
+        attributes: v.attributes.map((a) => ({
+          typeId: a.attributeValue.attribute.id,
+          typeName: a.attributeValue.attribute.name,
+          valueId: a.attributeValue.id,
+          value: a.attributeValue.value,
+        })),
       })),
       specs: [] as { label: string; value: string }[],
       rating: 0,
