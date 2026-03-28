@@ -64,6 +64,10 @@ export async function GET(
         name: v.name || "",
         attributeValueIds: v.attributes.map((a) => a.attributeValueId),
       })),
+      images: product.images.map((i) => ({
+        url: i.url,
+        altText: i.altText || "",
+      })),
     };
 
     return NextResponse.json({ product: mapped, brands, categories });
@@ -166,6 +170,21 @@ export async function PUT(
             });
           }
         }
+      }
+    }
+
+    if (body.images && Array.isArray(body.images)) {
+      await prisma.productImage.deleteMany({ where: { productId: id } });
+      if (body.images.length > 0) {
+        await prisma.productImage.createMany({
+          data: body.images.map((img: { url: string; altText?: string }, idx: number) => ({
+            productId: id,
+            url: img.url,
+            altText: img.altText || null,
+            position: idx,
+            isPrimary: idx === 0,
+          })),
+        });
       }
     }
 

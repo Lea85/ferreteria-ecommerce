@@ -153,3 +153,107 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
 }
+
+export async function POST(request: Request) {
+  try {
+    const session = await auth();
+    if (
+      !session?.user ||
+      !["ADMIN", "SUPER_ADMIN"].includes((session.user as any).role)
+    ) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+    }
+
+    const body = await request.json();
+
+    if (!body.name?.trim()) {
+      return NextResponse.json({ error: "El nombre es obligatorio" }, { status: 400 });
+    }
+    if (!body.slug?.trim()) {
+      return NextResponse.json({ error: "El slug es obligatorio" }, { status: 400 });
+    }
+    if (!body.variants || body.variants.length === 0) {
+      return NextResponse.json({ error: "Debe tener al menos una variante" }, { status: 400 });
+    }
+
+    const existingSlug = await prisma.product.findUnique({
+      where: { slug: body.slug.trim() },
+      select: { id: true },
+    });
+    if (existingSlug) {
+      return NextResponse.json({ error: "Ya existe un producto con ese slug" }, { status: 409 });
+    }
+
+    const product = await prisma.product.create({
+      data: {
+        name: body.name.trim(),
+        slug: body.slug.trim(),
+        description: body.description || null,
+        brandId: body.brandId || null,
+        warehouseLocationId: body.warehouseLocationId || null,
+        isActive: body.isActive ?? true,
+        isFeatured: body.isFeatured ?? false,
+        metaTitle: body.metaTitle || null,
+        metaDesc: body.metaDesc || null,
+        categories: {
+          create: (body.categoryIds || []).map((catId: string) => ({
+            categoryId: catId,
+          })),
+        },
+        variants: {
+          create: body.variants.map((v: any) => ({
+            sku: v.sku,
+            name: v.name || null,
+            price: v.price ?? 0,
+            comparePrice: v.comparePrice || null,
+            stock: v.stock ?? 0,
+            weight: v.weight || null,
+          })),
+        },
+      },
+      include: {
+        variants: { select: { id: true, sku: true } },
+      },
+    });
+
+    if (body.variants) {
+      for (let i = 0; i < body.variants.length; i++) {
+        const v = body.variants[i];
+        if (Array.isArray(v.attributeValueIds) && v.attributeValueIds.length > 0 && product.variants[i]) {
+          await prisma.variantAttributeValue.createMany({
+            data: v.attributeValueIds.map((avId: string) => ({
+              variantId: product.variants[i].id,
+              attributeValueId: avId,
+            })),
+          });
+        }
+      }
+    }
+
+    if (body.supplierIds && Array.isArray(body.supplierIds) && body.supplierIds.length > 0) {
+      await prisma.productSupplier.createMany({
+        data: body.supplierIds.map((sid: string) => ({
+          productId: product.id,
+          supplierId: sid,
+        })),
+      });
+    }
+
+    if (body.images && Array.isArray(body.images) && body.images.length > 0) {
+      await prisma.productImage.createMany({
+        data: body.images.map((img: { url: string; altText?: string }, idx: number) => ({
+          productId: product.id,
+          url: img.url,
+          altText: img.altText || null,
+          position: idx,
+          isPrimary: idx === 0,
+        })),
+      });
+    }
+
+    return NextResponse.json({ success: true, id: product.id, slug: body.slug });
+  } catch (error) {
+    console.error("Admin product CREATE error:", error);
+    return NextResponse.json({ error: "Error al crear el producto" }, { status: 500 });
+  }
+}

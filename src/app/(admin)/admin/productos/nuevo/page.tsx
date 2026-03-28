@@ -1,6 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { ProductForm, type ProductFormValues } from "@/components/admin/ProductForm";
@@ -13,27 +16,62 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 
-const BRANDS = [
-  { id: "b1", name: "Peirano" },
-  { id: "b2", name: "Ferrum" },
-  { id: "b3", name: "Tramontina" },
-  { id: "b4", name: "Tigre" },
-];
-
-const CATEGORIES = [
-  { id: "c1", name: "Griferías" },
-  { id: "c2", name: "Inodoros" },
-  { id: "c3", name: "Herramientas" },
-  { id: "c4", name: "Cañerías PVC" },
-  { id: "c5", name: "Pinturas" },
-];
-
 export default function NuevoProductoPage() {
+  const router = useRouter();
+  const [brands, setBrands] = useState<{ id: string; name: string }[]>([]);
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/admin/brands?limit=200").then((r) => r.json()),
+      fetch("/api/admin/categories?limit=200").then((r) => r.json()).catch(() =>
+        fetch("/api/categories").then((r) => r.json()),
+      ),
+    ])
+      .then(([brandsData, catsData]) => {
+        setBrands(
+          (brandsData.brands || []).map((b: any) => ({ id: b.id, name: b.name })),
+        );
+        const cats = catsData.categories || catsData || [];
+        setCategories(
+          cats.map((c: any) => ({ id: c.id, name: c.name })),
+        );
+      })
+      .catch(() => toast.error("Error al cargar datos"))
+      .finally(() => setLoading(false));
+  }, []);
+
   async function handleSubmit(data: ProductFormValues) {
-    await new Promise((r) => setTimeout(r, 400));
-    toast.success("Producto guardado (simulación)", {
-      description: `${data.name} · ${data.variants.length} variante(s)`,
-    });
+    try {
+      const res = await fetch("/api/admin/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        toast.error(result.error || "Error al crear el producto");
+        return;
+      }
+
+      toast.success("Producto creado correctamente", {
+        description: `${data.name} · ${data.variants.length} variante(s)`,
+      });
+      router.push("/admin/productos");
+    } catch {
+      toast.error("Error de conexión al crear el producto");
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="size-8 animate-spin text-muted-foreground" />
+      </div>
+    );
   }
 
   return (
@@ -53,8 +91,8 @@ export default function NuevoProductoPage() {
       </Breadcrumb>
 
       <ProductForm
-        brands={BRANDS}
-        categories={CATEGORIES}
+        brands={brands}
+        categories={categories}
         onSubmit={handleSubmit}
         submitLabel="Crear producto"
       />

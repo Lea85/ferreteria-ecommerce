@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Copy, MapPin, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Copy, ImageIcon, Link2, Loader2 as Spinner, MapPin, Plus, RefreshCw, Trash2, Upload, X } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { useForm, useFieldArray, type Resolver } from "react-hook-form";
 import { toast } from "sonner";
@@ -51,6 +51,11 @@ const variantSchema = z.object({
   attributeValueIds: z.array(z.string()).optional(),
 });
 
+const imageSchema = z.object({
+  url: z.string().min(1),
+  altText: z.string().optional(),
+});
+
 const productSchema = z.object({
   name: z.string().min(2, "Nombre muy corto"),
   slug: z.string().min(2, "Slug requerido"),
@@ -63,6 +68,7 @@ const productSchema = z.object({
   metaTitle: z.string().optional(),
   metaDesc: z.string().optional(),
   variants: z.array(variantSchema).min(1, "Agregá al menos una variante"),
+  images: z.array(imageSchema).optional(),
 });
 
 export type ProductFormValues = z.infer<typeof productSchema>;
@@ -109,6 +115,13 @@ export function ProductForm({
   const [allAttributes, setAllAttributes] = useState<Attribute[]>([]);
   const [selectedAttrIds, setSelectedAttrIds] = useState<Set<string>>(new Set());
   const [basePrice, setBasePrice] = useState<string>("");
+
+  type ImageItem = { url: string; altText?: string };
+  const [images, setImages] = useState<ImageItem[]>(
+    (initialData as any)?.images || [],
+  );
+  const [imageUrlInput, setImageUrlInput] = useState("");
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     fetch("/api/admin/warehouse/locations")
@@ -292,11 +305,73 @@ export function ProductForm({
     return labels.join(" / ");
   }
 
+  function addImageUrl() {
+    const url = imageUrlInput.trim();
+    if (!url) return;
+    if (images.some((img) => img.url === url)) {
+      toast.error("Esa imagen ya fue agregada");
+      return;
+    }
+    setImages((prev) => [...prev, { url, altText: "" }]);
+    setImageUrlInput("");
+  }
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setUploading(true);
+    const newImages: ImageItem[] = [];
+
+    for (const file of Array.from(files)) {
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        const res = await fetch("/api/admin/upload", {
+          method: "POST",
+          body: formData,
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          toast.error(data.error || `Error al subir ${file.name}`);
+          continue;
+        }
+        newImages.push({ url: data.url, altText: "" });
+      } catch {
+        toast.error(`Error al subir ${file.name}`);
+      }
+    }
+
+    if (newImages.length > 0) {
+      setImages((prev) => [...prev, ...newImages]);
+      toast.success(`${newImages.length} imagen(es) subida(s)`);
+    }
+    setUploading(false);
+    e.target.value = "";
+  }
+
+  function removeImage(index: number) {
+    setImages((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function moveImage(from: number, to: number) {
+    setImages((prev) => {
+      const next = [...prev];
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
+      return next;
+    });
+  }
+
   return (
     <form
       className={cn("space-y-8", className)}
       onSubmit={form.handleSubmit((data) =>
-        onSubmit({ ...data, supplierIds: Array.from(selectedSupplierIds) } as any),
+        onSubmit({
+          ...data,
+          images,
+          supplierIds: Array.from(selectedSupplierIds),
+        } as any),
       )}
     >
       <Card className="border-border shadow-sm">
@@ -616,18 +691,99 @@ export function ProductForm({
         <CardHeader>
           <CardTitle className="text-lg text-primary">Imágenes</CardTitle>
         </CardHeader>
-        <CardContent>
-          <Label htmlFor={fileInputId} className="cursor-pointer">
-            <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-border bg-muted/20 px-6 py-12 text-center transition-colors hover:bg-muted/40">
-              <p className="text-sm font-medium text-foreground">
-                Arrastrá archivos o hacé clic para seleccionar
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                JPG, PNG o WebP (placeholder — integración pendiente)
-              </p>
+        <CardContent className="space-y-4">
+          {images.length > 0 && (
+            <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+              {images.map((img, idx) => (
+                <div key={idx} className="group relative overflow-hidden rounded-lg border border-border">
+                  <img
+                    src={img.url}
+                    alt={img.altText || `Imagen ${idx + 1}`}
+                    className="aspect-square w-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = "/placeholder-product.webp";
+                    }}
+                  />
+                  {idx === 0 && (
+                    <span className="absolute left-1 top-1 rounded bg-primary px-1.5 py-0.5 text-[10px] font-bold text-primary-foreground">
+                      PRINCIPAL
+                    </span>
+                  )}
+                  <div className="absolute right-1 top-1 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                    {idx > 0 && (
+                      <button
+                        type="button"
+                        className="rounded bg-background/80 p-1 text-xs hover:bg-background"
+                        onClick={() => moveImage(idx, idx - 1)}
+                        title="Mover antes"
+                      >
+                        ←
+                      </button>
+                    )}
+                    {idx < images.length - 1 && (
+                      <button
+                        type="button"
+                        className="rounded bg-background/80 p-1 text-xs hover:bg-background"
+                        onClick={() => moveImage(idx, idx + 1)}
+                        title="Mover después"
+                      >
+                        →
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="rounded bg-destructive/80 p-1 text-destructive-foreground hover:bg-destructive"
+                      onClick={() => removeImage(idx)}
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
-          </Label>
-          <input id={fileInputId} type="file" accept="image/*" multiple className="sr-only" />
+          )}
+
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <div className="flex flex-1 gap-2">
+              <Input
+                placeholder="https://ejemplo.com/imagen.jpg"
+                value={imageUrlInput}
+                onChange={(e) => setImageUrlInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addImageUrl();
+                  }
+                }}
+                className="flex-1"
+              />
+              <Button type="button" variant="outline" size="sm" className="gap-1 shrink-0" onClick={addImageUrl}>
+                <Link2 className="size-4" /> Agregar URL
+              </Button>
+            </div>
+            <div className="shrink-0">
+              <Label htmlFor={fileInputId} className="cursor-pointer">
+                <div className="flex h-9 items-center gap-1 rounded-md border border-border bg-background px-3 text-sm font-medium transition-colors hover:bg-muted">
+                  {uploading ? <Spinner className="size-4 animate-spin" /> : <Upload className="size-4" />}
+                  {uploading ? "Subiendo..." : "Subir archivos"}
+                </div>
+              </Label>
+              <input
+                id={fileInputId}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                multiple
+                className="sr-only"
+                onChange={handleFileUpload}
+                disabled={uploading}
+              />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            <ImageIcon className="mr-1 inline size-3" />
+            Podés pegar URLs de imágenes o subir archivos (JPG, PNG, WebP, GIF - máx 5MB).
+            La primera imagen será la principal.
+          </p>
         </CardContent>
       </Card>
 
