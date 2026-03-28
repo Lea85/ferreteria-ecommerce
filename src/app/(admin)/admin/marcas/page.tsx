@@ -31,6 +31,7 @@ type Brand = {
   slug: string;
   logoUrl: string | null;
   isActive: boolean;
+  showInHome: boolean;
   productCount: number;
 };
 
@@ -57,6 +58,7 @@ export default function MarcasPage() {
   const [formSlug, setFormSlug] = useState("");
   const [formLogo, setFormLogo] = useState("");
   const [formActive, setFormActive] = useState(true);
+  const [formShowInHome, setFormShowInHome] = useState(false);
   const [slugTouched, setSlugTouched] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -87,6 +89,7 @@ export default function MarcasPage() {
     setFormSlug("");
     setFormLogo("");
     setFormActive(true);
+    setFormShowInHome(false);
     setSlugTouched(false);
     setDialog(true);
   }
@@ -97,6 +100,7 @@ export default function MarcasPage() {
     setFormSlug(brand.slug);
     setFormLogo(brand.logoUrl || "");
     setFormActive(brand.isActive);
+    setFormShowInHome(brand.showInHome);
     setSlugTouched(true);
     setDialog(true);
   }
@@ -114,6 +118,7 @@ export default function MarcasPage() {
         slug,
         logoUrl: formLogo.trim() || null,
         isActive: formActive,
+        showInHome: formShowInHome,
       };
 
       let res: Response;
@@ -140,6 +145,24 @@ export default function MarcasPage() {
       toast.error(err instanceof Error ? err.message : "Error");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function toggleShowInHome(brand: Brand) {
+    try {
+      const res = await fetch("/api/admin/brands", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: brand.id, showInHome: !brand.showInHome }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Error");
+      }
+      toast.success(brand.showInHome ? "Quitada de la home" : "Agregada a la home");
+      fetchBrands();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Error");
     }
   }
 
@@ -218,6 +241,7 @@ export default function MarcasPage() {
                   <TableHead>Logo</TableHead>
                   <TableHead className="text-center">Productos</TableHead>
                   <TableHead className="text-center">Estado</TableHead>
+                  <TableHead className="text-center">En Home</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -240,6 +264,12 @@ export default function MarcasPage() {
                       <Switch
                         checked={b.isActive}
                         onCheckedChange={() => toggleActive(b)}
+                      />
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Switch
+                        checked={b.showInHome}
+                        onCheckedChange={() => toggleShowInHome(b)}
                       />
                     </TableCell>
                     <TableCell className="text-right">
@@ -335,6 +365,13 @@ export default function MarcasPage() {
                 <p className="text-xs text-muted-foreground">Visible para asignar a productos</p>
               </div>
               <Switch checked={formActive} onCheckedChange={setFormActive} />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
+              <div>
+                <p className="text-sm font-medium">Mostrar en Home</p>
+                <p className="text-xs text-muted-foreground">Se muestra en la sección &quot;Marcas destacadas&quot; de la página principal</p>
+              </div>
+              <Switch checked={formShowInHome} onCheckedChange={setFormShowInHome} />
             </div>
           </div>
           <DialogFooter>

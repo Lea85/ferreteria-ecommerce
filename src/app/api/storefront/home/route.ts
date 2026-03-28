@@ -24,7 +24,7 @@ export async function GET() {
       }),
 
       prisma.brand.findMany({
-        where: { products: { some: { isActive: true } } },
+        where: { showInHome: true, isActive: true },
         select: { id: true, name: true, logoUrl: true },
         orderBy: { name: "asc" },
         take: 12,

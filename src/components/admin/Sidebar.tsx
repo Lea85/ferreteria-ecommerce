@@ -47,7 +47,6 @@ const nav: NavItem[] = [
   { href: "/admin/marcas", label: "Marcas", icon: Globe },
   { href: "/admin/pedidos", label: "Pedidos", icon: ShoppingCart },
   { href: "/admin/usuarios", label: "Clientes", icon: Users },
-  { href: "/admin/categorias-clientes", label: "Cat. Clientes", icon: Tag },
   { href: "/admin/almacen", label: "Almacen", icon: Warehouse },
   { href: "/admin/cupones", label: "Cupones", icon: Ticket },
   { href: "/admin/promociones", label: "Promociones", icon: Tag },

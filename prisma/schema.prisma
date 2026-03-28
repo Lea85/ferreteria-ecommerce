@@ -196,11 +196,12 @@ model Category {
 }
 
 model Brand {
-  id       String  @id @default(cuid())
-  name     String
-  slug     String  @unique
-  logoUrl  String?
-  isActive Boolean @default(true)
+  id         String  @id @default(cuid())
+  name       String
+  slug       String  @unique
+  logoUrl    String?
+  isActive   Boolean @default(true)
+  showInHome Boolean @default(false)
 
   products        Product[]
   priceRuleBrands PriceRuleBrand[]

@@ -61,6 +61,7 @@ export async function GET(request: Request) {
         slug: b.slug,
         logoUrl: b.logoUrl,
         isActive: b.isActive,
+        showInHome: b.showInHome,
         productCount: b._count.products,
         createdAt: b.createdAt,
       })),
@@ -93,6 +94,7 @@ export async function POST(request: Request) {
         slug,
         logoUrl: body.logoUrl || null,
         isActive: body.isActive ?? true,
+        showInHome: body.showInHome ?? false,
       },
     });
 
@@ -120,6 +122,7 @@ export async function PUT(request: Request) {
     if (body.slug !== undefined) data.slug = body.slug.trim();
     if (body.logoUrl !== undefined) data.logoUrl = body.logoUrl || null;
     if (body.isActive !== undefined) data.isActive = body.isActive;
+    if (body.showInHome !== undefined) data.showInHome = body.showInHome;
 
     const brand = await prisma.brand.update({ where: { id }, data });
     return NextResponse.json({ brand });

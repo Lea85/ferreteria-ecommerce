@@ -1,6 +1,7 @@
 "use client";
 
-import { CheckCircle2, Edit, Loader2, Trash2, XCircle } from "lucide-react";
+import { CheckCircle2, Edit, Loader2, Tag, Trash2, XCircle } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -264,7 +265,13 @@ export default function AdminUsuariosPage() {
             Gestión de usuarios, aprobación y edición.
           </p>
         </div>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <Button asChild variant="outline" size="sm" className="gap-2">
+            <Link href="/admin/categorias-clientes">
+              <Tag className="size-4" />
+              Categorías de Clientes
+            </Link>
+          </Button>
           <Select value={typeFilter} onValueChange={setTypeFilter}>
             <SelectTrigger className="w-44 border-border">
               <SelectValue placeholder="Tipo" />
