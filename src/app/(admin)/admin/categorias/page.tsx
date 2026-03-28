@@ -1,6 +1,6 @@
 "use client";
 
-import { Edit, EyeOff, FolderTree, Loader2, Plus, Trash2 } from "lucide-react";
+import { Edit, EyeOff, FolderTree, Link2, Loader2, Plus, Trash2, Upload, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -107,6 +107,9 @@ export default function AdminCategoriasPage() {
   const [formName, setFormName] = useState("");
   const [formSlug, setFormSlug] = useState("");
   const [formDescription, setFormDescription] = useState("");
+  const [formImageUrl, setFormImageUrl] = useState("");
+  const [formImageInput, setFormImageInput] = useState("");
+  const [uploading, setUploading] = useState(false);
   const [formParent, setFormParent] = useState<string>("none");
 
   const tree = useMemo(() => buildTree(flat), [flat]);
@@ -151,6 +154,8 @@ export default function AdminCategoriasPage() {
     setFormName("");
     setFormSlug("");
     setFormDescription("");
+    setFormImageUrl("");
+    setFormImageInput("");
     setFormParent("none");
     setDialogOpen(true);
   }
@@ -160,8 +165,40 @@ export default function AdminCategoriasPage() {
     setFormName(cat.name);
     setFormSlug(cat.slug);
     setFormDescription(cat.description ?? "");
+    setFormImageUrl(cat.imageUrl ?? "");
+    setFormImageInput("");
     setFormParent(cat.parentId ?? "none");
     setDialogOpen(true);
+  }
+
+  function addImageUrl() {
+    const url = formImageInput.trim();
+    if (!url) return;
+    setFormImageUrl(url);
+    setFormImageInput("");
+  }
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/admin/upload", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Error al subir imagen");
+        return;
+      }
+      setFormImageUrl(data.url);
+      toast.success("Imagen subida");
+    } catch {
+      toast.error("Error al subir imagen");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
   }
 
   async function handleSave() {
@@ -186,6 +223,7 @@ export default function AdminCategoriasPage() {
             name: formName.trim(),
             slug: slug.trim(),
             description: formDescription.trim() || null,
+            imageUrl: formImageUrl.trim() || null,
             parentId: formParent === "none" ? null : formParent,
           }),
         });
@@ -203,6 +241,7 @@ export default function AdminCategoriasPage() {
             name: formName.trim(),
             slug: slug.trim(),
             description: formDescription.trim() || null,
+            imageUrl: formImageUrl.trim() || null,
             parentId: formParent === "none" ? null : formParent,
             isActive: true,
           }),
@@ -364,18 +403,26 @@ export default function AdminCategoriasPage() {
               >
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <div className="flex items-center gap-3">
-                    <div
-                      className={cn(
-                        "flex size-10 items-center justify-center rounded-lg",
-                        root.isActive ? "bg-primary/10" : "bg-destructive/10",
-                      )}
-                    >
-                      {root.isActive ? (
-                        <FolderTree className="size-5 text-primary" />
-                      ) : (
-                        <EyeOff className="size-5 text-destructive" />
-                      )}
-                    </div>
+                    {root.imageUrl ? (
+                      <img
+                        src={root.imageUrl}
+                        alt={root.name}
+                        className="size-10 rounded-lg border border-border object-cover"
+                      />
+                    ) : (
+                      <div
+                        className={cn(
+                          "flex size-10 items-center justify-center rounded-lg",
+                          root.isActive ? "bg-primary/10" : "bg-destructive/10",
+                        )}
+                      >
+                        {root.isActive ? (
+                          <FolderTree className="size-5 text-primary" />
+                        ) : (
+                          <EyeOff className="size-5 text-destructive" />
+                        )}
+                      </div>
+                    )}
                     <div>
                       <CardTitle className="text-base">{root.name}</CardTitle>
                       <p className="text-xs text-muted-foreground">/{root.slug}</p>
@@ -448,6 +495,68 @@ export default function AdminCategoriasPage() {
                 rows={3}
               />
             </div>
+            <div className="space-y-2">
+              <Label>Imagen</Label>
+              {formImageUrl ? (
+                <div className="relative inline-block">
+                  <img
+                    src={formImageUrl}
+                    alt="Vista previa"
+                    className="h-28 w-auto rounded-lg border border-border object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = "/placeholder-category.webp";
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="absolute -right-2 -top-2 rounded-full bg-destructive p-1 text-destructive-foreground shadow hover:bg-destructive/80"
+                    onClick={() => setFormImageUrl("")}
+                  >
+                    <X className="size-3" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <div className="flex flex-1 gap-2">
+                    <Input
+                      placeholder="https://ejemplo.com/imagen.jpg"
+                      value={formImageInput}
+                      onChange={(e) => setFormImageInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addImageUrl();
+                        }
+                      }}
+                      className="flex-1"
+                    />
+                    <Button type="button" variant="outline" size="sm" className="gap-1 shrink-0" onClick={addImageUrl}>
+                      <Link2 className="size-4" /> URL
+                    </Button>
+                  </div>
+                  <div className="shrink-0">
+                    <Label htmlFor="cat-file-upload" className="cursor-pointer">
+                      <div className="flex h-9 items-center gap-1 rounded-md border border-border bg-background px-3 text-sm font-medium transition-colors hover:bg-muted">
+                        {uploading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+                        {uploading ? "Subiendo..." : "Archivo"}
+                      </div>
+                    </Label>
+                    <input
+                      id="cat-file-upload"
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      className="sr-only"
+                      onChange={handleFileUpload}
+                      disabled={uploading}
+                    />
+                  </div>
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Esta imagen se muestra en la sección de categorías de la página principal.
+              </p>
+            </div>
+
             <div className="space-y-2">
               <Label>Categoría padre</Label>
               <Select value={formParent} onValueChange={setFormParent}>
