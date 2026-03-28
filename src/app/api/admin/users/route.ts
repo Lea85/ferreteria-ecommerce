@@ -71,6 +71,9 @@ export async function GET(request: Request) {
           isApproved: true,
           createdAt: true,
           _count: { select: { orders: true, addresses: true } },
+          customerCategories: {
+            select: { customerCategoryId: true },
+          },
         },
       }),
     ]);
@@ -92,6 +95,7 @@ export async function GET(request: Request) {
           orders: u._count.orders,
           addresses: u._count.addresses,
         },
+        customerCategoryIds: u.customerCategories.map((cc) => cc.customerCategoryId),
       })),
       total,
       page,
@@ -152,7 +156,9 @@ export async function PUT(request: Request) {
     }
     if (isApproved !== undefined) data.isApproved = isApproved;
 
-    if (Object.keys(data).length === 0) {
+    const { customerCategoryIds } = body as { customerCategoryIds?: string[] };
+
+    if (Object.keys(data).length === 0 && customerCategoryIds === undefined) {
       return NextResponse.json(
         { error: "No hay campos para actualizar" },
         { status: 400 },
@@ -174,6 +180,18 @@ export async function PUT(request: Request) {
         createdAt: true,
       },
     });
+
+    if (customerCategoryIds !== undefined && Array.isArray(customerCategoryIds)) {
+      await prisma.userCustomerCategory.deleteMany({ where: { userId: id! } });
+      if (customerCategoryIds.length > 0) {
+        await prisma.userCustomerCategory.createMany({
+          data: customerCategoryIds.map((ccId) => ({
+            userId: id!,
+            customerCategoryId: ccId,
+          })),
+        });
+      }
+    }
 
     return NextResponse.json({ user });
   } catch (error) {

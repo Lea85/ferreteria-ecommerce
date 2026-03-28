@@ -23,9 +23,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { CUSTOMER_TYPE_LABELS } from "@/lib/constants";
 import type { CustomerType } from "@/lib/constants";
+
+type CustCategory = {
+  id: string;
+  name: string;
+  benefitType: string;
+  isActive: boolean;
+};
 
 type UserApi = {
   id: string;
@@ -38,6 +46,7 @@ type UserApi = {
   isApproved: boolean;
   createdAt: string;
   _count: { orders: number; addresses: number };
+  customerCategoryIds: string[];
 };
 
 type UserRow = UserApi;
@@ -62,7 +71,18 @@ export default function AdminUsuariosPage() {
     customerType: "CONSUMER" as CustomerType,
     isApproved: true,
   });
+  const [editCategoryIds, setEditCategoryIds] = useState<Set<string>>(new Set());
+  const [customerCategories, setCustomerCategories] = useState<CustCategory[]>([]);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/admin/customer-categories")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.categories) setCustomerCategories(d.categories);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchInput.trim()), 300);
@@ -117,6 +137,7 @@ export default function AdminUsuariosPage() {
       customerType: user.customerType,
       isApproved: user.isApproved,
     });
+    setEditCategoryIds(new Set(user.customerCategoryIds || []));
   }
 
   async function saveEdit() {
@@ -134,6 +155,7 @@ export default function AdminUsuariosPage() {
           phone: editForm.phone.trim() || null,
           customerType: editForm.customerType,
           isApproved: editForm.isApproved,
+          customerCategoryIds: Array.from(editCategoryIds),
         }),
       });
       const data = await res.json();
@@ -413,6 +435,51 @@ export default function AdminUsuariosPage() {
                 }
               />
             </div>
+            {customerCategories.length > 0 && (
+              <div className="space-y-2">
+                <Label>Categorías de cliente</Label>
+                <div className="max-h-40 space-y-2 overflow-y-auto rounded-md border border-border bg-muted/30 p-3">
+                  {customerCategories
+                    .filter((cc) => cc.isActive)
+                    .map((cc) => (
+                      <label key={cc.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={editCategoryIds.has(cc.id)}
+                          onCheckedChange={(checked) => {
+                            setEditCategoryIds((prev) => {
+                              const next = new Set(prev);
+                              if (checked) next.add(cc.id);
+                              else next.delete(cc.id);
+                              return next;
+                            });
+                          }}
+                        />
+                        <span>{cc.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          ({cc.benefitType === "DISCOUNT_PERCENT"
+                            ? "% descuento"
+                            : cc.benefitType === "DISCOUNT_AMOUNT"
+                              ? "$ descuento"
+                              : cc.benefitType === "VOLUME_DISCOUNT"
+                                ? "Volumen"
+                                : cc.benefitType === "FREE_SHIPPING"
+                                  ? "Envío gratis"
+                                  : cc.benefitType})
+                        </span>
+                      </label>
+                    ))}
+                  {customerCategories.filter((cc) => cc.isActive).length === 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      No hay categorías activas. Crealas desde{" "}
+                      <Link href="/admin/categorias-clientes" className="text-primary hover:underline">
+                        Categorías de Clientes
+                      </Link>.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
             {editUser ? (
               <p className="text-xs text-muted-foreground">
                 Pedidos: {editUser._count.orders} · Direcciones:{" "}
