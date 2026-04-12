@@ -31,6 +31,23 @@ async function main() {
   });
   console.log(`  Admin: ${admin.email}`);
 
+  // Mostrador user
+  const mostradorPassword = await bcrypt.hash("MOSTRADOR123", 10);
+  const mostrador = await prisma.user.upsert({
+    where: { email: "mostrador@ferrosan.com" },
+    update: {},
+    create: {
+      email: "mostrador@ferrosan.com",
+      name: "MOSTRADOR",
+      lastName: "",
+      passwordHash: mostradorPassword,
+      role: "ADMIN",
+      customerType: "CONSUMER",
+      isApproved: true,
+    },
+  });
+  console.log(`  Mostrador: ${mostrador.email}`);
+
   // Consumer user
   const userPassword = await bcrypt.hash("user123", 10);
   const consumer = await prisma.user.upsert({
@@ -403,6 +420,11 @@ async function main() {
     where: { key: "iva_rate" },
     update: {},
     create: { key: "iva_rate", value: "0.21" },
+  });
+  await prisma.setting.upsert({
+    where: { key: "quote_validity_days" },
+    update: {},
+    create: { key: "quote_validity_days", value: "7" },
   });
 
   console.log("  Settings created");

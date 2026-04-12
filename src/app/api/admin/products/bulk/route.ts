@@ -62,6 +62,7 @@ export async function POST(request: Request) {
               variants: {
                 create: [{
                   sku: p.sku,
+                  ean: p.ean ? String(p.ean) : null,
                   price: Number(p.price) || 0,
                   comparePrice: p.comparePrice ? Number(p.comparePrice) : null,
                   stock: Number(p.stock) || 0,
@@ -93,6 +94,7 @@ export async function POST(request: Request) {
           if (p.price !== undefined && p.price !== "") variantData.price = Number(p.price);
           if (p.comparePrice !== undefined && p.comparePrice !== "") variantData.comparePrice = Number(p.comparePrice);
           if (p.stock !== undefined && p.stock !== "") variantData.stock = Number(p.stock);
+          if (p.ean !== undefined && p.ean !== "") variantData.ean = String(p.ean);
 
           if (Object.keys(variantData).length > 0) {
             await prisma.productVariant.update({ where: { sku: p.sku }, data: variantData });

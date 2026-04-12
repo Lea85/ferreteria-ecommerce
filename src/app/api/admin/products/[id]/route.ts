@@ -23,7 +23,7 @@ export async function GET(
         suppliers: { select: { supplierId: true } },
         variants: {
           select: {
-            id: true, name: true, sku: true, price: true, comparePrice: true,
+            id: true, name: true, sku: true, ean: true, price: true, comparePrice: true,
             stock: true, weight: true, isActive: true,
             attributes: { select: { attributeValueId: true } },
           },
@@ -57,6 +57,7 @@ export async function GET(
       variants: product.variants.map((v) => ({
         id: v.id,
         sku: v.sku,
+        ean: v.ean || "",
         price: Number(v.price),
         comparePrice: v.comparePrice ? Number(v.comparePrice) : null,
         stock: v.stock,
@@ -89,6 +90,17 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
+
+    const isPartialUpdate = body.name === undefined && body.slug === undefined;
+
+    if (isPartialUpdate) {
+      const partialData: Record<string, any> = {};
+      if (body.isActive !== undefined) partialData.isActive = body.isActive;
+      if (body.isFeatured !== undefined) partialData.isFeatured = body.isFeatured;
+
+      const updated = await prisma.product.update({ where: { id }, data: partialData });
+      return NextResponse.json({ success: true, id: updated.id });
+    }
 
     const updated = await prisma.product.update({
       where: { id },
@@ -136,6 +148,7 @@ export async function PUT(
             where: { id: v.id },
             data: {
               sku: v.sku,
+              ean: v.ean || null,
               price: v.price,
               comparePrice: v.comparePrice || null,
               stock: v.stock ?? 0,
@@ -149,6 +162,7 @@ export async function PUT(
             data: {
               productId: id,
               sku: v.sku,
+              ean: v.ean || null,
               price: v.price,
               comparePrice: v.comparePrice || null,
               stock: v.stock ?? 0,

@@ -203,6 +203,7 @@ export async function POST(request: Request) {
         variants: {
           create: body.variants.map((v: any) => ({
             sku: v.sku,
+            ean: v.ean || null,
             name: v.name || null,
             price: v.price ?? 0,
             comparePrice: v.comparePrice || null,

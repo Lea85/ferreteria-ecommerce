@@ -42,6 +42,7 @@ export async function POST(request: Request) {
         minAmount: body.minAmount ? Number(body.minAmount) : null,
         minQuantity: body.minQuantity ? Number(body.minQuantity) : null,
         isActive: body.isActive ?? true,
+        canGenerateQuotes: body.canGenerateQuotes ?? false,
       },
     });
 
@@ -70,6 +71,7 @@ export async function PUT(request: Request) {
         minAmount: body.minAmount !== undefined ? (body.minAmount ? Number(body.minAmount) : null) : undefined,
         minQuantity: body.minQuantity !== undefined ? (body.minQuantity ? Number(body.minQuantity) : null) : undefined,
         isActive: body.isActive ?? undefined,
+        canGenerateQuotes: body.canGenerateQuotes ?? undefined,
       },
     });
 

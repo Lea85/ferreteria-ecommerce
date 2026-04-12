@@ -50,6 +50,7 @@ export type DataTableProps<T extends { id: string }> = {
   actionsHeader?: string;
   renderActions?: (row: T) => ReactNode;
   isLoading?: boolean;
+  showCheckbox?: boolean;
 };
 
 function getCellValue<T>(row: T, col: DataTableColumn<T>): unknown {
@@ -70,6 +71,7 @@ export function DataTable<T extends { id: string }>({
   actionsHeader = "Acciones",
   renderActions,
   isLoading = false,
+  showCheckbox = true,
 }: DataTableProps<T>) {
   const [internalSearch, setInternalSearch] = useState("");
   const [sortCol, setSortCol] = useState<string | null>(null);
@@ -191,13 +193,15 @@ export function DataTable<T extends { id: string }>({
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
-              <TableHead className="w-12 pl-4">
-                <Checkbox
-                  checked={allSelected}
-                  onCheckedChange={toggleAll}
-                  aria-label="Seleccionar todas las filas visibles"
-                />
-              </TableHead>
+              {showCheckbox && (
+                <TableHead className="w-12 pl-4">
+                  <Checkbox
+                    checked={allSelected}
+                    onCheckedChange={toggleAll}
+                    aria-label="Seleccionar todas las filas visibles"
+                  />
+                </TableHead>
+              )}
               {columns.map((col) => (
                 <TableHead key={col.id} className={col.className}>
                   {col.sortable ? (
@@ -223,7 +227,7 @@ export function DataTable<T extends { id: string }>({
             {isLoading ? (
               <TableRow>
                 <TableCell
-                  colSpan={columns.length + 1 + (renderActions ? 1 : 0)}
+                  colSpan={columns.length + (showCheckbox ? 1 : 0) + (renderActions ? 1 : 0)}
                   className="h-32 text-center text-muted-foreground"
                 >
                   <Loader2 className="mx-auto size-8 animate-spin" />
@@ -232,7 +236,7 @@ export function DataTable<T extends { id: string }>({
             ) : pageRows.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={columns.length + 1 + (renderActions ? 1 : 0)}
+                  colSpan={columns.length + (showCheckbox ? 1 : 0) + (renderActions ? 1 : 0)}
                   className="h-24 text-center text-muted-foreground"
                 >
                   No hay resultados.
@@ -248,16 +252,18 @@ export function DataTable<T extends { id: string }>({
                     className={cn(onRowClick && "cursor-pointer")}
                     onClick={() => onRowClick?.(row)}
                   >
-                    <TableCell
-                      className="pl-4"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Checkbox
-                        checked={selected.has(id)}
-                        onCheckedChange={() => toggleRow(id)}
-                        aria-label={`Seleccionar fila ${id}`}
-                      />
-                    </TableCell>
+                    {showCheckbox && (
+                      <TableCell
+                        className="pl-4"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Checkbox
+                          checked={selected.has(id)}
+                          onCheckedChange={() => toggleRow(id)}
+                          aria-label={`Seleccionar fila ${id}`}
+                        />
+                      </TableCell>
+                    )}
                     {columns.map((col) => (
                       <TableCell key={col.id} className={col.className}>
                         {col.cell

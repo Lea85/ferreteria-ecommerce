@@ -26,6 +26,7 @@ type CustCat = {
   minAmount: number | null;
   minQuantity: number | null;
   isActive: boolean;
+  canGenerateQuotes: boolean;
   _count: { users: number };
 };
 
@@ -36,7 +37,7 @@ const BENEFIT_LABELS: Record<string, string> = {
   FREE_SHIPPING: "Envio gratis",
 };
 
-const EMPTY = { name: "", description: "", benefitType: "DISCOUNT_PERCENT", benefitValue: "0", minAmount: "", minQuantity: "", isActive: true };
+const EMPTY = { name: "", description: "", benefitType: "DISCOUNT_PERCENT", benefitValue: "0", minAmount: "", minQuantity: "", isActive: true, canGenerateQuotes: false };
 
 export default function AdminCategoriasClientesPage() {
   const [cats, setCats] = useState<CustCat[]>([]);
@@ -66,6 +67,7 @@ export default function AdminCategoriasClientesPage() {
       name: c.name, description: c.description || "", benefitType: c.benefitType,
       benefitValue: String(c.benefitValue), minAmount: c.minAmount ? String(c.minAmount) : "",
       minQuantity: c.minQuantity ? String(c.minQuantity) : "", isActive: c.isActive,
+      canGenerateQuotes: c.canGenerateQuotes,
     });
     setDialogOpen(true);
   }
@@ -125,6 +127,7 @@ export default function AdminCategoriasClientesPage() {
                 <div className="flex flex-wrap gap-2">
                   <Badge variant="secondary">{BENEFIT_LABELS[c.benefitType] || c.benefitType}</Badge>
                   {c.benefitType !== "FREE_SHIPPING" && <Badge variant="outline">{c.benefitType.includes("PERCENT") ? `${c.benefitValue}%` : `$${c.benefitValue}`}</Badge>}
+                  {c.canGenerateQuotes && <Badge variant="outline" className="border-blue-500 text-blue-600">Presupuestos</Badge>}
                   {!c.isActive && <Badge variant="destructive">Inactiva</Badge>}
                 </div>
                 {c.minAmount && <p className="text-xs text-muted-foreground">Monto minimo: ${c.minAmount}</p>}
@@ -163,6 +166,13 @@ export default function AdminCategoriasClientesPage() {
             </div>
             <div className="flex items-center gap-3">
               <Switch checked={form.isActive} onCheckedChange={(v) => setForm((f) => ({ ...f, isActive: v }))} /><Label>Activa</Label>
+            </div>
+            <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-4 py-3">
+              <div>
+                <Label className="cursor-pointer">Puede generar presupuestos</Label>
+                <p className="text-xs text-muted-foreground">Los clientes de esta categoria podran generar e imprimir presupuestos desde su carrito.</p>
+              </div>
+              <Switch checked={form.canGenerateQuotes} onCheckedChange={(v) => setForm((f) => ({ ...f, canGenerateQuotes: v }))} />
             </div>
             <div className="flex justify-end gap-3 pt-2">
               <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>

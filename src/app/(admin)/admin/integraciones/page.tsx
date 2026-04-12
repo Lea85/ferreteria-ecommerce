@@ -28,6 +28,7 @@ const SECTIONS: SectionDef[] = [
     fields: [
       { key: "store_name", label: "Nombre de la tienda", placeholder: "FerroSan" },
       { key: "store_logo_url", label: "URL del logo (tambien se usa como favicon)", placeholder: "https://ejemplo.com/logo.png" },
+      { key: "quote_validity_days", label: "Dias habiles de validez de presupuestos", placeholder: "7" },
     ],
   },
   {

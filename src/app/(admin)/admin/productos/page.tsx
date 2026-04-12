@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, Edit, ImageIcon, Layers, Loader2, Upload } from "lucide-react";
+import { Download, Edit, Eye, ImageIcon, Layers, Loader2, Upload } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { formatPrice } from "@/lib/utils";
 
 type ProductApi = {
@@ -48,6 +49,7 @@ const IMPORT_TEMPLATE = [
   {
     name: "Producto ejemplo 1",
     sku: "SKU-001",
+    ean: "7791234567890",
     price: 10000,
     comparePrice: 12000,
     stock: 50,
@@ -58,6 +60,7 @@ const IMPORT_TEMPLATE = [
   {
     name: "Producto ejemplo 2",
     sku: "SKU-002",
+    ean: "7791234567891",
     price: 25000,
     comparePrice: "",
     stock: 10,
@@ -70,6 +73,7 @@ const IMPORT_TEMPLATE = [
 const UPDATE_TEMPLATE = [
   {
     sku: "SKU-001",
+    ean: "7791234567890",
     name: "",
     price: 15000,
     comparePrice: "",
@@ -79,6 +83,7 @@ const UPDATE_TEMPLATE = [
   },
   {
     sku: "SKU-002",
+    ean: "",
     name: "",
     price: "",
     comparePrice: "",
@@ -254,14 +259,42 @@ export default function AdminProductosPage() {
         accessor: "isActive",
         sortable: true,
         cell: (row) => (
-          <Badge variant={row.isActive ? "default" : "secondary"}>
-            {row.isActive ? "Activo" : "Inactivo"}
-          </Badge>
+          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+            <Switch
+              checked={row.isActive}
+              onCheckedChange={() => handleToggleActive(row.id, !row.isActive)}
+              aria-label={row.isActive ? "Desactivar" : "Activar"}
+            />
+            <span className={`text-xs ${row.isActive ? "text-emerald-600" : "text-muted-foreground"}`}>
+              {row.isActive ? "Activo" : "Inactivo"}
+            </span>
+          </div>
         ),
       },
     ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
+
+  async function handleToggleActive(productId: string, newState: boolean) {
+    try {
+      const res = await fetch(`/api/admin/products/${productId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: newState }),
+      });
+      if (res.ok) {
+        setProducts((prev) =>
+          prev.map((p) => (p.id === productId ? { ...p, isActive: newState } : p)),
+        );
+        toast.success(newState ? "Producto activado" : "Producto desactivado");
+      } else {
+        toast.error("Error al cambiar estado");
+      }
+    } catch {
+      toast.error("Error de conexión");
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -330,6 +363,7 @@ export default function AdminProductosPage() {
         searchPlaceholder="Buscar por nombre o SKU…"
         externalSearch={{ value: searchInput, onChange: setSearchInput }}
         isLoading={loading}
+        showCheckbox={false}
         pagination={{
           page,
           pageSize: LIMIT,
@@ -340,6 +374,14 @@ export default function AdminProductosPage() {
         }}
         renderActions={(row) => (
           <div className="flex justify-end gap-1">
+            <Button variant="ghost" size="icon" asChild>
+              <Link
+                href={`/admin/productos/detalle/${row.id}`}
+                aria-label="Ver detalle"
+              >
+                <Eye className="size-4" />
+              </Link>
+            </Button>
             <Button variant="ghost" size="icon" asChild>
               <Link
                 href={`/admin/productos/${row.id}`}

@@ -44,6 +44,7 @@ function slugify(text: string): string {
 const variantSchema = z.object({
   id: z.string().optional(),
   sku: z.string().min(1, "SKU requerido"),
+  ean: z.string().optional().nullable(),
   price: z.coerce.number().min(0, "Precio inválido"),
   comparePrice: z.coerce.number().min(0).optional().nullable(),
   stock: z.coerce.number().int().min(0),
@@ -171,7 +172,7 @@ export function ProductForm({
       metaDesc: initialData?.metaDesc ?? "",
       variants: initialData?.variants?.length
         ? initialData.variants
-        : [{ sku: "", price: 0, comparePrice: null, stock: 0, weight: null, attributeValueIds: [] }],
+        : [{ sku: "", ean: "", price: 0, comparePrice: null, stock: 0, weight: null, attributeValueIds: [] }],
     }),
     [initialData],
   );
@@ -268,6 +269,7 @@ export function ProductForm({
     const price = parseFloat(basePrice) || 0;
     const newVariants = combos.map((c, i) => ({
       sku: `${baseSku}-${String(i + 1).padStart(3, "0")}`,
+      ean: "" as string | null,
       price,
       comparePrice: null as number | null,
       stock: 0,
@@ -635,7 +637,7 @@ export function ProductForm({
             size="sm"
             className="gap-1"
             onClick={() =>
-              append({ sku: "", price: 0, comparePrice: null, stock: 0, weight: null, attributeValueIds: [] })
+              append({ sku: "", ean: "", price: 0, comparePrice: null, stock: 0, weight: null, attributeValueIds: [] })
             }
           >
             <Plus className="size-4" /> Agregar variante
@@ -650,6 +652,7 @@ export function ProductForm({
               <TableRow className="bg-muted/40">
                 {selectedAttributes.length > 0 && <TableHead>Atributos</TableHead>}
                 <TableHead>SKU <span className="text-destructive">*</span></TableHead>
+                <TableHead>EAN</TableHead>
                 <TableHead>Precio <span className="text-destructive">*</span></TableHead>
                 <TableHead>Precio comparación</TableHead>
                 <TableHead>Stock</TableHead>
@@ -675,6 +678,9 @@ export function ProductForm({
                     )}
                     <TableCell>
                       <Input {...form.register(`variants.${index}.sku`)} className="h-9 min-w-[120px] border-border" />
+                    </TableCell>
+                    <TableCell>
+                      <Input {...form.register(`variants.${index}.ean`)} className="h-9 min-w-[120px] border-border" placeholder="EAN-13" />
                     </TableCell>
                     <TableCell>
                       <Input
