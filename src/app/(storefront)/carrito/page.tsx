@@ -25,9 +25,12 @@ export default function CarritoPage() {
 
   useEffect(() => {
     fetch("/api/quotes?checkPermission=true")
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) return null;
+        return r.json();
+      })
       .then((data) => {
-        if (data.canGenerateQuotes) setCanGenerateQuotes(true);
+        if (data?.canGenerateQuotes) setCanGenerateQuotes(true);
       })
       .catch(() => {});
   }, []);
