@@ -1,5 +1,9 @@
-import "dotenv/config";
+import { config } from "dotenv";
 import { defineConfig } from "prisma/config";
+
+// Prisma CLI no carga `.env.local` por defecto; Next sí. Cargamos ambos como en desarrollo.
+config({ path: ".env" });
+config({ path: ".env.local", override: true });
 
 export default defineConfig({
   schema: "./prisma/schema.prisma",
