@@ -5,6 +5,11 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
+    "build:prod": "vercel build --prod",
+    "vercel:link": "vercel link",
+    "vercel:pull": "vercel pull --yes --environment=production",
+    "deploy:preview": "vercel --yes",
+    "deploy:prod": "vercel deploy --prod --yes",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
@@ -64,6 +69,7 @@
     "eslint-config-next": "16.2.1",
     "prisma": "^7.5.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vercel": "^49.0.1"
   }
 }

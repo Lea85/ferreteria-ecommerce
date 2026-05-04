@@ -36,6 +36,48 @@ npx tsx prisma/seed.ts
 npm run dev
 ```
 
+## Flujo Local -> Producción (GitHub + Vercel + Supabase)
+
+1. Linkear este repo con tu proyecto de Vercel (una sola vez):
+
+```bash
+npm run vercel:link
+```
+
+2. Traer variables de producción de Vercel al entorno local:
+
+```bash
+npm run vercel:pull
+```
+
+3. Verificar que `.env.local` tenga valores correctos para:
+
+- `DATABASE_URL`
+- `DIRECT_URL`
+- `AUTH_SECRET`
+- `NEXT_PUBLIC_APP_URL` (en local: `http://localhost:3000`)
+
+4. Aplicar cambios de base (si modificaste schema Prisma):
+
+```bash
+npm run db:push
+```
+
+5. Trabajar localmente:
+
+```bash
+npm run dev
+```
+
+6. Publicar:
+
+- Si Vercel despliega por GitHub, solo hace falta `git push`.
+- Si querés desplegar directo desde tu máquina:
+
+```bash
+npm run deploy:prod
+```
+
 ## Usuarios de Prueba (después del seed)
 
 | Rol | Email | Contraseña |
