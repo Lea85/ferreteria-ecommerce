@@ -44,6 +44,7 @@ type ProductApi = {
 };
 
 type ProductRow = ProductApi;
+type FilterOption = { id: string; name: string };
 
 const IMPORT_TEMPLATE = [
   {
@@ -97,10 +98,14 @@ const LIMIT = 20;
 
 export default function AdminProductosPage() {
   const [activeFilter, setActiveFilter] = useState<string>("all");
+  const [brandFilter, setBrandFilter] = useState<string>("all");
+  const [supplierFilter, setSupplierFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [products, setProducts] = useState<ProductRow[]>([]);
+  const [brands, setBrands] = useState<FilterOption[]>([]);
+  const [suppliers, setSuppliers] = useState<FilterOption[]>([]);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -120,7 +125,53 @@ export default function AdminProductosPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, activeFilter]);
+  }, [debouncedSearch, activeFilter, brandFilter, supplierFilter]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadFilters() {
+      try {
+        const [brandsRes, suppliersRes] = await Promise.all([
+          fetch("/api/admin/brands?limit=100"),
+          fetch("/api/admin/suppliers?limit=100"),
+        ]);
+
+        const [brandsData, suppliersData] = await Promise.all([
+          brandsRes.json(),
+          suppliersRes.json(),
+        ]);
+
+        if (!brandsRes.ok || !suppliersRes.ok) {
+          throw new Error("No se pudieron cargar filtros");
+        }
+
+        if (!cancelled) {
+          setBrands(
+            (brandsData.brands ?? []).map((brand: { id: string; name: string }) => ({
+              id: brand.id,
+              name: brand.name,
+            })),
+          );
+          setSuppliers(
+            (suppliersData.suppliers ?? []).map((supplier: { id: string; name: string }) => ({
+              id: supplier.id,
+              name: supplier.name,
+            })),
+          );
+        }
+      } catch {
+        if (!cancelled) {
+          toast.error("No se pudieron cargar marcas y proveedores");
+        }
+      }
+    }
+
+    void loadFilters();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const loadProducts = useCallback(async () => {
     setLoading(true);
@@ -128,6 +179,8 @@ export default function AdminProductosPage() {
       const params = new URLSearchParams();
       if (debouncedSearch) params.set("search", debouncedSearch);
       params.set("active", activeFilter);
+      if (brandFilter !== "all") params.set("brand", brandFilter);
+      if (supplierFilter !== "all") params.set("supplier", supplierFilter);
       params.set("page", String(page));
       params.set("limit", String(LIMIT));
       const res = await fetch(`/api/admin/products?${params.toString()}`);
@@ -150,7 +203,7 @@ export default function AdminProductosPage() {
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch, activeFilter, page]);
+  }, [debouncedSearch, activeFilter, brandFilter, supplierFilter, page]);
 
   useEffect(() => {
     void loadProducts();
@@ -352,6 +405,42 @@ export default function AdminProductosPage() {
               <SelectItem value="all">Todos</SelectItem>
               <SelectItem value="true">Solo activos</SelectItem>
               <SelectItem value="false">Solo inactivos</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <span className="text-xs font-medium text-muted-foreground">
+            Marca
+          </span>
+          <Select value={brandFilter} onValueChange={setBrandFilter}>
+            <SelectTrigger className="w-full min-w-[180px] border-border sm:w-56">
+              <SelectValue placeholder="Marca" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              {brands.map((brand) => (
+                <SelectItem key={brand.id} value={brand.id}>
+                  {brand.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <span className="text-xs font-medium text-muted-foreground">
+            Proveedor
+          </span>
+          <Select value={supplierFilter} onValueChange={setSupplierFilter}>
+            <SelectTrigger className="w-full min-w-[180px] border-border sm:w-56">
+              <SelectValue placeholder="Proveedor" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              {suppliers.map((supplier) => (
+                <SelectItem key={supplier.id} value={supplier.id}>
+                  {supplier.name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>

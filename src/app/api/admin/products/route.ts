@@ -18,6 +18,7 @@ export async function GET(request: Request) {
     const search = searchParams.get("search")?.trim() || "";
     const categoryParam = searchParams.get("category")?.trim();
     const brandParam = searchParams.get("brand")?.trim();
+    const supplierParam = searchParams.get("supplier")?.trim();
     const active = searchParams.get("active") ?? "all";
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1);
     const limit = Math.min(
@@ -68,6 +69,23 @@ export async function GET(request: Request) {
       });
       if (brand) {
         where.brandId = brand.id;
+      } else {
+        return NextResponse.json({
+          products: [],
+          total: 0,
+          page,
+          totalPages: 0,
+        });
+      }
+    }
+
+    if (supplierParam) {
+      const supplier = await prisma.supplier.findUnique({
+        where: { id: supplierParam },
+        select: { id: true },
+      });
+      if (supplier) {
+        where.suppliers = { some: { supplierId: supplier.id } };
       } else {
         return NextResponse.json({
           products: [],
