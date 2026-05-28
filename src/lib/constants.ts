@@ -12,6 +12,8 @@ export type PaymentMethod =
   | "CASH_ON_PICKUP"
   | "COUNTER_CASH"
   | "COUNTER_CREDIT_CARD"
+  | "COUNTER_CREDIT_ABSORBE_LOCAL"
+  | "COUNTER_CREDIT_ABSORBE_BANCO"
   | "COUNTER_DEBIT_CARD"
   | "COUNTER_TRANSFER";
 export type PriceRuleType = "ROLE" | "VOLUME" | "PROMO";
@@ -43,13 +45,16 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   CASH_ON_PICKUP: "Efectivo al retiro en sucursal",
   COUNTER_CASH: "Efectivo",
   COUNTER_CREDIT_CARD: "Tarjeta de crédito",
+  COUNTER_CREDIT_ABSORBE_LOCAL: "Tarjeta de crédito absorbe local",
+  COUNTER_CREDIT_ABSORBE_BANCO: "Tarjeta de crédito absorbe banco",
   COUNTER_DEBIT_CARD: "Tarjeta de débito",
   COUNTER_TRANSFER: "Transferencia",
 };
 
 export const COUNTER_PAYMENT_OPTIONS = [
   { value: "COUNTER_CASH", label: "Efectivo" },
-  { value: "COUNTER_CREDIT_CARD", label: "Tarjeta de crédito" },
+  { value: "COUNTER_CREDIT_ABSORBE_LOCAL", label: "Tarjeta de crédito absorbe local" },
+  { value: "COUNTER_CREDIT_ABSORBE_BANCO", label: "Tarjeta de crédito absorbe banco" },
   { value: "COUNTER_DEBIT_CARD", label: "Tarjeta de débito" },
   { value: "COUNTER_TRANSFER", label: "Transferencia" },
 ] as const;
