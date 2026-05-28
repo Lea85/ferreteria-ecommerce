@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 
 import type { Prisma } from "@/generated/prisma";
+import { OrderStatus } from "@/generated/prisma";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { getOrderSalesChannel } from "@/lib/order-channel";
 
-const EXCLUDED_STATUSES = ["CANCELLED", "REFUNDED"] as const;
+const EXCLUDED_STATUSES: OrderStatus[] = [OrderStatus.CANCELLED, OrderStatus.REFUNDED];
 
 function getDateFrom(period: string): Date {
   const now = new Date();

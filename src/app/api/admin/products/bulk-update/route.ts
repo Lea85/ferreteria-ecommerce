@@ -67,7 +67,9 @@ export async function POST(request: Request) {
         const data: Prisma.ProductUpdateInput = {};
 
         if (body.brandId !== undefined) {
-          data.brandId = body.brandId.value || null;
+          data.brand = body.brandId.value
+            ? { connect: { id: body.brandId.value } }
+            : { disconnect: true };
         }
         if (body.isActive !== undefined) {
           data.isActive = body.isActive.value;

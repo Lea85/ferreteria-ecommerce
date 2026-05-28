@@ -85,7 +85,14 @@ export function DataTable<T extends { id: string }>({
   const [internalSelected, setInternalSelected] = useState<Set<string>>(new Set());
 
   const selected = selection?.selectedIds ?? internalSelected;
-  const setSelected = selection?.onSelectionChange ?? setInternalSelected;
+
+  function updateSelected(updater: (prev: Set<string>) => Set<string>) {
+    if (selection) {
+      selection.onSelectionChange(updater(selection.selectedIds));
+    } else {
+      setInternalSelected(updater);
+    }
+  }
 
   const searchValue = externalSearch?.value ?? internalSearch;
   const setSearchValue = externalSearch?.onChange ?? setInternalSearch;
@@ -163,7 +170,7 @@ export function DataTable<T extends { id: string }>({
   }
 
   function toggleRow(id: string) {
-    setSelected((prev) => {
+    updateSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -173,13 +180,13 @@ export function DataTable<T extends { id: string }>({
 
   function toggleAll() {
     if (allSelected) {
-      setSelected((prev) => {
+      updateSelected((prev) => {
         const next = new Set(prev);
         allVisibleIds.forEach((id) => next.delete(id));
         return next;
       });
     } else {
-      setSelected((prev) => {
+      updateSelected((prev) => {
         const next = new Set(prev);
         allVisibleIds.forEach((id) => next.add(id));
         return next;
