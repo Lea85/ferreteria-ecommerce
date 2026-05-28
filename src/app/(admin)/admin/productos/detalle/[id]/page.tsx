@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import { RichTextContent } from "@/components/storefront/RichTextContent";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -134,7 +135,7 @@ export default function ProductoDetallePage() {
               {product.description && (
                 <div>
                   <p className="text-xs font-medium text-muted-foreground mb-1">Descripción</p>
-                  <p className="text-sm text-foreground whitespace-pre-wrap">{product.description}</p>
+                  <RichTextContent content={product.description} />
                 </div>
               )}
               <div className="flex gap-4">

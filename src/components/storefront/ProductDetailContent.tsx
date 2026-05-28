@@ -20,6 +20,7 @@ import { useCartStore } from "@/stores/cart.store";
 
 import { ProductCard } from "./ProductCard";
 import { ProductGallery } from "./ProductGallery";
+import { RichTextContent } from "./RichTextContent";
 
 type VariantAttribute = {
   typeId: string;
@@ -301,8 +302,8 @@ export function ProductDetailContent({ product }: ProductDetailContentProps) {
               <TabsTrigger value="specs">Especificaciones</TabsTrigger>
               <TabsTrigger value="reviews">Opiniones</TabsTrigger>
             </TabsList>
-            <TabsContent value="desc" className="text-sm leading-relaxed">
-              {product.description}
+            <TabsContent value="desc">
+              <RichTextContent content={product.description} />
             </TabsContent>
             <TabsContent value="specs">
               <table className="w-full text-sm">

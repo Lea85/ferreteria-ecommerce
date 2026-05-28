@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Copy, ImageIcon, Link2, Loader2 as Spinner, MapPin, Plus, RefreshCw, Trash2, Upload, X } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
-import { useForm, useFieldArray, type Resolver } from "react-hook-form";
+import { Controller, useForm, useFieldArray, type Resolver } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -29,6 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { RichTextEditor } from "@/components/admin/RichTextEditor";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
@@ -448,7 +449,16 @@ export function ProductForm({
           </div>
           <div className="space-y-2 md:col-span-2">
             <Label htmlFor="description">Descripción</Label>
-            <Textarea id="description" rows={5} {...form.register("description")} className="border-border" />
+            <Controller
+              name="description"
+              control={form.control}
+              render={({ field }) => (
+                <RichTextEditor
+                  value={field.value ?? ""}
+                  onChange={field.onChange}
+                />
+              )}
+            />
           </div>
           <div className="space-y-2">
             <Label>Marca</Label>
