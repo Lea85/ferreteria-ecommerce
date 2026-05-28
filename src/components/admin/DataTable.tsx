@@ -51,6 +51,11 @@ export type DataTableProps<T extends { id: string }> = {
   renderActions?: (row: T) => ReactNode;
   isLoading?: boolean;
   showCheckbox?: boolean;
+  /** Selección controlada por el padre (persiste entre páginas). */
+  selection?: {
+    selectedIds: Set<string>;
+    onSelectionChange: (ids: Set<string>) => void;
+  };
 };
 
 function getCellValue<T>(row: T, col: DataTableColumn<T>): unknown {
@@ -72,11 +77,15 @@ export function DataTable<T extends { id: string }>({
   renderActions,
   isLoading = false,
   showCheckbox = true,
+  selection,
 }: DataTableProps<T>) {
   const [internalSearch, setInternalSearch] = useState("");
   const [sortCol, setSortCol] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [internalSelected, setInternalSelected] = useState<Set<string>>(new Set());
+
+  const selected = selection?.selectedIds ?? internalSelected;
+  const setSelected = selection?.onSelectionChange ?? setInternalSelected;
 
   const searchValue = externalSearch?.value ?? internalSearch;
   const setSearchValue = externalSearch?.onChange ?? setInternalSearch;

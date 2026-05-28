@@ -1,11 +1,12 @@
 "use client";
 
-import { Download, Edit, Eye, ImageIcon, Layers, Loader2, Upload } from "lucide-react";
+import { Download, Edit, Eye, ImageIcon, Layers, ListChecks, Loader2, Upload } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 
+import { BulkProductEditDialog } from "@/components/admin/BulkProductEditDialog";
 import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -109,6 +110,9 @@ export default function AdminProductosPage() {
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedNames, setSelectedNames] = useState<Record<string, string>>({});
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [bulkMode, setBulkMode] = useState<"import" | "update" | null>(null);
   const [bulkLoading, setBulkLoading] = useState(false);
   const [bulkResults, setBulkResults] = useState<{
@@ -208,6 +212,18 @@ export default function AdminProductosPage() {
   useEffect(() => {
     void loadProducts();
   }, [loadProducts]);
+
+  function handleSelectionChange(ids: Set<string>) {
+    setSelectedIds(ids);
+    setSelectedNames((prev) => {
+      const next: Record<string, string> = {};
+      for (const id of ids) {
+        const onPage = products.find((p) => p.id === id);
+        next[id] = onPage?.name ?? prev[id] ?? "Producto";
+      }
+      return next;
+    });
+  }
 
   function downloadTemplate(type: "import" | "update") {
     const data = type === "import" ? IMPORT_TEMPLATE : UPDATE_TEMPLATE;
@@ -360,6 +376,17 @@ export default function AdminProductosPage() {
             variant="outline"
             size="sm"
             className="gap-2"
+            disabled={selectedIds.size === 0}
+            onClick={() => setBulkEditOpen(true)}
+          >
+            <ListChecks className="size-4" />
+            Edición masiva web
+            {selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
             onClick={() => {
               setBulkMode("import");
               setBulkResults(null);
@@ -452,7 +479,11 @@ export default function AdminProductosPage() {
         searchPlaceholder="Buscar por nombre, SKU o EAN…"
         externalSearch={{ value: searchInput, onChange: setSearchInput }}
         isLoading={loading}
-        showCheckbox={false}
+        showCheckbox
+        selection={{
+          selectedIds,
+          onSelectionChange: handleSelectionChange,
+        }}
         pagination={{
           page,
           pageSize: LIMIT,
@@ -481,6 +512,20 @@ export default function AdminProductosPage() {
             </Button>
           </div>
         )}
+      />
+
+      <BulkProductEditDialog
+        open={bulkEditOpen}
+        onOpenChange={setBulkEditOpen}
+        productIds={[...selectedIds]}
+        productNames={[...selectedIds].map((id) => selectedNames[id] ?? id)}
+        brands={brands}
+        suppliers={suppliers}
+        onSuccess={() => {
+          setSelectedIds(new Set());
+          setSelectedNames({});
+          void loadProducts();
+        }}
       />
 
       <Dialog
