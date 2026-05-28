@@ -4,7 +4,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
-import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { FeaturedProducts } from "@/components/storefront/FeaturedProducts";
@@ -23,13 +22,6 @@ export default function HomePage() {
   const [categories, setCategories] = useState<HomeCat[]>([]);
   const [brands, setBrands] = useState<HomeBrand[]>([]);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    toast.success("Bienvenido!", {
-      duration: 10000,
-      id: "home-welcome-toast",
-    });
-  }, []);
 
   useEffect(() => {
     fetch("/api/storefront/home")
