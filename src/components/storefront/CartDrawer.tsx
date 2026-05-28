@@ -7,14 +7,21 @@ import { ShoppingBag, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useCartStockSync } from "@/hooks/use-cart-stock-sync";
+import {
+  cartHasOverStock,
+  toastCheckoutBlockedOverStock,
+} from "@/lib/cart-stock";
 import { cn, formatPrice } from "@/lib/utils";
+import { useRouter } from "next/navigation";
 import { useCartStore } from "@/stores/cart.store";
 
 import { QuantityControls } from "./QuantityControls";
 
 export function CartDrawer() {
+  const router = useRouter();
   useCartStockSync();
   const items = useCartStore((s) => s.items);
+  const adminStockBypass = useCartStore((s) => s.adminStockBypass);
   const isOpen = useCartStore((s) => s.isOpen);
   const closeCart = useCartStore((s) => s.closeCart);
   const removeItem = useCartStore((s) => s.removeItem);
@@ -112,6 +119,7 @@ export function CartDrawer() {
                         size="sm"
                         value={line.quantity}
                         maxStock={line.stock}
+                        ignoreStockLimit={adminStockBypass}
                         onChange={(q) => updateQuantity(line.variantId, q)}
                       />
                       <Button
@@ -143,12 +151,20 @@ export function CartDrawer() {
                   </Link>
                 </Button>
                 <Button
-                  asChild
+                  type="button"
                   className="w-full bg-store-orange text-store-orange-foreground hover:bg-store-orange/90"
+                  onClick={() => {
+                    if (cartHasOverStock(items)) {
+                      toastCheckoutBlockedOverStock();
+                      closeCart();
+                      router.push("/carrito");
+                      return;
+                    }
+                    closeCart();
+                    router.push("/checkout/datos");
+                  }}
                 >
-                  <Link href="/checkout/datos" onClick={closeCart}>
-                    Finalizar compra
-                  </Link>
+                  Finalizar compra
                 </Button>
               </div>
             </div>

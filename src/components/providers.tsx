@@ -6,6 +6,7 @@ import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { useState } from "react";
 import { Toaster } from "sonner";
 
+import { CartAdminStockBypass } from "@/components/storefront/CartAdminStockBypass";
 import { FavoritesSync } from "@/components/storefront/FavoritesSync";
 import { StoreConfigProvider } from "@/contexts/store-config";
 
@@ -27,6 +28,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <QueryClientProvider client={queryClient}>
         <StoreConfigProvider>
           <FavoritesSync />
+          <CartAdminStockBypass />
           <NuqsAdapter>
             {children}
           </NuqsAdapter>

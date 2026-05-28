@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 
@@ -12,6 +13,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { CheckoutOrderSummary } from "@/components/storefront/CheckoutOrderSummary";
+import { cartHasOverStock, toastCheckoutBlockedOverStock } from "@/lib/cart-stock";
+import { useCartStore } from "@/stores/cart.store";
 
 function RL({ htmlFor, children }: { htmlFor: string; children: React.ReactNode }) {
   return <Label htmlFor={htmlFor}>{children} <span className="text-destructive">*</span></Label>;
@@ -36,7 +39,9 @@ const EMPTY: DatosForm = {
 };
 
 export default function CheckoutDatosPage() {
+  const router = useRouter();
   const { data: session } = useSession();
+  const items = useCartStore((s) => s.items);
   const [form, setForm] = useState<DatosForm>(EMPTY);
   const [loaded, setLoaded] = useState(false);
 
@@ -135,8 +140,19 @@ export default function CheckoutDatosPage() {
             </div>
           </section>
 
-          <Button asChild className="w-full bg-store-orange text-store-orange-foreground hover:bg-store-orange/90 sm:w-auto">
-            <Link href="/checkout/envio">Continuar</Link>
+          <Button
+            type="button"
+            className="w-full bg-store-orange text-store-orange-foreground hover:bg-store-orange/90 sm:w-auto"
+            onClick={() => {
+              if (cartHasOverStock(items)) {
+                toastCheckoutBlockedOverStock();
+                router.push("/carrito");
+                return;
+              }
+              router.push("/checkout/envio");
+            }}
+          >
+            Continuar
           </Button>
         </form>
       </div>

@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { cn, formatPrice } from "@/lib/utils";
+import { cartHasOverStock, toastCheckoutBlockedOverStock } from "@/lib/cart-stock";
 import { useCartStore } from "@/stores/cart.store";
 import { CheckoutOrderSummary } from "@/components/storefront/CheckoutOrderSummary";
 
@@ -70,6 +71,10 @@ export default function CheckoutPagoPage() {
   async function handleConfirm() {
     if (!accepted) return;
     if (method === "mp") { toast.info("Mercado Pago estara disponible proximamente."); return; }
+    if (cartHasOverStock(items)) {
+      toastCheckoutBlockedOverStock();
+      return;
+    }
 
     setSubmitting(true);
     try {

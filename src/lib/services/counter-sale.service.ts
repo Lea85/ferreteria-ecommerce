@@ -151,11 +151,6 @@ export async function createCounterSaleOrder(data: CounterSaleOrderOptions) {
     if (!variant.product.isActive) {
       throw new Error(`El producto "${variant.product.name}" no está activo.`);
     }
-    if (variant.stock < item.quantity) {
-      throw new Error(
-        `Stock insuficiente para "${variant.product.name}" (disponible: ${variant.stock}).`,
-      );
-    }
 
     const lineSubtotal = item.unitPrice * item.quantity;
     subtotal += lineSubtotal;

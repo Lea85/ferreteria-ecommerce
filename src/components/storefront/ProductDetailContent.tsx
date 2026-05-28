@@ -15,6 +15,8 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useIsAdmin } from "@/hooks/use-is-admin";
+import { resolveCartQuantity } from "@/lib/cart-stock";
 import { cn, formatPrice } from "@/lib/utils";
 import { useCartStore } from "@/stores/cart.store";
 
@@ -22,8 +24,6 @@ import { ProductCard } from "./ProductCard";
 import { ProductGallery } from "./ProductGallery";
 import { QuantityControls } from "./QuantityControls";
 import { RichTextContent } from "./RichTextContent";
-import { clampToStock } from "@/lib/cart-quantity";
-
 type VariantAttribute = {
   typeId: string;
   typeName: string;
@@ -158,6 +158,7 @@ function VariantSelector({
 export function ProductDetailContent({ product }: ProductDetailContentProps) {
   const [variantId, setVariantId] = useState(product.variants[0]?.id ?? "");
   const [qty, setQty] = useState(1);
+  const isAdmin = useIsAdmin();
   const addItem = useCartStore((s) => s.addItem);
   const openCart = useCartStore((s) => s.openCart);
 
@@ -167,8 +168,10 @@ export function ProductDetailContent({ product }: ProductDetailContentProps) {
   );
 
   useEffect(() => {
-    if (variant) setQty((q) => clampToStock(q, variant.stock));
-  }, [variant?.id, variant?.stock]);
+    if (variant) {
+      setQty((q) => resolveCartQuantity(q, variant.stock, isAdmin));
+    }
+  }, [variant?.id, variant?.stock, isAdmin]);
 
   if (!variant) return null;
 
@@ -240,7 +243,8 @@ export function ProductDetailContent({ product }: ProductDetailContentProps) {
             <QuantityControls
               value={qty}
               maxStock={variant.stock}
-              disabled={out}
+              disabled={out && !isAdmin}
+              ignoreStockLimit={isAdmin}
               onChange={setQty}
             />
             <p className="text-sm text-muted-foreground">
@@ -262,7 +266,7 @@ export function ProductDetailContent({ product }: ProductDetailContentProps) {
             type="button"
             size="lg"
             className="mt-6 w-full bg-store-orange text-lg text-store-orange-foreground hover:bg-store-orange/90 sm:w-auto sm:min-w-[280px]"
-            disabled={out}
+            disabled={out && !isAdmin}
             onClick={() => {
               addItem({
                 productId: product.id,

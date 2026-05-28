@@ -15,6 +15,7 @@ import {
   CardHeader,
 } from "@/components/ui/card";
 import { cn, formatPrice } from "@/lib/utils";
+import { useIsAdmin } from "@/hooks/use-is-admin";
 import { useCartStore } from "@/stores/cart.store";
 import { useFavoritesStore } from "@/stores/favorites.store";
 
@@ -43,6 +44,7 @@ export function ProductCard({ product, className }: ProductCardProps) {
   const router = useRouter();
   const addItem = useCartStore((s) => s.addItem);
   const openCart = useCartStore((s) => s.openCart);
+  const isAdmin = useIsAdmin();
   const isFavorite = useFavoritesStore((s) => s.isFavorite(product.id));
   const toggleFavorite = useFavoritesStore((s) => s.toggle);
   const favLoading = useFavoritesStore((s) => s.loading);
@@ -65,7 +67,7 @@ export function ProductCard({ product, className }: ProductCardProps) {
     product.comparePrice && product.comparePrice > product.price,
   );
   const outOfStock = product.stock <= 0;
-  const canAddToCart = Boolean(product.defaultVariantId) && !outOfStock;
+  const canAddToCart = Boolean(product.defaultVariantId) && (isAdmin || !outOfStock);
 
   return (
     <Card

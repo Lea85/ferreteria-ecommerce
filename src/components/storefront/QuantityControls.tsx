@@ -4,7 +4,7 @@ import { Minus, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { clampToStock } from "@/lib/cart-quantity";
+import { resolveCartQuantity } from "@/lib/cart-stock";
 import { cn } from "@/lib/utils";
 
 type QuantityControlsProps = {
@@ -12,6 +12,8 @@ type QuantityControlsProps = {
   maxStock: number;
   onChange: (quantity: number) => void;
   disabled?: boolean;
+  /** Admin: sin tope por stock al sumar cantidad. */
+  ignoreStockLimit?: boolean;
   size?: "sm" | "md";
   className?: string;
 };
@@ -21,15 +23,17 @@ export function QuantityControls({
   maxStock,
   onChange,
   disabled = false,
+  ignoreStockLimit = false,
   size = "md",
   className,
 }: QuantityControlsProps) {
-  const out = maxStock <= 0;
+  const out = !ignoreStockLimit && maxStock <= 0;
   const btnClass = size === "sm" ? "size-8" : "size-9";
   const inputClass = size === "sm" ? "h-8 w-12" : "h-9 w-14";
+  const atMax = !ignoreStockLimit && value >= maxStock;
 
   function apply(next: number) {
-    onChange(clampToStock(next, maxStock));
+    onChange(resolveCartQuantity(next, maxStock, ignoreStockLimit));
   }
 
   return (
@@ -47,7 +51,7 @@ export function QuantityControls({
       <Input
         type="number"
         min={1}
-        max={Math.max(1, maxStock)}
+        max={ignoreStockLimit ? undefined : Math.max(1, maxStock)}
         value={value}
         disabled={disabled || out}
         onChange={(e) => {
@@ -65,7 +69,7 @@ export function QuantityControls({
         variant="ghost"
         size="icon"
         className={cn(btnClass, "rounded-none")}
-        disabled={disabled || out || value >= maxStock}
+        disabled={disabled || out || atMax}
         onClick={() => apply(value + 1)}
       >
         <Plus className={size === "sm" ? "size-3.5" : "size-4"} />

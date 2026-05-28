@@ -3,7 +3,10 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
-import { clampToStock } from "@/lib/cart-quantity";
+import {
+  resolveCartQuantity,
+  toastOverStockWarning,
+} from "@/lib/cart-stock";
 
 export type CartItem = {
   variantId: string;
@@ -22,6 +25,9 @@ export type CartItem = {
 type CartState = {
   items: CartItem[];
   isOpen: boolean;
+  /** Admin: permite cantidades mayores al stock (checkout web sigue bloqueado). */
+  adminStockBypass: boolean;
+  setAdminStockBypass: (enabled: boolean) => void;
   addItem: (item: Omit<CartItem, "quantity"> & { quantity?: number }) => void;
   removeItem: (variantId: string) => void;
   updateQuantity: (variantId: string, quantity: number) => void;
@@ -40,12 +46,15 @@ export const useCartStore = create<CartState>()(
     (set, get) => ({
       items: [],
       isOpen: false,
+      adminStockBypass: false,
+      setAdminStockBypass: (enabled) => set({ adminStockBypass: enabled }),
       openCart: () => set({ isOpen: true }),
       closeCart: () => set({ isOpen: false }),
       toggleCart: () => set((s) => ({ isOpen: !s.isOpen })),
       addItem: (item) => {
+        const bypass = get().adminStockBypass;
         const stock = Math.max(0, item.stock ?? 0);
-        const addQty = clampToStock(item.quantity ?? 1, stock);
+        const addQty = resolveCartQuantity(item.quantity ?? 1, stock, bypass);
 
         set((state) => {
           const idx = state.items.findIndex(
@@ -54,10 +63,11 @@ export const useCartStore = create<CartState>()(
           if (idx >= 0) {
             const next = [...state.items];
             const merged = next[idx].quantity + addQty;
+            const quantity = resolveCartQuantity(merged, stock, bypass);
             next[idx] = {
               ...next[idx],
               stock,
-              quantity: clampToStock(merged, stock),
+              quantity,
             };
             return { items: next };
           }
@@ -79,12 +89,18 @@ export const useCartStore = create<CartState>()(
             ],
           };
         });
+
+        const line = get().items.find((i) => i.variantId === item.variantId);
+        if (bypass && line && line.quantity > line.stock) {
+          toastOverStockWarning(line.name, line.quantity, line.stock);
+        }
       },
       removeItem: (variantId) =>
         set((state) => ({
           items: state.items.filter((i) => i.variantId !== variantId),
         })),
-      updateQuantity: (variantId, quantity) =>
+      updateQuantity: (variantId, quantity) => {
+        const bypass = get().adminStockBypass;
         set((state) => {
           if (quantity <= 0) {
             return {
@@ -96,11 +112,17 @@ export const useCartStore = create<CartState>()(
               if (i.variantId !== variantId) return i;
               return {
                 ...i,
-                quantity: clampToStock(quantity, i.stock),
+                quantity: resolveCartQuantity(quantity, i.stock, bypass),
               };
             }),
           };
-        }),
+        });
+
+        const line = get().items.find((i) => i.variantId === variantId);
+        if (bypass && line && line.quantity > line.stock) {
+          toastOverStockWarning(line.name, line.quantity, line.stock);
+        }
+      },
       syncStocks: (stocks) =>
         set((state) => ({
           items: state.items.map((i) => {
@@ -109,7 +131,11 @@ export const useCartStore = create<CartState>()(
             return {
               ...i,
               stock,
-              quantity: clampToStock(i.quantity, stock),
+              quantity: resolveCartQuantity(
+                i.quantity,
+                stock,
+                state.adminStockBypass,
+              ),
             };
           }),
         })),

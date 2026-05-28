@@ -29,6 +29,10 @@ import { COUNTER_PAYMENT_OPTIONS, type CounterPaymentMethod } from "@/lib/consta
 import { resolveQuoteStoreBranding } from "@/lib/quote-branding";
 import { cn, formatPrice } from "@/lib/utils";
 import { useCartStockSync } from "@/hooks/use-cart-stock-sync";
+import {
+  cartHasOverStock,
+  toastCheckoutBlockedOverStock,
+} from "@/lib/cart-stock";
 import { useCartStore } from "@/stores/cart.store";
 import { toast } from "sonner";
 
@@ -40,6 +44,8 @@ export default function CarritoPage() {
   const updateQuantity = useCartStore((s) => s.updateQuantity);
   const getSubtotal = useCartStore((s) => s.getSubtotal);
   const clearCart = useCartStore((s) => s.clearCart);
+  const adminStockBypass = useCartStore((s) => s.adminStockBypass);
+  const hasOverStock = cartHasOverStock(items);
 
   const [coupon, setCoupon] = useState("");
   const [applied, setApplied] = useState(false);
@@ -347,9 +353,14 @@ export default function CarritoPage() {
                   <QuantityControls
                     value={line.quantity}
                     maxStock={line.stock}
+                    ignoreStockLimit={adminStockBypass}
                     onChange={(q) => updateQuantity(line.variantId, q)}
                   />
-                  {line.stock > 0 && line.quantity >= line.stock ? (
+                  {line.quantity > line.stock ? (
+                    <span className="text-xs text-amber-700">
+                      Stock: {line.stock} u. — superás el disponible
+                    </span>
+                  ) : line.stock > 0 && line.quantity >= line.stock && !adminStockBypass ? (
                     <span className="text-xs text-amber-700">Máx. {line.stock} u.</span>
                   ) : null}
                   <Button
@@ -429,11 +440,24 @@ export default function CarritoPage() {
             <span>Total</span>
             <span className="text-primary">{formatPrice(summary.total)}</span>
           </div>
+          {adminStockBypass && hasOverStock ? (
+            <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              Hay ítems sin stock suficiente para la compra web. Podés generar presupuesto o
+              registrar venta por mostrador.
+            </p>
+          ) : null}
           <Button
-            asChild
+            type="button"
             className="mt-6 w-full bg-store-orange text-store-orange-foreground hover:bg-store-orange/90"
+            onClick={() => {
+              if (hasOverStock) {
+                toastCheckoutBlockedOverStock();
+                return;
+              }
+              router.push("/checkout/datos");
+            }}
           >
-            <Link href="/checkout/datos">Finalizar compra</Link>
+            Finalizar compra
           </Button>
           {canCounterSale && (
             <Button
