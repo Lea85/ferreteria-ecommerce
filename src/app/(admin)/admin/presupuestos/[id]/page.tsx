@@ -304,7 +304,7 @@ export default function AdminPresupuestoDetallePage() {
                   href={`/admin/pedidos/${quote.soldOrderId}`}
                   className="text-sm text-emerald-600 underline"
                 >
-                  Ver pedido asociado
+                  Ver venta asociada
                 </Link>
               </CardContent>
             </Card>

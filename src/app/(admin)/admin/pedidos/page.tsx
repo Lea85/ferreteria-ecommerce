@@ -111,7 +111,7 @@ export default function AdminPedidosPage() {
     () => [
       {
         id: "orderNumber",
-        header: "Pedido#",
+        header: "Venta#",
         accessor: "orderNumber",
         sortable: true,
         cell: (row) => (
@@ -175,9 +175,9 @@ export default function AdminPedidosPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4">
         <div>
-          <h1 className="text-xl font-bold text-foreground">Pedidos</h1>
+          <h1 className="text-xl font-bold text-foreground">Ventas</h1>
           <p className="text-sm text-muted-foreground">
-            Gestión y seguimiento de todos los pedidos.
+            Gestión y seguimiento de ventas del sitio y del mostrador.
           </p>
         </div>
         <Tabs value={statusFilter} onValueChange={setStatusFilter}>

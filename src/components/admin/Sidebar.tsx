@@ -47,10 +47,10 @@ const nav: NavItem[] = [
   { href: "/admin/marcas", label: "Marcas", icon: Globe },
   {
     href: "/admin/pedidos",
-    label: "Pedidos",
+    label: "Ventas",
     icon: ShoppingCart,
     children: [
-      { href: "/admin/pedidos", label: "Pedidos", icon: ShoppingCart },
+      { href: "/admin/pedidos", label: "Ventas", icon: ShoppingCart },
       { href: "/admin/presupuestos", label: "Presupuestos", icon: FileText },
     ],
   },

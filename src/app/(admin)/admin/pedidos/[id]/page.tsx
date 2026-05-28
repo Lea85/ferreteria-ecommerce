@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 
 import { OrderStatusBadge } from "@/components/admin/OrderStatusBadge";
 import { Badge } from "@/components/ui/badge";
@@ -17,94 +18,78 @@ import {
   CUSTOMER_TYPE_LABELS,
   ORDER_STATUS_LABELS,
   PAYMENT_METHOD_LABELS,
+  type CustomerType,
+  type OrderStatus,
+  type PaymentMethod,
 } from "@/lib/constants";
+import { getOrderById } from "@/lib/services/order.service";
 import { formatPrice } from "@/lib/utils";
 
 import { OrderDetailClient } from "./order-detail-client";
 
-const MOCK = {
-  id: "o1",
-  orderNumber: "FER-2026-100801",
-  createdAt: "19 de marzo de 2026, 10:42",
-  status: "PREPARING" as const,
-  paymentMethod: "BANK_TRANSFER" as const,
-  customerType: "TRADE" as const,
-  customer: {
-    name: "Instalaciones Delta SRL",
-    email: "compras@deltasanitarios.com.ar",
-    phone: "+54 11 5555-0192",
-    taxId: "30-71458291-7",
-  },
-  shipping: {
-    name: "Depósito Delta — Avellaneda",
-    street: "Av. Mitre 4520",
-    city: "Avellaneda",
-    state: "Buenos Aires",
-    postalCode: "1870",
-    phone: "+54 11 5555-0193",
-  },
-  transferProofUrl: null as string | null,
-  items: [
-    {
-      sku: "PEI-MC-COC-DAL",
-      name: "Grifería monocomando cocina Peirano Dalia",
-      variant: "Cromo",
-      qty: 2,
-      unit: 189_900,
-      total: 379_800,
-    },
-    {
-      sku: "PVC-32-4",
-      name: "Caño PVC presión Ø32 mm x 4 m",
-      variant: null as string | null,
-      qty: 24,
-      unit: 8750,
-      total: 210_000,
-    },
-  ],
-  subtotal: 589_800,
-  discountTotal: 45_000,
-  shippingCost: 12_500,
-  total: 557_300,
-  statusHistory: [
-    {
-      at: "19 mar 2026, 10:42",
-      from: null as string | null,
-      to: "PENDING",
-      note: "Pedido creado",
-    },
-    {
-      at: "19 mar 2026, 11:05",
-      from: "PENDING",
-      to: "PAYMENT_PENDING",
-      note: "Cliente subió comprobante",
-    },
-    {
-      at: "19 mar 2026, 14:20",
-      from: "PAYMENT_PENDING",
-      to: "PAYMENT_APPROVED",
-      note: "Validado por admin",
-    },
-    {
-      at: "20 mar 2026, 09:10",
-      from: "PAYMENT_APPROVED",
-      to: "PREPARING",
-      note: "Pick list generado",
-    },
-  ],
+const SHIPPING_METHOD_LABELS: Record<string, string> = {
+  STORE_PICKUP: "Retiro en sucursal",
+  OWN_DELIVERY: "Envío propio",
+  CARRIER: "Correo / transporte",
 };
+
+function formatOrderDate(date: Date) {
+  return new Intl.DateTimeFormat("es-AR", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function formatHistoryDate(date: Date) {
+  return new Intl.DateTimeFormat("es-AR", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
 
 type PageProps = { params: Promise<{ id: string }> };
 
-export default async function PedidoDetallePage({ params }: PageProps) {
-  await params;
-  const order = MOCK;
+export default async function VentaDetallePage({ params }: PageProps) {
+  const { id } = await params;
+  const order = await getOrderById(id);
+
+  if (!order) {
+    notFound();
+  }
+
+  const customerType = (order.customerType ?? "CONSUMER") as CustomerType;
+  const status = order.status as OrderStatus;
+  const paymentMethod = order.paymentMethod as PaymentMethod;
+
+  const customerName =
+    order.customerName ||
+    [order.user?.name, order.user?.lastName].filter(Boolean).join(" ") ||
+    "—";
+  const customerEmail = order.customerEmail || order.user?.email || "—";
+  const customerPhone = order.customerPhone || order.user?.phone || "—";
+  const taxId = order.billingTaxId || order.billingDoc || null;
+
+  const shippingLabel = SHIPPING_METHOD_LABELS[order.shippingMethod] ?? order.shippingMethod;
+  const hasShippingAddress =
+    order.shippingName ||
+    order.shippingStreet ||
+    order.shippingCity;
+
+  const statusHistory = [...order.statusHistory].sort(
+    (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+  );
 
   return (
     <div className="space-y-8">
       <nav className="text-sm text-muted-foreground">
         <Link href="/admin/pedidos" className="hover:text-primary">
-          Pedidos
+          Ventas
         </Link>
         <span className="mx-2">/</span>
         <span className="font-medium text-foreground">{order.orderNumber}</span>
@@ -116,11 +101,16 @@ export default async function PedidoDetallePage({ params }: PageProps) {
             <h2 className="text-2xl font-semibold tracking-tight text-foreground">
               {order.orderNumber}
             </h2>
-            <OrderStatusBadge status={order.status} />
+            <OrderStatusBadge status={status} />
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">{order.createdAt}</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {formatOrderDate(order.createdAt)}
+          </p>
+          {order.notes ? (
+            <p className="mt-2 text-sm text-muted-foreground">{order.notes}</p>
+          ) : null}
         </div>
-        <OrderDetailClient currentStatus={order.status} />
+        <OrderDetailClient orderId={order.id} currentStatus={status} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -129,15 +119,17 @@ export default async function PedidoDetallePage({ params }: PageProps) {
             <CardTitle className="text-base text-primary">Cliente</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1 text-sm">
-            <p className="font-medium">{order.customer.name}</p>
-            <p className="text-muted-foreground">{order.customer.email}</p>
-            <p className="text-muted-foreground">{order.customer.phone}</p>
+            <p className="font-medium">{customerName}</p>
+            <p className="text-muted-foreground">{customerEmail}</p>
+            {customerPhone !== "—" ? (
+              <p className="text-muted-foreground">{customerPhone}</p>
+            ) : null}
             <Badge variant="secondary" className="mt-2">
-              {CUSTOMER_TYPE_LABELS[order.customerType]}
+              {CUSTOMER_TYPE_LABELS[customerType]}
             </Badge>
-            <p className="pt-2 text-xs text-muted-foreground">
-              CUIT {order.customer.taxId}
-            </p>
+            {taxId ? (
+              <p className="pt-2 text-xs text-muted-foreground">Doc. {taxId}</p>
+            ) : null}
           </CardContent>
         </Card>
 
@@ -146,12 +138,27 @@ export default async function PedidoDetallePage({ params }: PageProps) {
             <CardTitle className="text-base text-primary">Envío</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1 text-sm">
-            <p className="font-medium">{order.shipping.name}</p>
-            <p className="text-muted-foreground">
-              {order.shipping.street}, {order.shipping.city} (
-              {order.shipping.state}) CP {order.shipping.postalCode}
-            </p>
-            <p className="text-muted-foreground">{order.shipping.phone}</p>
+            <p className="font-medium">{shippingLabel}</p>
+            {hasShippingAddress ? (
+              <>
+                {order.shippingName ? (
+                  <p className="font-medium">{order.shippingName}</p>
+                ) : null}
+                <p className="text-muted-foreground">
+                  {[order.shippingStreet, order.shippingCity, order.shippingState]
+                    .filter(Boolean)
+                    .join(", ")}
+                  {(order.shippingPostalCode || order.shippingZip)
+                    ? ` CP ${order.shippingPostalCode || order.shippingZip}`
+                    : ""}
+                </p>
+                {order.shippingPhone ? (
+                  <p className="text-muted-foreground">{order.shippingPhone}</p>
+                ) : null}
+              </>
+            ) : (
+              <p className="text-muted-foreground">Sin dirección de envío cargada</p>
+            )}
           </CardContent>
         </Card>
 
@@ -160,8 +167,8 @@ export default async function PedidoDetallePage({ params }: PageProps) {
             <CardTitle className="text-base text-primary">Pago</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
-            <p>{PAYMENT_METHOD_LABELS[order.paymentMethod]}</p>
-            {order.paymentMethod === "BANK_TRANSFER" && (
+            <p>{PAYMENT_METHOD_LABELS[paymentMethod] ?? paymentMethod}</p>
+            {paymentMethod === "BANK_TRANSFER" && (
               <div className="rounded-md border border-dashed border-border bg-muted/30 p-4">
                 <p className="text-xs font-medium text-foreground">
                   Comprobante de transferencia
@@ -169,11 +176,15 @@ export default async function PedidoDetallePage({ params }: PageProps) {
                 <p className="mt-1 text-xs text-muted-foreground">
                   {order.transferProofUrl
                     ? "Archivo cargado."
-                    : "El cliente aún no subió archivo (simulación)."}
+                    : "El cliente aún no subió comprobante."}
                 </p>
-                <Button type="button" variant="outline" size="sm" className="mt-3 w-full">
-                  Subir / reemplazar comprobante
-                </Button>
+                {order.transferProofUrl ? (
+                  <Button type="button" variant="outline" size="sm" className="mt-3 w-full" asChild>
+                    <a href={order.transferProofUrl} target="_blank" rel="noopener noreferrer">
+                      Ver comprobante
+                    </a>
+                  </Button>
+                ) : null}
               </div>
             )}
           </CardContent>
@@ -182,7 +193,7 @@ export default async function PedidoDetallePage({ params }: PageProps) {
 
       <Card className="border-border shadow-sm">
         <CardHeader>
-          <CardTitle className="text-base">Ítems del pedido</CardTitle>
+          <CardTitle className="text-base">Ítems de la venta</CardTitle>
         </CardHeader>
         <CardContent className="px-0 sm:px-6">
           <Table>
@@ -196,21 +207,21 @@ export default async function PedidoDetallePage({ params }: PageProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {order.items.map((it, i) => (
-                <TableRow key={i}>
+              {order.items.map((it) => (
+                <TableRow key={it.id}>
                   <TableCell>
-                    <p className="font-medium">{it.name}</p>
-                    {it.variant && (
-                      <p className="text-xs text-muted-foreground">{it.variant}</p>
-                    )}
+                    <p className="font-medium">{it.productName}</p>
+                    {it.variantName ? (
+                      <p className="text-xs text-muted-foreground">{it.variantName}</p>
+                    ) : null}
                   </TableCell>
-                  <TableCell className="font-mono text-xs">{it.sku}</TableCell>
-                  <TableCell className="text-right">{it.qty}</TableCell>
+                  <TableCell className="font-mono text-xs">{it.sku ?? "—"}</TableCell>
+                  <TableCell className="text-right">{it.quantity}</TableCell>
                   <TableCell className="text-right">
-                    {formatPrice(it.unit)}
+                    {formatPrice(Number(it.unitPrice))}
                   </TableCell>
                   <TableCell className="text-right font-medium">
-                    {formatPrice(it.total)}
+                    {formatPrice(Number(it.subtotal))}
                   </TableCell>
                 </TableRow>
               ))}
@@ -224,20 +235,28 @@ export default async function PedidoDetallePage({ params }: PageProps) {
           <CardContent className="space-y-2 pt-6 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Subtotal</span>
-              <span>{formatPrice(order.subtotal)}</span>
+              <span>{formatPrice(Number(order.subtotal))}</span>
             </div>
-            <div className="flex justify-between text-emerald-700">
-              <span>Descuentos</span>
-              <span>-{formatPrice(order.discountTotal)}</span>
-            </div>
+            {Number(order.discountTotal) > 0 ? (
+              <div className="flex justify-between text-emerald-700">
+                <span>Descuentos</span>
+                <span>-{formatPrice(Number(order.discountTotal))}</span>
+              </div>
+            ) : null}
             <div className="flex justify-between">
               <span className="text-muted-foreground">Envío</span>
-              <span>{formatPrice(order.shippingCost)}</span>
+              <span>{formatPrice(Number(order.shippingCost))}</span>
             </div>
+            {Number(order.taxTotal) > 0 ? (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Impuestos</span>
+                <span>{formatPrice(Number(order.taxTotal))}</span>
+              </div>
+            ) : null}
             <Separator />
             <div className="flex justify-between text-base font-semibold">
               <span>Total</span>
-              <span>{formatPrice(order.total)}</span>
+              <span>{formatPrice(Number(order.total))}</span>
             </div>
           </CardContent>
         </Card>
@@ -248,20 +267,32 @@ export default async function PedidoDetallePage({ params }: PageProps) {
           <CardTitle className="text-base">Historial de estado</CardTitle>
         </CardHeader>
         <CardContent>
-          <ol className="relative ms-3 border-s border-border ps-6">
-            {order.statusHistory.map((h, i) => (
-              <li key={i} className="mb-6 last:mb-0">
-                <span className="absolute -start-[7px] mt-1.5 size-3 rounded-full bg-primary" />
-                <p className="text-sm font-medium text-foreground">
-                  {ORDER_STATUS_LABELS[h.to as keyof typeof ORDER_STATUS_LABELS]}
-                </p>
-                <p className="text-xs text-muted-foreground">{h.at}</p>
-                {h.note && (
-                  <p className="mt-1 text-sm text-muted-foreground">{h.note}</p>
-                )}
-              </li>
-            ))}
-          </ol>
+          {statusHistory.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Sin historial registrado.</p>
+          ) : (
+            <ol className="relative ms-3 border-s border-border ps-6">
+              {statusHistory.map((h) => (
+                <li key={h.id} className="mb-6 last:mb-0">
+                  <span className="absolute -start-[7px] mt-1.5 size-3 rounded-full bg-primary" />
+                  <p className="text-sm font-medium text-foreground">
+                    {ORDER_STATUS_LABELS[h.toStatus as OrderStatus]}
+                    {h.fromStatus ? (
+                      <span className="font-normal text-muted-foreground">
+                        {" "}
+                        (desde {ORDER_STATUS_LABELS[h.fromStatus as OrderStatus]})
+                      </span>
+                    ) : null}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatHistoryDate(h.createdAt)}
+                  </p>
+                  {h.note ? (
+                    <p className="mt-1 text-sm text-muted-foreground">{h.note}</p>
+                  ) : null}
+                </li>
+              ))}
+            </ol>
+          )}
         </CardContent>
       </Card>
     </div>
