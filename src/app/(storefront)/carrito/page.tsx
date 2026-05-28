@@ -248,7 +248,7 @@ export default function CarritoPage() {
     <p><strong>${storeName}</strong></p>
     ${storeAddress ? `<p>${storeAddress}</p>` : ""}
     ${storePhone ? `<p>Tel: ${storePhone}</p>` : ""}
-    ${storeEmail ? `<p>${storeEmail}</p>` : ""}
+    ${storeEmail ? `<p>Email: ${storeEmail}</p>` : ""}
     <p style="margin-top:8px">Este presupuesto no constituye factura. Los precios pueden variar sin previo aviso una vez vencido el plazo de validez.</p>
   </div>
 </body>
