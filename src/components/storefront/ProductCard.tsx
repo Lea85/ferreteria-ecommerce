@@ -140,6 +140,7 @@ export function ProductCard({ product, className }: ProductCardProps) {
               slug: product.slug,
               image: product.image || "/placeholder-product.webp",
               price: product.price,
+              stock: product.stock,
               quantity: 1,
               sku: product.defaultSku,
             });

@@ -3,35 +3,35 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
+import { clampToStock } from "@/lib/cart-quantity";
+
 export type CartItem = {
   variantId: string;
   productId: string;
   name: string;
   slug: string;
   image: string;
-  /** Precio unitario mostrado (puede diferir del precio final según tipo de cliente) */
   price: number;
   quantity: number;
+  /** Stock disponible al agregar (se actualiza al hidratar carrito). */
+  stock: number;
   variantLabel?: string;
   sku?: string;
 };
 
 type CartState = {
   items: CartItem[];
-  /** Panel lateral del carrito (no se persiste) */
   isOpen: boolean;
   addItem: (item: Omit<CartItem, "quantity"> & { quantity?: number }) => void;
   removeItem: (variantId: string) => void;
   updateQuantity: (variantId: string, quantity: number) => void;
+  syncStocks: (stocks: Record<string, number>) => void;
   clearCart: () => void;
   openCart: () => void;
   closeCart: () => void;
   toggleCart: () => void;
-  /** Cantidad total de unidades */
   getTotalCount: () => number;
-  /** Alias útil para la UI */
   getItemCount: () => number;
-  /** Subtotal estimado (precio × cantidad) */
   getSubtotal: () => number;
 };
 
@@ -44,16 +44,20 @@ export const useCartStore = create<CartState>()(
       closeCart: () => set({ isOpen: false }),
       toggleCart: () => set((s) => ({ isOpen: !s.isOpen })),
       addItem: (item) => {
-        const qty = item.quantity ?? 1;
+        const stock = Math.max(0, item.stock ?? 0);
+        const addQty = clampToStock(item.quantity ?? 1, stock);
+
         set((state) => {
           const idx = state.items.findIndex(
             (i) => i.variantId === item.variantId,
           );
           if (idx >= 0) {
             const next = [...state.items];
+            const merged = next[idx].quantity + addQty;
             next[idx] = {
               ...next[idx],
-              quantity: next[idx].quantity + qty,
+              stock,
+              quantity: clampToStock(merged, stock),
             };
             return { items: next };
           }
@@ -67,7 +71,8 @@ export const useCartStore = create<CartState>()(
                 slug: item.slug,
                 image: item.image,
                 price: item.price,
-                quantity: qty,
+                quantity: addQty,
+                stock,
                 variantLabel: item.variantLabel,
                 sku: item.sku,
               },
@@ -80,13 +85,33 @@ export const useCartStore = create<CartState>()(
           items: state.items.filter((i) => i.variantId !== variantId),
         })),
       updateQuantity: (variantId, quantity) =>
+        set((state) => {
+          if (quantity <= 0) {
+            return {
+              items: state.items.filter((i) => i.variantId !== variantId),
+            };
+          }
+          return {
+            items: state.items.map((i) => {
+              if (i.variantId !== variantId) return i;
+              return {
+                ...i,
+                quantity: clampToStock(quantity, i.stock),
+              };
+            }),
+          };
+        }),
+      syncStocks: (stocks) =>
         set((state) => ({
-          items:
-            quantity <= 0
-              ? state.items.filter((i) => i.variantId !== variantId)
-              : state.items.map((i) =>
-                  i.variantId === variantId ? { ...i, quantity } : i,
-                ),
+          items: state.items.map((i) => {
+            const stock = stocks[i.variantId];
+            if (stock === undefined) return i;
+            return {
+              ...i,
+              stock,
+              quantity: clampToStock(i.quantity, stock),
+            };
+          }),
         })),
       clearCart: () => set({ items: [] }),
       getTotalCount: () =>

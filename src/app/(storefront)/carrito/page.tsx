@@ -4,8 +4,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { FileText, Loader2, Minus, Plus, ShoppingBag, Store, Trash2 } from "lucide-react";
+import { FileText, Loader2, ShoppingBag, Store, Trash2 } from "lucide-react";
 
+import { QuantityControls } from "@/components/storefront/QuantityControls";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -26,10 +27,12 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { COUNTER_PAYMENT_OPTIONS, type CounterPaymentMethod } from "@/lib/constants";
 import { cn, formatPrice } from "@/lib/utils";
+import { useCartStockSync } from "@/hooks/use-cart-stock-sync";
 import { useCartStore } from "@/stores/cart.store";
 import { toast } from "sonner";
 
 export default function CarritoPage() {
+  useCartStockSync();
   const router = useRouter();
   const items = useCartStore((s) => s.items);
   const removeItem = useCartStore((s) => s.removeItem);
@@ -344,33 +347,14 @@ export default function CarritoPage() {
                   </span>
                 </p>
                 <div className="mt-4 flex flex-wrap items-center gap-3">
-                  <div className="inline-flex items-center rounded-md border border-border">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="size-9 rounded-none"
-                      onClick={() =>
-                        updateQuantity(line.variantId, line.quantity - 1)
-                      }
-                    >
-                      <Minus className="size-4" />
-                    </Button>
-                    <span className="min-w-10 text-center text-sm font-semibold tabular-nums">
-                      {line.quantity}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="size-9 rounded-none"
-                      onClick={() =>
-                        updateQuantity(line.variantId, line.quantity + 1)
-                      }
-                    >
-                      <Plus className="size-4" />
-                    </Button>
-                  </div>
+                  <QuantityControls
+                    value={line.quantity}
+                    maxStock={line.stock}
+                    onChange={(q) => updateQuantity(line.variantId, q)}
+                  />
+                  {line.stock > 0 && line.quantity >= line.stock ? (
+                    <span className="text-xs text-amber-700">Máx. {line.stock} u.</span>
+                  ) : null}
                   <Button
                     type="button"
                     variant="ghost"

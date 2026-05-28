@@ -2,14 +2,18 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Minus, Plus, ShoppingBag, Trash2, X } from "lucide-react";
+import { ShoppingBag, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { useCartStockSync } from "@/hooks/use-cart-stock-sync";
 import { cn, formatPrice } from "@/lib/utils";
 import { useCartStore } from "@/stores/cart.store";
 
+import { QuantityControls } from "./QuantityControls";
+
 export function CartDrawer() {
+  useCartStockSync();
   const items = useCartStore((s) => s.items);
   const isOpen = useCartStore((s) => s.isOpen);
   const closeCart = useCartStore((s) => s.closeCart);
@@ -104,33 +108,12 @@ export function CartDrawer() {
                       {formatPrice(line.price)}
                     </p>
                     <div className="mt-2 flex items-center gap-2">
-                      <div className="inline-flex items-center rounded-md border border-border">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="size-8 rounded-none"
-                          onClick={() =>
-                            updateQuantity(line.variantId, line.quantity - 1)
-                          }
-                        >
-                          <Minus className="size-3.5" />
-                        </Button>
-                        <span className="min-w-8 text-center text-sm tabular-nums">
-                          {line.quantity}
-                        </span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="size-8 rounded-none"
-                          onClick={() =>
-                            updateQuantity(line.variantId, line.quantity + 1)
-                          }
-                        >
-                          <Plus className="size-3.5" />
-                        </Button>
-                      </div>
+                      <QuantityControls
+                        size="sm"
+                        value={line.quantity}
+                        maxStock={line.stock}
+                        onChange={(q) => updateQuantity(line.variantId, q)}
+                      />
                       <Button
                         type="button"
                         variant="ghost"

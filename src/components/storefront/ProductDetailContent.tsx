@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Minus, Plus, ShoppingCart, Star } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ShoppingCart, Star } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,9 @@ import { useCartStore } from "@/stores/cart.store";
 
 import { ProductCard } from "./ProductCard";
 import { ProductGallery } from "./ProductGallery";
+import { QuantityControls } from "./QuantityControls";
 import { RichTextContent } from "./RichTextContent";
+import { clampToStock } from "@/lib/cart-quantity";
 
 type VariantAttribute = {
   typeId: string;
@@ -164,6 +166,10 @@ export function ProductDetailContent({ product }: ProductDetailContentProps) {
     [product.variants, variantId],
   );
 
+  useEffect(() => {
+    if (variant) setQty((q) => clampToStock(q, variant.stock));
+  }, [variant?.id, variant?.stock]);
+
   if (!variant) return null;
 
   const onSale = Boolean(
@@ -231,30 +237,12 @@ export function ProductDetailContent({ product }: ProductDetailContentProps) {
           ) : null}
 
           <div className="mt-6 flex flex-wrap items-center gap-4">
-            <div className="flex items-center rounded-md border border-border">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="rounded-none"
-                onClick={() => setQty((q) => Math.max(1, q - 1))}
-              >
-                <Minus className="size-4" />
-              </Button>
-              <span className="min-w-10 text-center text-sm font-semibold tabular-nums">
-                {qty}
-              </span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="rounded-none"
-                disabled={out || qty >= variant.stock}
-                onClick={() => setQty((q) => q + 1)}
-              >
-                <Plus className="size-4" />
-              </Button>
-            </div>
+            <QuantityControls
+              value={qty}
+              maxStock={variant.stock}
+              disabled={out}
+              onChange={setQty}
+            />
             <p className="text-sm text-muted-foreground">
               {out ? (
                 <span className="font-medium text-destructive">Sin stock</span>
@@ -283,6 +271,7 @@ export function ProductDetailContent({ product }: ProductDetailContentProps) {
                 slug: product.slug,
                 image: product.images[0] ?? product.image,
                 price: variant.price,
+                stock: variant.stock,
                 quantity: qty,
                 sku: variant.sku,
                 variantLabel: variant.attributes
