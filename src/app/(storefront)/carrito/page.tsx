@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { COUNTER_PAYMENT_OPTIONS, type CounterPaymentMethod } from "@/lib/constants";
+import { resolveQuoteStoreBranding } from "@/lib/quote-branding";
 import { cn, formatPrice } from "@/lib/utils";
 import { useCartStockSync } from "@/hooks/use-cart-stock-sync";
 import { useCartStore } from "@/stores/cart.store";
@@ -120,13 +121,7 @@ export default function CarritoPage() {
 
       toast.success(`Presupuesto ${data.quote.quoteNumber} generado`);
 
-      const settingsRes = await fetch(
-        "/api/settings/public?keys=store_name,store_address,google_maps_address,whatsapp_number,store_logo_url,contact_email,quote_validity_days",
-      );
-      const settingsData = await settingsRes.json();
-      const settings = settingsData.settings || {};
-
-      generateQuotePDF(data.quote, settings);
+      generateQuotePDF(data.quote, data.storeSettings || {});
     } catch {
       toast.error("Error al generar presupuesto");
     } finally {
@@ -138,12 +133,13 @@ export default function CarritoPage() {
     quote: any,
     storeSettings: Record<string, string>,
   ) {
-    const storeName = storeSettings.store_name || "Ferretería";
-    const storeAddress =
-      storeSettings.google_maps_address || storeSettings.store_address || "";
-    const storePhone = storeSettings.whatsapp_number || "";
-    const storeEmail = storeSettings.contact_email || "";
-    const validityDays = storeSettings.quote_validity_days || "7";
+    const {
+      storeName,
+      storeAddress,
+      storePhone,
+      storeEmail,
+      validityDays,
+    } = resolveQuoteStoreBranding(storeSettings);
 
     const validUntil = new Date(quote.validUntil).toLocaleDateString("es-AR", {
       day: "2-digit",
@@ -205,7 +201,7 @@ export default function CarritoPage() {
       <h1>${storeName}</h1>
       ${storeAddress ? `<p>${storeAddress}</p>` : ""}
       ${storePhone ? `<p>Tel: ${storePhone}</p>` : ""}
-      ${storeEmail ? `<p>${storeEmail}</p>` : ""}
+      ${storeEmail ? `<p>Email: ${storeEmail}</p>` : ""}
     </div>
     <div class="quote-info">
       <h2>PRESUPUESTO</h2>

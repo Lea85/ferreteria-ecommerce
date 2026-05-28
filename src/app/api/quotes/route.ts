@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
+import { getIntegracionesSettings } from "@/lib/integraciones-settings";
 
 export async function POST(request: Request) {
   try {
@@ -124,7 +125,9 @@ export async function POST(request: Request) {
       include: { items: true },
     });
 
-    return NextResponse.json({ quote }, { status: 201 });
+    const storeSettings = await getIntegracionesSettings();
+
+    return NextResponse.json({ quote, storeSettings }, { status: 201 });
   } catch (error) {
     console.error("Quote creation error:", error);
     return NextResponse.json({ error: "Error interno." }, { status: 500 });
