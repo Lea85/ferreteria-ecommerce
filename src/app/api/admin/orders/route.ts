@@ -45,7 +45,7 @@ export async function GET(request: Request) {
     const session = await auth();
     if (
       !session?.user ||
-      !["ADMIN", "SUPER_ADMIN"].includes((session.user as { role?: string }).role)
+      !["ADMIN", "SUPER_ADMIN"].includes((session.user as { role?: string }).role ?? "")
     ) {
       return NextResponse.json({ error: "No autorizado" }, { status: 403 });
     }
