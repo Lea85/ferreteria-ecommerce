@@ -2,8 +2,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Heart, ShoppingCart } from "lucide-react";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,7 @@ import {
 } from "@/components/ui/card";
 import { cn, formatPrice } from "@/lib/utils";
 import { useCartStore } from "@/stores/cart.store";
+import { useFavoritesStore } from "@/stores/favorites.store";
 
 export type ProductCardProduct = {
   id: string;
@@ -38,9 +40,26 @@ type ProductCardProps = {
 };
 
 export function ProductCard({ product, className }: ProductCardProps) {
-  const [fav, setFav] = useState(false);
+  const router = useRouter();
   const addItem = useCartStore((s) => s.addItem);
   const openCart = useCartStore((s) => s.openCart);
+  const isFavorite = useFavoritesStore((s) => s.isFavorite(product.id));
+  const toggleFavorite = useFavoritesStore((s) => s.toggle);
+  const favLoading = useFavoritesStore((s) => s.loading);
+
+  async function onToggleFavorite(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const result = await toggleFavorite(product.id);
+    if (result === "auth_required") {
+      toast.error("Iniciá sesión para guardar favoritos");
+      router.push("/login");
+      return;
+    }
+    if (result === "error") {
+      toast.error("No se pudo actualizar el favorito");
+    }
+  }
 
   const onSale = Boolean(
     product.comparePrice && product.comparePrice > product.price,
@@ -87,12 +106,14 @@ export function ProductCard({ product, className }: ProductCardProps) {
           size="icon"
           className={cn(
             "absolute right-2 top-2 size-9 rounded-full border border-border bg-background/90 shadow-sm backdrop-blur",
-            fav && "text-red-500",
+            isFavorite && "text-red-500",
           )}
-          onClick={() => setFav((v) => !v)}
-          aria-label="Favoritos"
+          onClick={onToggleFavorite}
+          disabled={favLoading}
+          aria-label={isFavorite ? "Quitar de favoritos" : "Agregar a favoritos"}
+          aria-pressed={isFavorite}
         >
-          <Heart className={cn("size-4", fav && "fill-current")} />
+          <Heart className={cn("size-4", isFavorite && "fill-current")} />
         </Button>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-1 p-4">
