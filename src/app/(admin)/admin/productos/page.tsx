@@ -24,6 +24,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import {
+  BULK_IMPORT_TEMPLATE_ROW,
+  BULK_UPDATE_TEMPLATE_ROW,
+} from "@/lib/bulk-products-spreadsheet";
 import { formatPrice } from "@/lib/utils";
 
 type ProductApi = {
@@ -47,53 +51,8 @@ type ProductApi = {
 type ProductRow = ProductApi;
 type FilterOption = { id: string; name: string };
 
-const IMPORT_TEMPLATE = [
-  {
-    name: "Producto ejemplo 1",
-    sku: "SKU-001",
-    ean: "7791234567890",
-    price: 10000,
-    comparePrice: 12000,
-    stock: 50,
-    brand: "MarcaX",
-    description: "Descripcion del producto",
-    shortDesc: "Resumen corto",
-  },
-  {
-    name: "Producto ejemplo 2",
-    sku: "SKU-002",
-    ean: "7791234567891",
-    price: 25000,
-    comparePrice: "",
-    stock: 10,
-    brand: "MarcaY",
-    description: "Otra descripcion",
-    shortDesc: "Otro resumen",
-  },
-];
-
-const UPDATE_TEMPLATE = [
-  {
-    sku: "SKU-001",
-    ean: "7791234567890",
-    name: "",
-    price: 15000,
-    comparePrice: "",
-    stock: 45,
-    description: "",
-    shortDesc: "",
-  },
-  {
-    sku: "SKU-002",
-    ean: "",
-    name: "",
-    price: "",
-    comparePrice: "",
-    stock: 20,
-    description: "",
-    shortDesc: "",
-  },
-];
+const IMPORT_TEMPLATE = [BULK_IMPORT_TEMPLATE_ROW];
+const UPDATE_TEMPLATE = [BULK_UPDATE_TEMPLATE_ROW];
 
 const LIMIT = 20;
 
@@ -119,6 +78,7 @@ export default function AdminProductosPage() {
     created?: number;
     updated?: number;
     errors?: string[];
+    warnings?: string[];
   } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -266,9 +226,12 @@ export default function AdminProductosPage() {
       setBulkResults(result.results);
 
       if (result.results) {
-        const { created, updated, errors } = result.results;
+        const { created, updated, errors, warnings } = result.results;
         if (created > 0) toast.success(`${created} productos creados`);
         if (updated > 0) toast.success(`${updated} productos actualizados`);
+        if (warnings?.length > 0) {
+          toast.warning(`${warnings.length} avisos (proveedor o categoría inexistente)`);
+        }
         if (errors?.length > 0) toast.error(`${errors.length} errores encontrados`);
       }
       if (res.ok) void loadProducts();
@@ -545,8 +508,8 @@ export default function AdminProductosPage() {
           <div className="space-y-4 pt-2">
             <p className="text-sm text-muted-foreground">
               {bulkMode === "import"
-                ? "Subí un archivo Excel (.xlsx) con los productos nuevos. Descargá la plantilla de ejemplo para ver el formato requerido."
-                : "Subí un archivo Excel (.xlsx) con las modificaciones. El campo SKU es obligatorio para identificar cada producto. Solo se actualizan los campos con valor."}
+                ? "Subí un Excel (.xlsx) con productos nuevos. Columnas: sku, ean, nombre, precio_compra, precio_venta, stock, marca, proveedor, categorias (separadas por ;), descripcion, descripcion_corta."
+                : "Subí un Excel (.xlsx) para modificar. El sku es obligatorio. Solo se actualizan las columnas con valor. Mismos nombres de columna que en el alta."}
             </p>
             <Button
               variant="outline"
@@ -599,6 +562,18 @@ export default function AdminProductosPage() {
                   <p className="text-sm text-blue-600">
                     ~ {bulkResults.updated} productos actualizados
                   </p>
+                ) : null}
+                {bulkResults.warnings != null && bulkResults.warnings.length > 0 ? (
+                  <div>
+                    <p className="text-sm text-amber-700">
+                      {bulkResults.warnings.length} avisos:
+                    </p>
+                    <ul className="mt-1 max-h-32 overflow-y-auto text-xs text-amber-800/90">
+                      {bulkResults.warnings.map((w, i) => (
+                        <li key={i}>- {w}</li>
+                      ))}
+                    </ul>
+                  </div>
                 ) : null}
                 {bulkResults.errors != null && bulkResults.errors.length > 0 ? (
                   <div>
