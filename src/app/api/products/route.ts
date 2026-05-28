@@ -82,6 +82,8 @@ export async function GET(request: Request) {
         comparePrice: v?.comparePrice ? Number(v.comparePrice) : null,
         stock: totalStock,
         variantCount: p.variants.length,
+        defaultVariantId: v?.id ?? null,
+        defaultSku: v?.sku ?? null,
         isFeatured: p.isFeatured,
       };
     });

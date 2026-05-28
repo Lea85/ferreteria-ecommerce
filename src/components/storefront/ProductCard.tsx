@@ -28,6 +28,8 @@ export type ProductCardProduct = {
   comparePrice?: number | null;
   stock: number;
   variantCount?: number;
+  defaultVariantId?: string;
+  defaultSku?: string;
 };
 
 type ProductCardProps = {
@@ -44,6 +46,7 @@ export function ProductCard({ product, className }: ProductCardProps) {
     product.comparePrice && product.comparePrice > product.price,
   );
   const outOfStock = product.stock <= 0;
+  const canAddToCart = Boolean(product.defaultVariantId) && !outOfStock;
 
   return (
     <Card
@@ -127,17 +130,18 @@ export function ProductCard({ product, className }: ProductCardProps) {
         <Button
           type="button"
           className="w-full bg-store-orange text-store-orange-foreground hover:bg-store-orange/90"
-          disabled={outOfStock}
+          disabled={!canAddToCart}
           onClick={() => {
+            if (!product.defaultVariantId) return;
             addItem({
               productId: product.id,
-              variantId: `${product.id}-default`,
+              variantId: product.defaultVariantId,
               name: product.name,
               slug: product.slug,
               image: product.image || "/placeholder-product.webp",
               price: product.price,
               quantity: 1,
-              sku: `FS-${product.id}`,
+              sku: product.defaultSku,
             });
             openCart();
           }}

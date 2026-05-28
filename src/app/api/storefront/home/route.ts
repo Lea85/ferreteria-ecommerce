@@ -9,7 +9,12 @@ export async function GET() {
         where: { isActive: true, isFeatured: true },
         include: {
           brand: { select: { name: true } },
-          variants: { where: { isActive: true }, select: { price: true, comparePrice: true, stock: true }, orderBy: { price: "asc" }, take: 1 },
+          variants: {
+            where: { isActive: true },
+            select: { id: true, sku: true, price: true, comparePrice: true, stock: true },
+            orderBy: { price: "asc" },
+            take: 1,
+          },
           images: { select: { url: true, altText: true }, orderBy: { position: "asc" }, take: 1 },
         },
         take: 8,
@@ -42,6 +47,8 @@ export async function GET() {
         price: v ? Number(v.price) : 0,
         comparePrice: v?.comparePrice ? Number(v.comparePrice) : null,
         stock: v?.stock ?? 0,
+        defaultVariantId: v?.id,
+        defaultSku: v?.sku,
       };
     });
 

@@ -19,6 +19,39 @@ export function isCounterPaymentMethod(value: string): value is PaymentMethod {
   return COUNTER_PAYMENT_METHODS.includes(value as PaymentMethod);
 }
 
+const LEGACY_DEFAULT_SUFFIX = "-default";
+
+/** IDs legacy del listado (`{productId}-default`) → variante real en BD. */
+async function resolveVariantIds(
+  items: CounterSaleItemInput[],
+): Promise<CounterSaleItemInput[]> {
+  const resolved: CounterSaleItemInput[] = [];
+
+  for (const item of items) {
+    if (!item.variantId.endsWith(LEGACY_DEFAULT_SUFFIX)) {
+      resolved.push(item);
+      continue;
+    }
+
+    const productId = item.variantId.slice(0, -LEGACY_DEFAULT_SUFFIX.length);
+    const variant = await prisma.productVariant.findFirst({
+      where: { productId },
+      orderBy: [{ isActive: "desc" }, { createdAt: "asc" }],
+      select: { id: true },
+    });
+
+    if (!variant) {
+      throw new Error(
+        `No se encontró variante para el producto en el carrito. Volvé a agregar el ítem desde el catálogo.`,
+      );
+    }
+
+    resolved.push({ ...item, variantId: variant.id });
+  }
+
+  return resolved;
+}
+
 export async function createCounterSaleOrder(data: {
   adminUserId: string;
   adminName: string;
@@ -30,10 +63,11 @@ export async function createCounterSaleOrder(data: {
   }
 
   const orderNumber = await generateOrderNumber();
-  const variantIds = data.items.map((i) => i.variantId);
+  const resolvedItems = await resolveVariantIds(data.items);
+  const variantIds = resolvedItems.map((i) => i.variantId);
 
   const variants = await prisma.productVariant.findMany({
-    where: { id: { in: variantIds }, isActive: true },
+    where: { id: { in: variantIds } },
     include: {
       product: { select: { id: true, name: true, isActive: true } },
     },
@@ -54,10 +88,10 @@ export async function createCounterSaleOrder(data: {
 
   let subtotal = 0;
 
-  for (const item of data.items) {
+  for (const item of resolvedItems) {
     const variant = variantMap.get(item.variantId);
     if (!variant) {
-      throw new Error(`Variante no encontrada o inactiva.`);
+      throw new Error(`Variante no encontrada.`);
     }
     if (!variant.product.isActive) {
       throw new Error(`El producto "${variant.product.name}" no está activo.`);

@@ -46,7 +46,12 @@ export async function GET(
       },
       include: {
         brand: { select: { name: true } },
-        variants: { where: { isActive: true }, select: { price: true, comparePrice: true, stock: true }, orderBy: { price: "asc" }, take: 1 },
+        variants: {
+          where: { isActive: true },
+          select: { id: true, sku: true, price: true, comparePrice: true, stock: true },
+          orderBy: { price: "asc" },
+          take: 1,
+        },
         images: { select: { url: true }, orderBy: { position: "asc" }, take: 1 },
       },
       take: 4,
@@ -89,6 +94,8 @@ export async function GET(
           price: rv ? Number(rv.price) : 0,
           comparePrice: rv?.comparePrice ? Number(rv.comparePrice) : undefined,
           stock: rv?.stock ?? 0,
+          defaultVariantId: rv?.id,
+          defaultSku: rv?.sku,
         };
       }),
     };

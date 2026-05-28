@@ -6,6 +6,7 @@ import { ProductCard } from "./ProductCard";
 type ProductItem = {
   id: string; name: string; slug: string; brand: string | null;
   image: string | null; price: number; comparePrice?: number | null; stock: number;
+  defaultVariantId?: string; defaultSku?: string;
 };
 
 type FeaturedProductsProps = {
