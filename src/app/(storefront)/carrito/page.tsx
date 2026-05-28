@@ -121,7 +121,7 @@ export default function CarritoPage() {
       toast.success(`Presupuesto ${data.quote.quoteNumber} generado`);
 
       const settingsRes = await fetch(
-        "/api/settings/public?keys=store_name,store_address,store_phone,store_logo_url,contact_email,quote_validity_days",
+        "/api/settings/public?keys=store_name,store_address,google_maps_address,whatsapp_number,store_logo_url,contact_email,quote_validity_days",
       );
       const settingsData = await settingsRes.json();
       const settings = settingsData.settings || {};
@@ -139,8 +139,9 @@ export default function CarritoPage() {
     storeSettings: Record<string, string>,
   ) {
     const storeName = storeSettings.store_name || "Ferretería";
-    const storeAddress = storeSettings.store_address || "";
-    const storePhone = storeSettings.store_phone || "";
+    const storeAddress =
+      storeSettings.google_maps_address || storeSettings.store_address || "";
+    const storePhone = storeSettings.whatsapp_number || "";
     const storeEmail = storeSettings.contact_email || "";
     const validityDays = storeSettings.quote_validity_days || "7";
 
