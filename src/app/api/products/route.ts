@@ -2,6 +2,36 @@ import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/db";
 
+type ListingRow = {
+  id: string;
+  name: string;
+  createdAt: Date;
+  totalStock: number;
+  minPrice: number;
+  maxPrice: number;
+};
+
+function sortProductsForListing(items: ListingRow[], sort: string) {
+  return [...items].sort((a, b) => {
+    const aHasStock = a.totalStock > 0 ? 1 : 0;
+    const bHasStock = b.totalStock > 0 ? 1 : 0;
+    if (aHasStock !== bHasStock) return bHasStock - aHasStock;
+
+    switch (sort) {
+      case "price_asc":
+        return a.minPrice - b.minPrice;
+      case "price_desc":
+        return b.minPrice - a.minPrice;
+      case "name_asc":
+        return a.name.localeCompare(b.name, "es");
+      case "name_desc":
+        return b.name.localeCompare(a.name, "es");
+      default:
+        return b.createdAt.getTime() - a.createdAt.getTime();
+    }
+  });
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -35,69 +65,117 @@ export async function GET(request: Request) {
     }
 
     if (inStock) {
-      where.variants = { ...where.variants, some: { ...where.variants?.some, stock: { gt: 0 }, isActive: true } };
+      where.variants = {
+        ...where.variants,
+        some: { ...where.variants?.some, stock: { gt: 0 }, isActive: true },
+      };
     }
 
-    const orderBy: any = (() => {
-      switch (sort) {
-        case "price_asc": return { name: "asc" };
-        case "price_desc": return { name: "desc" };
-        case "name_asc": return { name: "asc" };
-        case "name_desc": return { name: "desc" };
-        default: return { createdAt: "desc" };
-      }
-    })();
-
-    const [products, total] = await Promise.all([
-      prisma.product.findMany({
-        where,
-        include: {
-          brand: { select: { name: true } },
-          categories: { select: { category: { select: { name: true, slug: true } } }, take: 1 },
-          variants: { where: { isActive: true }, select: { id: true, sku: true, price: true, comparePrice: true, stock: true, name: true }, orderBy: { price: "asc" } },
-          images: { select: { url: true, altText: true }, orderBy: { position: "asc" }, take: 1 },
+    const candidates = await prisma.product.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        createdAt: true,
+        variants: {
+          where: { isActive: true },
+          select: { price: true, stock: true },
         },
-        orderBy,
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-      prisma.product.count({ where }),
-    ]);
+      },
+    });
 
-    const mapped = products.map((p) => {
-      const v = p.variants[0];
-      const prices = p.variants.map((vr) => Number(vr.price));
+    let listingRows: ListingRow[] = candidates.map((p) => {
+      const prices = p.variants.map((v) => Number(v.price));
       const minP = prices.length > 0 ? Math.min(...prices) : 0;
       const maxP = prices.length > 0 ? Math.max(...prices) : 0;
-      const totalStock = p.variants.reduce((sum, vr) => sum + vr.stock, 0);
+      const totalStock = p.variants.reduce((sum, v) => sum + v.stock, 0);
       return {
         id: p.id,
         name: p.name,
-        slug: p.slug,
-        brand: p.brand?.name || null,
-        category: p.categories[0]?.category?.name || null,
-        categorySlug: p.categories[0]?.category?.slug || null,
-        image: p.images[0]?.url || null,
-        price: minP,
-        maxPrice: maxP !== minP ? maxP : null,
-        comparePrice: v?.comparePrice ? Number(v.comparePrice) : null,
-        stock: totalStock,
-        variantCount: p.variants.length,
-        defaultVariantId: v?.id ?? null,
-        defaultSku: v?.sku ?? null,
-        isFeatured: p.isFeatured,
+        createdAt: p.createdAt,
+        totalStock,
+        minPrice: minP,
+        maxPrice: maxP,
       };
     });
 
-    let result = mapped;
+    if (minPrice > 0) {
+      listingRows = listingRows.filter((p) => p.minPrice >= minPrice);
+    }
+    if (maxPrice > 0) {
+      listingRows = listingRows.filter((p) => p.minPrice <= maxPrice);
+    }
 
-    if (minPrice > 0) result = result.filter((p) => p.price >= minPrice);
-    if (maxPrice > 0) result = result.filter((p) => p.price <= maxPrice);
+    const sorted = sortProductsForListing(listingRows, sort);
+    const total = sorted.length;
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const pageIds = sorted
+      .slice((page - 1) * limit, page * limit)
+      .map((p) => p.id);
 
-    if (sort === "price_asc") result.sort((a, b) => a.price - b.price);
-    else if (sort === "price_desc") result.sort((a, b) => b.price - a.price);
+    if (pageIds.length === 0) {
+      return NextResponse.json({ products: [], total, page, totalPages });
+    }
 
-    return NextResponse.json({ products: result, total, page, totalPages: Math.ceil(total / limit) });
+    const products = await prisma.product.findMany({
+      where: { id: { in: pageIds } },
+      include: {
+        brand: { select: { name: true } },
+        categories: {
+          select: { category: { select: { name: true, slug: true } } },
+          take: 1,
+        },
+        variants: {
+          where: { isActive: true },
+          select: {
+            id: true,
+            sku: true,
+            price: true,
+            comparePrice: true,
+            stock: true,
+            name: true,
+          },
+          orderBy: { price: "asc" },
+        },
+        images: {
+          select: { url: true, altText: true },
+          orderBy: { position: "asc" },
+          take: 1,
+        },
+      },
+    });
+
+    const byId = new Map(products.map((p) => [p.id, p]));
+
+    const result = pageIds
+      .map((id) => byId.get(id))
+      .filter((p): p is NonNullable<typeof p> => Boolean(p))
+      .map((p) => {
+        const v = p.variants[0];
+        const prices = p.variants.map((vr) => Number(vr.price));
+        const minP = prices.length > 0 ? Math.min(...prices) : 0;
+        const maxP = prices.length > 0 ? Math.max(...prices) : 0;
+        const totalStock = p.variants.reduce((sum, vr) => sum + vr.stock, 0);
+        return {
+          id: p.id,
+          name: p.name,
+          slug: p.slug,
+          brand: p.brand?.name || null,
+          category: p.categories[0]?.category?.name || null,
+          categorySlug: p.categories[0]?.category?.slug || null,
+          image: p.images[0]?.url || null,
+          price: minP,
+          maxPrice: maxP !== minP ? maxP : null,
+          comparePrice: v?.comparePrice ? Number(v.comparePrice) : null,
+          stock: totalStock,
+          variantCount: p.variants.length,
+          defaultVariantId: v?.id ?? null,
+          defaultSku: v?.sku ?? null,
+          isFeatured: p.isFeatured,
+        };
+      });
+
+    return NextResponse.json({ products: result, total, page, totalPages });
   } catch (error) {
     console.error("Products API error:", error);
     return NextResponse.json({ products: [], total: 0, page: 1, totalPages: 0 });
