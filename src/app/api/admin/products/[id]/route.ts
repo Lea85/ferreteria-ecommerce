@@ -23,7 +23,7 @@ export async function GET(
         suppliers: { select: { supplierId: true } },
         variants: {
           select: {
-            id: true, name: true, sku: true, ean: true, price: true, comparePrice: true,
+            id: true, name: true, sku: true, ean: true, price: true, costPrice: true, comparePrice: true,
             stock: true, weight: true, isActive: true,
             attributes: { select: { attributeValueId: true } },
           },
@@ -59,6 +59,7 @@ export async function GET(
         sku: v.sku,
         ean: v.ean || "",
         price: Number(v.price),
+        costPrice: v.costPrice ? Number(v.costPrice) : null,
         comparePrice: v.comparePrice ? Number(v.comparePrice) : null,
         stock: v.stock,
         weight: v.weight ? Number(v.weight) : null,
@@ -150,6 +151,7 @@ export async function PUT(
               sku: v.sku,
               ean: v.ean || null,
               price: v.price,
+              costPrice: v.costPrice ?? null,
               comparePrice: v.comparePrice || null,
               stock: v.stock ?? 0,
               weight: v.weight || null,
@@ -164,6 +166,7 @@ export async function PUT(
               sku: v.sku,
               ean: v.ean || null,
               price: v.price,
+              costPrice: v.costPrice ?? null,
               comparePrice: v.comparePrice || null,
               stock: v.stock ?? 0,
               weight: v.weight || null,

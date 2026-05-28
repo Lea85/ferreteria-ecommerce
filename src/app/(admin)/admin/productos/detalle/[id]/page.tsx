@@ -19,6 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { formatProfitMarginPercent } from "@/lib/profit-margin";
 import { formatPrice } from "@/lib/utils";
 
 type ProductDetail = {
@@ -38,6 +39,7 @@ type ProductDetail = {
     sku: string;
     ean: string;
     price: number;
+    costPrice: number | null;
     comparePrice: number | null;
     stock: number;
     weight: number | null;
@@ -162,8 +164,9 @@ export default function ProductoDetallePage() {
                     <TableHead>SKU</TableHead>
                     <TableHead>EAN</TableHead>
                     <TableHead>Nombre</TableHead>
-                    <TableHead className="text-right">Precio</TableHead>
-                    <TableHead className="text-right">P. Comparación</TableHead>
+                    <TableHead className="text-right">Precio de compra</TableHead>
+                    <TableHead className="text-right">Precio de publicación</TableHead>
+                    <TableHead className="text-center">Margen</TableHead>
                     <TableHead className="text-center">Stock</TableHead>
                     <TableHead className="text-center">Peso (kg)</TableHead>
                   </TableRow>
@@ -174,11 +177,14 @@ export default function ProductoDetallePage() {
                       <TableCell className="font-mono text-xs font-semibold">{v.sku}</TableCell>
                       <TableCell className="font-mono text-xs">{v.ean || "—"}</TableCell>
                       <TableCell>{v.name || "—"}</TableCell>
+                      <TableCell className="text-right font-mono text-muted-foreground">
+                        {v.costPrice != null ? formatPrice(v.costPrice) : "—"}
+                      </TableCell>
                       <TableCell className="text-right font-mono font-semibold">
                         {formatPrice(v.price)}
                       </TableCell>
-                      <TableCell className="text-right font-mono text-muted-foreground">
-                        {v.comparePrice ? formatPrice(v.comparePrice) : "—"}
+                      <TableCell className="text-center font-mono text-sm font-medium">
+                        {formatProfitMarginPercent(v.price, v.costPrice)}
                       </TableCell>
                       <TableCell className="text-center">
                         <span className={v.stock <= 5 ? "text-destructive font-semibold" : ""}>

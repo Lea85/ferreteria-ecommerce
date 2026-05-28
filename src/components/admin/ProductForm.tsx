@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Copy, ImageIcon, Link2, Loader2 as Spinner, MapPin, Plus, RefreshCw, Trash2, Upload, X } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
-import { Controller, useForm, useFieldArray, type Resolver } from "react-hook-form";
+import { Controller, useForm, useFieldArray, useWatch, type Control, type Resolver } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/table";
 import { RichTextEditor } from "@/components/admin/RichTextEditor";
 import { Textarea } from "@/components/ui/textarea";
+import { formatProfitMarginPercent } from "@/lib/profit-margin";
 import { cn } from "@/lib/utils";
 
 function slugify(text: string): string {
@@ -46,7 +47,8 @@ const variantSchema = z.object({
   id: z.string().optional(),
   sku: z.string().min(1, "SKU requerido"),
   ean: z.string().optional().nullable(),
-  price: z.coerce.number().min(0, "Precio inválido"),
+  costPrice: z.coerce.number().min(0).optional().nullable(),
+  price: z.coerce.number().min(0, "Precio de publicación inválido"),
   comparePrice: z.coerce.number().min(0).optional().nullable(),
   stock: z.coerce.number().int().min(0),
   weight: z.coerce.number().min(0).optional().nullable(),
@@ -95,6 +97,43 @@ export type ProductFormProps = {
 
 type AttrValue = { id: string; value: string; position: number };
 type Attribute = { id: string; name: string; position: number; values: AttrValue[] };
+
+function VariantProfitMargin({
+  control,
+  index,
+}: {
+  control: Control<ProductFormValues>;
+  index: number;
+}) {
+  const costPrice = useWatch({ control, name: `variants.${index}.costPrice` });
+  const price = useWatch({ control, name: `variants.${index}.price` });
+  const margin = formatProfitMarginPercent(Number(price) || 0, costPrice ?? null);
+  const negative =
+    margin !== "—" && profitMarginIsNegative(Number(price) || 0, costPrice ?? null);
+
+  return (
+    <span
+      className={cn(
+        "inline-flex h-9 min-w-[4.5rem] items-center justify-center rounded-md border border-border bg-muted/40 px-2 text-sm font-medium tabular-nums",
+        negative && "text-destructive",
+        margin !== "—" && !negative && "text-emerald-700 dark:text-emerald-400",
+      )}
+      title="Margen de ganancia sobre el precio de compra"
+    >
+      {margin}
+    </span>
+  );
+}
+
+function profitMarginIsNegative(
+  salePrice: number,
+  costPrice: number | null | undefined,
+): boolean {
+  const cost = Number(costPrice);
+  const sale = Number(salePrice);
+  if (!Number.isFinite(cost) || cost <= 0) return false;
+  return sale < cost;
+}
 
 export function ProductForm({
   initialData,
@@ -173,7 +212,7 @@ export function ProductForm({
       metaDesc: initialData?.metaDesc ?? "",
       variants: initialData?.variants?.length
         ? initialData.variants
-        : [{ sku: "", ean: "", price: 0, comparePrice: null, stock: 0, weight: null, attributeValueIds: [] }],
+        : [{ sku: "", ean: "", costPrice: null, price: 0, comparePrice: null, stock: 0, weight: null, attributeValueIds: [] }],
     }),
     [initialData],
   );
@@ -271,6 +310,7 @@ export function ProductForm({
     const newVariants = combos.map((c, i) => ({
       sku: `${baseSku}-${String(i + 1).padStart(3, "0")}`,
       ean: "" as string | null,
+      costPrice: null as number | null,
       price,
       comparePrice: null as number | null,
       stock: 0,
@@ -285,13 +325,13 @@ export function ProductForm({
   function applyPriceToAll() {
     const price = parseFloat(basePrice);
     if (isNaN(price) || price < 0) {
-      toast.error("Ingresá un precio válido");
+      toast.error("Ingresá un precio de publicación válido");
       return;
     }
     const current = form.getValues("variants");
     const updated = current.map((v) => ({ ...v, price }));
     replace(updated);
-    toast.success("Precio aplicado a todas las variantes");
+    toast.success("Precio de publicación aplicado a todas las variantes");
   }
 
   function getVariantAttributeLabels(attributeValueIds?: string[]): string {
@@ -599,7 +639,7 @@ export function ProductForm({
                 ))}
                 <div className="flex flex-col gap-3 border-t border-border pt-3 sm:flex-row sm:items-end">
                   <div className="space-y-1">
-                    <Label className="text-xs">Precio base para todas las variantes</Label>
+                    <Label className="text-xs">Precio de publicación base (todas las variantes)</Label>
                     <Input
                       type="number"
                       step="0.01"
@@ -647,7 +687,7 @@ export function ProductForm({
             size="sm"
             className="gap-1"
             onClick={() =>
-              append({ sku: "", ean: "", price: 0, comparePrice: null, stock: 0, weight: null, attributeValueIds: [] })
+              append({ sku: "", ean: "", costPrice: null, price: 0, comparePrice: null, stock: 0, weight: null, attributeValueIds: [] })
             }
           >
             <Plus className="size-4" /> Agregar variante
@@ -663,8 +703,9 @@ export function ProductForm({
                 {selectedAttributes.length > 0 && <TableHead>Atributos</TableHead>}
                 <TableHead>SKU <span className="text-destructive">*</span></TableHead>
                 <TableHead>EAN</TableHead>
-                <TableHead>Precio <span className="text-destructive">*</span></TableHead>
-                <TableHead>Precio comparación</TableHead>
+                <TableHead>Precio de compra</TableHead>
+                <TableHead>Precio de publicación <span className="text-destructive">*</span></TableHead>
+                <TableHead className="text-center">Margen</TableHead>
                 <TableHead>Stock</TableHead>
                 <TableHead>Peso (kg)</TableHead>
                 <TableHead className="w-12" />
@@ -696,7 +737,9 @@ export function ProductForm({
                       <Input
                         type="number"
                         step="0.01"
-                        {...form.register(`variants.${index}.price`)}
+                        min={0}
+                        placeholder="0.00"
+                        {...form.register(`variants.${index}.costPrice`)}
                         className="h-9 w-28 border-border"
                       />
                     </TableCell>
@@ -704,9 +747,13 @@ export function ProductForm({
                       <Input
                         type="number"
                         step="0.01"
-                        {...form.register(`variants.${index}.comparePrice`)}
+                        min={0}
+                        {...form.register(`variants.${index}.price`)}
                         className="h-9 w-28 border-border"
                       />
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <VariantProfitMargin control={form.control} index={index} />
                     </TableCell>
                     <TableCell>
                       <Input

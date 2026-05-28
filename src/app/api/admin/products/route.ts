@@ -236,6 +236,7 @@ export async function POST(request: Request) {
             ean: v.ean || null,
             name: v.name || null,
             price: v.price ?? 0,
+            costPrice: v.costPrice ?? null,
             comparePrice: v.comparePrice || null,
             stock: v.stock ?? 0,
             weight: v.weight || null,
