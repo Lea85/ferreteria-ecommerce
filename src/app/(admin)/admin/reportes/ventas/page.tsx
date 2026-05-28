@@ -17,7 +17,6 @@ import {
 import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,12 +35,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { cn, formatPrice } from "@/lib/utils";
+import { formatPrice } from "@/lib/utils";
 
 type Period = "day" | "7d" | "15d" | "30d" | "ytd";
 
 const PERIODS: { value: Period; label: string }[] = [
-  { value: "day", label: "Un día (elegir fecha)" },
+  { value: "day", label: "Hoy" },
   { value: "7d", label: "Ultimos 7 dias" },
   { value: "15d", label: "Ultimos 15 dias" },
   { value: "30d", label: "Ultimos 30 dias" },
@@ -118,87 +117,57 @@ export default function AnalisisVentasPage() {
   const topCategories = data?.topCategories || [];
 
   const hasData = m.totalOrders > 0;
-  const isToday =
-    period === "day" && selectedDate === todayIsoArgentina();
 
-  function showToday() {
-    setPeriod("day");
-    setSelectedDate(todayIsoArgentina());
+  function handlePeriodChange(value: Period) {
+    setPeriod(value);
+    if (value === "day") {
+      setSelectedDate(todayIsoArgentina());
+    }
   }
 
   return (
     <div className="space-y-8">
-      <div className="space-y-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-xl font-bold text-foreground">Analisis de ventas</h1>
           <p className="text-sm text-muted-foreground">
             Metricas calculadas en base a pedidos reales del sitio y del mostrador.
           </p>
         </div>
-
-        <Card className="border-border bg-muted/20 shadow-sm">
-          <CardContent className="flex flex-col gap-4 p-4 sm:p-5">
-            <p className="text-sm font-medium text-foreground">Filtrar por periodo</p>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant={isToday ? "default" : "outline"}
-                className={cn(isToday && "bg-primary")}
-                onClick={showToday}
-              >
-                Hoy
-              </Button>
-              {(["7d", "15d", "30d", "ytd"] as const).map((p) => (
-                <Button
-                  key={p}
-                  type="button"
-                  size="sm"
-                  variant={period === p ? "default" : "outline"}
-                  className={cn(period === p && "bg-primary")}
-                  onClick={() => setPeriod(p)}
-                >
-                  {PERIODS.find((x) => x.value === p)?.label}
-                </Button>
-              ))}
-            </div>
-            <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-end">
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Otro rango</Label>
-                <Select value={period} onValueChange={(v) => setPeriod(v as Period)}>
-                  <SelectTrigger className="w-full min-w-[200px] border-border sm:w-56">
-                    <SelectValue placeholder="Periodo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PERIODS.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="report-date" className="text-xs text-muted-foreground">
-                  Fecha del día
-                </Label>
-                <div className="relative">
-                  <Calendar className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    id="report-date"
-                    type="date"
-                    value={selectedDate}
-                    onChange={(e) => {
-                      setPeriod("day");
-                      setSelectedDate(e.target.value);
-                    }}
-                    className="w-full min-w-[180px] border-border pl-9 sm:w-44"
-                  />
-                </div>
+        <div className="flex flex-col gap-2 sm:items-end">
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Periodo</Label>
+            <Select value={period} onValueChange={(v) => handlePeriodChange(v as Period)}>
+              <SelectTrigger className="w-full min-w-[220px] border-border sm:w-56">
+                <SelectValue placeholder="Periodo" />
+              </SelectTrigger>
+              <SelectContent>
+                {PERIODS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {period === "day" && (
+            <div className="space-y-1.5">
+              <Label htmlFor="report-date" className="text-xs text-muted-foreground">
+                Otra fecha
+              </Label>
+              <div className="relative">
+                <Calendar className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="report-date"
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="w-full min-w-[220px] border-border pl-9 sm:w-56"
+                />
               </div>
             </div>
-          </CardContent>
-        </Card>
+          )}
+        </div>
       </div>
 
       {period === "day" && data?.periodLabel && (
