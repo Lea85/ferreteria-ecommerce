@@ -449,7 +449,7 @@ export default function AdminProductosPage() {
       <DataTable
         columns={columns}
         data={products}
-        searchPlaceholder="Buscar por nombre o SKU…"
+        searchPlaceholder="Buscar por nombre, SKU o EAN…"
         externalSearch={{ value: searchInput, onChange: setSearchInput }}
         isLoading={loading}
         showCheckbox={false}

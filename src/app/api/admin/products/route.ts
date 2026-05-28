@@ -32,6 +32,18 @@ export async function GET(request: Request) {
       where.OR = [
         { name: { contains: search, mode: "insensitive" } },
         { slug: { contains: search, mode: "insensitive" } },
+        { description: { contains: search, mode: "insensitive" } },
+        { shortDesc: { contains: search, mode: "insensitive" } },
+        {
+          variants: {
+            some: {
+              OR: [
+                { sku: { contains: search, mode: "insensitive" } },
+                { ean: { contains: search, mode: "insensitive" } },
+              ],
+            },
+          },
+        },
       ];
     }
 
