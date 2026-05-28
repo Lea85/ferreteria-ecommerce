@@ -17,6 +17,7 @@ import {
 import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,17 +36,23 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatPrice } from "@/lib/utils";
+import { cn, formatPrice } from "@/lib/utils";
 
 type Period = "day" | "7d" | "15d" | "30d" | "ytd";
 
 const PERIODS: { value: Period; label: string }[] = [
-  { value: "day", label: "Un día" },
+  { value: "day", label: "Un día (elegir fecha)" },
   { value: "7d", label: "Ultimos 7 dias" },
   { value: "15d", label: "Ultimos 15 dias" },
   { value: "30d", label: "Ultimos 30 dias" },
   { value: "ytd", label: "Desde inicio del año" },
 ];
+
+function todayIsoArgentina() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Argentina/Buenos_Aires",
+  }).format(new Date());
+}
 
 type ProductRow = { name: string; sku: string; units: number; revenue: number };
 type StockRow = { name: string; sku: string; stock: number };
@@ -69,13 +76,9 @@ type ReportData = {
   periodLabel?: string;
 };
 
-function todayIso() {
-  return new Date().toISOString().slice(0, 10);
-}
-
 export default function AnalisisVentasPage() {
-  const [period, setPeriod] = useState<Period>("30d");
-  const [selectedDate, setSelectedDate] = useState(todayIso);
+  const [period, setPeriod] = useState<Period>("day");
+  const [selectedDate, setSelectedDate] = useState(todayIsoArgentina);
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -115,50 +118,87 @@ export default function AnalisisVentasPage() {
   const topCategories = data?.topCategories || [];
 
   const hasData = m.totalOrders > 0;
+  const isToday =
+    period === "day" && selectedDate === todayIsoArgentina();
+
+  function showToday() {
+    setPeriod("day");
+    setSelectedDate(todayIsoArgentina());
+  }
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="space-y-4">
         <div>
           <h1 className="text-xl font-bold text-foreground">Analisis de ventas</h1>
           <p className="text-sm text-muted-foreground">
             Metricas calculadas en base a pedidos reales del sitio y del mostrador.
           </p>
         </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Periodo</Label>
-            <Select value={period} onValueChange={(v) => setPeriod(v as Period)}>
-              <SelectTrigger className="w-52 border-border">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PERIODS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          {period === "day" && (
-            <div className="space-y-1.5">
-              <Label htmlFor="report-date" className="text-xs text-muted-foreground">
-                Fecha
-              </Label>
-              <div className="relative">
-                <Calendar className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="report-date"
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="w-44 border-border pl-9"
-                />
+
+        <Card className="border-border bg-muted/20 shadow-sm">
+          <CardContent className="flex flex-col gap-4 p-4 sm:p-5">
+            <p className="text-sm font-medium text-foreground">Filtrar por periodo</p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={isToday ? "default" : "outline"}
+                className={cn(isToday && "bg-primary")}
+                onClick={showToday}
+              >
+                Hoy
+              </Button>
+              {(["7d", "15d", "30d", "ytd"] as const).map((p) => (
+                <Button
+                  key={p}
+                  type="button"
+                  size="sm"
+                  variant={period === p ? "default" : "outline"}
+                  className={cn(period === p && "bg-primary")}
+                  onClick={() => setPeriod(p)}
+                >
+                  {PERIODS.find((x) => x.value === p)?.label}
+                </Button>
+              ))}
+            </div>
+            <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-end">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Otro rango</Label>
+                <Select value={period} onValueChange={(v) => setPeriod(v as Period)}>
+                  <SelectTrigger className="w-full min-w-[200px] border-border sm:w-56">
+                    <SelectValue placeholder="Periodo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PERIODS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="report-date" className="text-xs text-muted-foreground">
+                  Fecha del día
+                </Label>
+                <div className="relative">
+                  <Calendar className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="report-date"
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => {
+                      setPeriod("day");
+                      setSelectedDate(e.target.value);
+                    }}
+                    className="w-full min-w-[180px] border-border pl-9 sm:w-44"
+                  />
+                </div>
               </div>
             </div>
-          )}
-        </div>
+          </CardContent>
+        </Card>
       </div>
 
       {period === "day" && data?.periodLabel && (

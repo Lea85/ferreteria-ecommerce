@@ -76,15 +76,20 @@ export async function GET(request: Request) {
     }
 
     const { searchParams } = new URL(request.url);
-    const period = searchParams.get("period") || "30d";
+    const periodRaw = searchParams.get("period") || "day";
+    const period = periodRaw === "today" ? "day" : periodRaw;
     const dateParam = searchParams.get("date")?.trim() || "";
+
+    const todayArgentina = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Argentina/Buenos_Aires",
+    }).format(new Date());
 
     let createdAtFilter: Prisma.DateTimeFilter;
     let periodLabel = period;
 
     if (period === "day") {
       const dayRange =
-        getDayRange(dateParam) ?? getDayRange(new Date().toISOString().slice(0, 10));
+        getDayRange(dateParam) ?? getDayRange(todayArgentina);
       if (!dayRange) {
         return NextResponse.json({ error: "Fecha inválida" }, { status: 400 });
       }
