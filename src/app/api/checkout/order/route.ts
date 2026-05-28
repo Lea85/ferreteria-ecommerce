@@ -11,7 +11,16 @@ export async function GET(request: Request) {
     const order = await prisma.order.findUnique({
       where: { id },
       include: {
-        items: { select: { productName: true, quantity: true, unitPrice: true, subtotal: true } },
+        items: {
+          select: {
+            productName: true,
+            variantName: true,
+            sku: true,
+            quantity: true,
+            unitPrice: true,
+            subtotal: true,
+          },
+        },
       },
     });
 
@@ -39,6 +48,8 @@ export async function GET(request: Request) {
         createdAt: order.createdAt.toISOString(),
         items: order.items.map((i) => ({
           productName: i.productName,
+          variantName: i.variantName,
+          sku: i.sku,
           quantity: i.quantity,
           unitPrice: Number(i.unitPrice),
           subtotal: Number(i.subtotal),

@@ -2,38 +2,98 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { FileText, Loader2, Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
+import { FileText, Loader2, Minus, Plus, ShoppingBag, Store, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { COUNTER_PAYMENT_OPTIONS, type CounterPaymentMethod } from "@/lib/constants";
 import { cn, formatPrice } from "@/lib/utils";
 import { useCartStore } from "@/stores/cart.store";
 import { toast } from "sonner";
 
 export default function CarritoPage() {
+  const router = useRouter();
   const items = useCartStore((s) => s.items);
   const removeItem = useCartStore((s) => s.removeItem);
   const updateQuantity = useCartStore((s) => s.updateQuantity);
   const getSubtotal = useCartStore((s) => s.getSubtotal);
+  const clearCart = useCartStore((s) => s.clearCart);
 
   const [coupon, setCoupon] = useState("");
   const [applied, setApplied] = useState(false);
   const [canGenerateQuotes, setCanGenerateQuotes] = useState(false);
+  const [canCounterSale, setCanCounterSale] = useState(false);
   const [generatingQuote, setGeneratingQuote] = useState(false);
+  const [counterModalOpen, setCounterModalOpen] = useState(false);
+  const [counterPayment, setCounterPayment] = useState<CounterPaymentMethod>("COUNTER_CASH");
+  const [processingCounterSale, setProcessingCounterSale] = useState(false);
 
   useEffect(() => {
-    fetch("/api/quotes?checkPermission=true")
-      .then((r) => {
-        if (!r.ok) return null;
-        return r.json();
-      })
-      .then((data) => {
-        if (data?.canGenerateQuotes) setCanGenerateQuotes(true);
+    Promise.all([
+      fetch("/api/quotes?checkPermission=true").then((r) =>
+        r.ok ? r.json() : null,
+      ),
+      fetch("/api/admin/counter-sale?checkPermission=true").then((r) =>
+        r.ok ? r.json() : null,
+      ),
+    ])
+      .then(([quotesData, counterData]) => {
+        if (quotesData?.canGenerateQuotes) setCanGenerateQuotes(true);
+        if (counterData?.canCounterSale) setCanCounterSale(true);
       })
       .catch(() => {});
   }, []);
+
+  async function handleCounterSale() {
+    if (items.length === 0) return;
+    setProcessingCounterSale(true);
+    try {
+      const res = await fetch("/api/admin/counter-sale", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paymentMethod: counterPayment,
+          items: items.map((i) => ({
+            variantId: i.variantId,
+            quantity: i.quantity,
+            unitPrice: i.price,
+          })),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Error al registrar la venta");
+        return;
+      }
+
+      clearCart();
+      setCounterModalOpen(false);
+      toast.success(`Venta ${data.order.orderNumber} registrada`);
+      router.push(`/carrito/mostrador-exito?orderId=${data.order.id}`);
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setProcessingCounterSale(false);
+    }
+  }
 
   async function handleGenerateQuote() {
     if (items.length === 0) return;
@@ -394,6 +454,16 @@ export default function CarritoPage() {
           >
             <Link href="/checkout/datos">Finalizar compra</Link>
           </Button>
+          {canCounterSale && (
+            <Button
+              type="button"
+              className="mt-3 w-full gap-2 border border-emerald-300 bg-emerald-100 text-emerald-900 hover:bg-emerald-200"
+              onClick={() => setCounterModalOpen(true)}
+            >
+              <Store className="size-4" />
+              Compra Mostrador
+            </Button>
+          )}
           {canGenerateQuotes && (
             <Button
               variant="outline"
@@ -414,6 +484,67 @@ export default function CarritoPage() {
           </Button>
         </aside>
       </div>
+
+      <Dialog open={counterModalOpen} onOpenChange={setCounterModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Compra Mostrador</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Seleccioná el medio de pago utilizado. La venta se registrará y
+            descontará el stock al confirmar.
+          </p>
+          <div className="space-y-2">
+            <Label htmlFor="counter-payment">Medio de pago</Label>
+            <Select
+              value={counterPayment}
+              onValueChange={(v) => setCounterPayment(v as CounterPaymentMethod)}
+            >
+              <SelectTrigger id="counter-payment" className="w-full">
+                <SelectValue placeholder="Elegir medio de pago" />
+              </SelectTrigger>
+              <SelectContent>
+                {COUNTER_PAYMENT_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Total a cobrar</span>
+              <span className="font-bold">{formatPrice(summary.total)}</span>
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCounterModalOpen(false)}
+              disabled={processingCounterSale}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              className="bg-emerald-100 text-emerald-900 hover:bg-emerald-200"
+              onClick={handleCounterSale}
+              disabled={processingCounterSale}
+            >
+              {processingCounterSale ? (
+                <>
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                  Procesando…
+                </>
+              ) : (
+                "Confirmar venta"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

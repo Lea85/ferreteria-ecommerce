@@ -6,7 +6,14 @@ export const ORDER_PREFIX = "FER";
 
 export type CustomerType = "CONSUMER" | "TRADE" | "WHOLESALE";
 export type OrderStatus = "PENDING" | "PAYMENT_PENDING" | "PAYMENT_APPROVED" | "PREPARING" | "SHIPPED" | "DELIVERED" | "CANCELLED" | "REFUNDED";
-export type PaymentMethod = "MERCADO_PAGO" | "BANK_TRANSFER" | "CASH_ON_PICKUP";
+export type PaymentMethod =
+  | "MERCADO_PAGO"
+  | "BANK_TRANSFER"
+  | "CASH_ON_PICKUP"
+  | "COUNTER_CASH"
+  | "COUNTER_CREDIT_CARD"
+  | "COUNTER_DEBIT_CARD"
+  | "COUNTER_TRANSFER";
 export type PriceRuleType = "ROLE" | "VOLUME" | "PROMO";
 export type DiscountType = "PERCENTAGE" | "FIXED_AMOUNT";
 export type PriceRuleScope = "ALL_PRODUCTS" | "SPECIFIC_PRODUCTS" | "SPECIFIC_CATEGORIES" | "SPECIFIC_BRANDS";
@@ -34,7 +41,20 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   MERCADO_PAGO: "Mercado Pago",
   BANK_TRANSFER: "Transferencia bancaria",
   CASH_ON_PICKUP: "Efectivo al retiro en sucursal",
+  COUNTER_CASH: "Efectivo",
+  COUNTER_CREDIT_CARD: "Tarjeta de crédito",
+  COUNTER_DEBIT_CARD: "Tarjeta de débito",
+  COUNTER_TRANSFER: "Transferencia",
 };
+
+export const COUNTER_PAYMENT_OPTIONS = [
+  { value: "COUNTER_CASH", label: "Efectivo" },
+  { value: "COUNTER_CREDIT_CARD", label: "Tarjeta de crédito" },
+  { value: "COUNTER_DEBIT_CARD", label: "Tarjeta de débito" },
+  { value: "COUNTER_TRANSFER", label: "Transferencia" },
+] as const;
+
+export type CounterPaymentMethod = (typeof COUNTER_PAYMENT_OPTIONS)[number]["value"];
 
 export const PRICE_RULE_TYPE_LABELS: Record<PriceRuleType, string> = {
   ROLE: "Por tipo de cliente",
