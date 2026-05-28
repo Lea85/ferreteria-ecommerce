@@ -9,7 +9,23 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { COUNTER_PAYMENT_OPTIONS, type CounterPaymentMethod } from "@/lib/constants";
 import {
   Table,
   TableBody,
@@ -41,6 +57,8 @@ export default function AdminPresupuestoDetallePage() {
 
   const [quote, setQuote] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [sellModalOpen, setSellModalOpen] = useState(false);
+  const [counterPayment, setCounterPayment] = useState<CounterPaymentMethod>("COUNTER_CASH");
   const [selling, setSelling] = useState(false);
   const [cancelling, setCancelling] = useState(false);
 
@@ -53,21 +71,21 @@ export default function AdminPresupuestoDetallePage() {
   }, [id]);
 
   async function handleSell() {
-    if (!confirm("¿Confirmar venta? Se descontará el stock de todos los productos.")) return;
     setSelling(true);
     try {
       const res = await fetch(`/api/admin/quotes/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "sell" }),
+        body: JSON.stringify({ action: "sell", paymentMethod: counterPayment }),
       });
       const data = await res.json();
       if (!res.ok) {
         toast.error(data.error || "Error al vender");
         return;
       }
-      toast.success(`Venta registrada - Pedido ${data.orderNumber}`);
-      router.push("/admin/presupuestos");
+      toast.success(`Venta registrada — Pedido ${data.orderNumber}`);
+      setSellModalOpen(false);
+      router.push(`/carrito/mostrador-exito?orderId=${data.orderId}`);
     } catch {
       toast.error("Error de conexión");
     } finally {
@@ -253,16 +271,12 @@ export default function AdminPresupuestoDetallePage() {
           {isActive && (
             <div className="space-y-3">
               <Button
-                className="w-full gap-2"
-                onClick={handleSell}
+                className="w-full gap-2 bg-emerald-100 text-emerald-900 hover:bg-emerald-200"
+                onClick={() => setSellModalOpen(true)}
                 disabled={selling}
               >
-                {selling ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <ShoppingCart className="size-4" />
-                )}
-                {selling ? "Procesando..." : "Vender presupuesto"}
+                <ShoppingCart className="size-4" />
+                Vender presupuesto
               </Button>
               <Button
                 variant="outline"
@@ -297,6 +311,67 @@ export default function AdminPresupuestoDetallePage() {
           )}
         </div>
       </div>
+
+      <Dialog open={sellModalOpen} onOpenChange={setSellModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Vender presupuesto</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Seleccioná el medio de pago. Se registrará la venta en mostrador, se
+            descontará el stock y el presupuesto quedará como vendido.
+          </p>
+          <div className="space-y-2">
+            <Label htmlFor="quote-counter-payment">Medio de pago</Label>
+            <Select
+              value={counterPayment}
+              onValueChange={(v) => setCounterPayment(v as CounterPaymentMethod)}
+            >
+              <SelectTrigger id="quote-counter-payment" className="w-full">
+                <SelectValue placeholder="Elegir medio de pago" />
+              </SelectTrigger>
+              <SelectContent>
+                {COUNTER_PAYMENT_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Total a cobrar</span>
+              <span className="font-bold">{formatPrice(Number(quote.total))}</span>
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setSellModalOpen(false)}
+              disabled={selling}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              className="bg-emerald-100 text-emerald-900 hover:bg-emerald-200"
+              onClick={handleSell}
+              disabled={selling}
+            >
+              {selling ? (
+                <>
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                  Procesando…
+                </>
+              ) : (
+                "Confirmar venta"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

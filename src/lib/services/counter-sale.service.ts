@@ -54,12 +54,65 @@ async function resolveVariantIds(
   return resolved;
 }
 
-export async function createCounterSaleOrder(data: {
+export type CounterSaleOrderOptions = {
   adminUserId: string;
   adminName: string;
   paymentMethod: PaymentMethod;
   items: CounterSaleItemInput[];
+  /** Al vender un presupuesto, se marca como SOLD en la misma transacción. */
+  quoteId?: string;
+  quoteNumber?: string;
+  customerName?: string;
+  customerEmail?: string | null;
+  customerPhone?: string | null;
+};
+
+export async function sellQuoteAsCounterSale(data: {
+  quoteId: string;
+  adminUserId: string;
+  adminName: string;
+  paymentMethod: PaymentMethod;
 }) {
+  const quote = await prisma.quote.findUnique({
+    where: { id: data.quoteId },
+    include: {
+      items: true,
+      user: { select: { name: true, lastName: true, email: true, phone: true } },
+    },
+  });
+
+  if (!quote) {
+    throw new Error("Presupuesto no encontrado.");
+  }
+  if (quote.status !== "ACTIVE") {
+    throw new Error("Solo se pueden vender presupuestos activos.");
+  }
+  if (quote.items.length === 0) {
+    throw new Error("El presupuesto no tiene productos.");
+  }
+
+  const customerName =
+    [quote.user.name, quote.user.lastName].filter(Boolean).join(" ").trim() ||
+    "Cliente presupuesto";
+
+  return createCounterSaleOrder({
+    adminUserId: data.adminUserId,
+    adminName: data.adminName,
+    paymentMethod: data.paymentMethod,
+    items: quote.items.map((item) => ({
+      variantId: item.variantId,
+      quantity: item.quantity,
+      unitPrice: Number(item.unitPrice),
+    })),
+    quoteId: quote.id,
+    quoteNumber: quote.quoteNumber,
+    customerName,
+    customerEmail: quote.user.email,
+    customerPhone: quote.user.phone,
+  });
+}
+
+export async function createCounterSaleOrder(data: CounterSaleOrderOptions) {
   if (data.items.length === 0) {
     throw new Error("El carrito está vacío.");
   }
@@ -127,6 +180,10 @@ export async function createCounterSaleOrder(data: {
       });
     }
 
+    const notes = data.quoteNumber
+      ? `Compra mostrador — presupuesto ${data.quoteNumber} — operador: ${data.adminName}`
+      : `Compra mostrador — operador: ${data.adminName}`;
+
     const order = await tx.order.create({
       data: {
         orderNumber,
@@ -135,16 +192,16 @@ export async function createCounterSaleOrder(data: {
         customerType: "CONSUMER",
         shippingMethod: "STORE_PICKUP",
         paymentMethod: data.paymentMethod,
-        customerName: "Venta mostrador",
-        customerEmail: null,
-        customerPhone: null,
-        billingName: "Consumidor final",
+        customerName: data.customerName ?? "Venta mostrador",
+        customerEmail: data.customerEmail ?? null,
+        customerPhone: data.customerPhone ?? null,
+        billingName: data.customerName ?? "Consumidor final",
         subtotal,
         discountTotal: 0,
         shippingCost: 0,
         taxTotal: 0,
         total: subtotal,
-        notes: `Compra mostrador — operador: ${data.adminName}`,
+        notes,
         items: {
           create: orderItems.map((item) => ({
             productId: item.productId,
@@ -189,6 +246,17 @@ export async function createCounterSaleOrder(data: {
         },
       },
     });
+
+    if (data.quoteId) {
+      await tx.quote.update({
+        where: { id: data.quoteId },
+        data: {
+          status: "SOLD",
+          soldAt: new Date(),
+          soldOrderId: order.id,
+        },
+      });
+    }
 
     return {
       id: order.id,
