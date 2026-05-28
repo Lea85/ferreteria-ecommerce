@@ -12,6 +12,7 @@ import {
 import { useCallback, useEffect, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
+import { plainTextToEditorHtml } from "@/lib/sanitize-html";
 import { cn } from "@/lib/utils";
 
 type RichTextEditorProps = {
@@ -27,6 +28,10 @@ function normalizeHtml(html: string) {
   return html;
 }
 
+function toEditorHtml(value: string) {
+  return plainTextToEditorHtml(value);
+}
+
 export function RichTextEditor({
   value,
   onChange,
@@ -34,21 +39,26 @@ export function RichTextEditor({
   className,
 }: RichTextEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
-  const lastExternal = useRef(value);
+  /** null = aún no se aplicó valor al DOM del editor */
+  const lastApplied = useRef<string | null>(null);
 
   const syncFromEditor = useCallback(() => {
     const el = editorRef.current;
     if (!el) return;
     const html = normalizeHtml(el.innerHTML);
-    lastExternal.current = html;
+    lastApplied.current = html;
     onChange(html);
   }, [onChange]);
 
   useEffect(() => {
     const el = editorRef.current;
-    if (!el || value === lastExternal.current) return;
-    el.innerHTML = value || "";
-    lastExternal.current = value;
+    if (!el) return;
+
+    const html = toEditorHtml(value || "");
+    if (lastApplied.current === value && el.innerHTML === html) return;
+
+    el.innerHTML = html;
+    lastApplied.current = value;
   }, [value]);
 
   const exec = (command: string, arg?: string) => {

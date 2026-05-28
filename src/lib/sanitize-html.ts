@@ -68,6 +68,17 @@ export function looksLikeHtml(text: string): boolean {
   return /<[a-z][\s\S]*>/i.test(text);
 }
 
+/** Convierte texto plano guardado en BD a HTML seguro para el editor. */
+export function plainTextToEditorHtml(text: string): string {
+  if (!text.trim()) return "";
+  if (looksLikeHtml(text)) return text;
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\n/g, "<br>");
+}
+
 export function toDisplayHtml(text: string): string {
   if (!text.trim()) return "";
   if (looksLikeHtml(text)) return sanitizeHtml(text);
