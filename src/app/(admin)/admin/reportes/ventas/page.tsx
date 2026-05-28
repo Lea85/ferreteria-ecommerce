@@ -10,8 +10,8 @@ import {
   ShoppingCart,
   Store,
   TrendingDown,
+  Percent,
   TrendingUp,
-  Users,
   Warehouse,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -62,9 +62,9 @@ type ChannelMetrics = { revenue: number; orders: number; avgTicket: number };
 type ReportData = {
   metrics: {
     totalRevenue: number;
+    totalProfit: number;
     totalOrders: number;
     avgTicket: number;
-    newCustomers: number;
   };
   channelBreakdown: { counter: ChannelMetrics; web: ChannelMetrics };
   topProducts: ProductRow[];
@@ -102,9 +102,9 @@ export default function AnalisisVentasPage() {
 
   const m = data?.metrics || {
     totalRevenue: 0,
+    totalProfit: 0,
     totalOrders: 0,
     avgTicket: 0,
-    newCustomers: 0,
   };
   const channels = data?.channelBreakdown || {
     counter: { revenue: 0, orders: 0, avgTicket: 0 },
@@ -193,6 +193,12 @@ export default function AnalisisVentasPage() {
             color: "text-emerald-600",
           },
           {
+            label: "Ganancia total",
+            value: formatPrice(m.totalProfit),
+            icon: Percent,
+            color: "text-teal-600",
+          },
+          {
             label: "Pedidos",
             value: m.totalOrders.toLocaleString("es-AR"),
             icon: ShoppingCart,
@@ -203,12 +209,6 @@ export default function AnalisisVentasPage() {
             value: formatPrice(m.avgTicket),
             icon: TrendingUp,
             color: "text-violet-600",
-          },
-          {
-            label: "Nuevos clientes",
-            value: m.newCustomers.toLocaleString("es-AR"),
-            icon: Users,
-            color: "text-amber-600",
           },
         ].map((k) => (
           <Card key={k.label} className="border-border shadow-sm">

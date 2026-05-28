@@ -33,6 +33,50 @@ function getDayRange(dateStr: string): { gte: Date; lte: Date } | null {
   return { gte: start, lte: end };
 }
 
+type OrderItemForProfit = {
+  variantId: string | null;
+  quantity: number;
+  subtotal: unknown;
+};
+
+function computeItemsProfit(
+  items: OrderItemForProfit[],
+  costByVariantId: Map<string, number>,
+): number {
+  let profit = 0;
+  for (const item of items) {
+    if (!item.variantId) continue;
+    const unitCost = costByVariantId.get(item.variantId);
+    if (unitCost === undefined) continue;
+    profit += Number(item.subtotal) - unitCost * item.quantity;
+  }
+  return profit;
+}
+
+async function loadVariantCostMap(
+  orders: { items: OrderItemForProfit[] }[],
+): Promise<Map<string, number>> {
+  const variantIds = [
+    ...new Set(
+      orders.flatMap((o) =>
+        o.items.map((i) => i.variantId).filter((id): id is string => Boolean(id)),
+      ),
+    ),
+  ];
+  if (variantIds.length === 0) return new Map();
+
+  const variants = await prisma.productVariant.findMany({
+    where: { id: { in: variantIds } },
+    select: { id: true, costPrice: true },
+  });
+
+  const map = new Map<string, number>();
+  for (const v of variants) {
+    if (v.costPrice != null) map.set(v.id, Number(v.costPrice));
+  }
+  return map;
+}
+
 function buildChannelMetrics(
   orders: { total: unknown; paymentMethod: string; notes: string | null }[],
 ) {
@@ -112,14 +156,11 @@ export async function GET(request: Request) {
     const totalOrders = orders.length;
     const avgTicket = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
-    const newCustomersCreatedAt: Prisma.DateTimeFilter =
-      period === "day" && "lte" in createdAtFilter
-        ? { gte: createdAtFilter.gte, lte: createdAtFilter.lte }
-        : { gte: getDateFrom(period) };
-
-    const newCustomers = await prisma.user.count({
-      where: { createdAt: newCustomersCreatedAt, role: "CUSTOMER" },
-    });
+    const costByVariantId = await loadVariantCostMap(orders);
+    const totalProfit = orders.reduce(
+      (sum, o) => sum + computeItemsProfit(o.items, costByVariantId),
+      0,
+    );
 
     const channelBreakdown = buildChannelMetrics(orders);
 
@@ -211,7 +252,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       period,
       periodLabel,
-      metrics: { totalRevenue, totalOrders, avgTicket, newCustomers },
+      metrics: { totalRevenue, totalProfit, totalOrders, avgTicket },
       channelBreakdown,
       topProducts,
       leastSold,
