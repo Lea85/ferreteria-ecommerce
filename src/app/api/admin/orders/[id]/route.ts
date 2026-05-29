@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 
-import { auth } from "@/lib/auth";
+import { auth, isAdminRole } from "@/lib/auth";
 import { ORDER_STATUS_LABELS } from "@/lib/constants";
 import { getOrderById, updateOrderStatus } from "@/lib/services/order.service";
 
 function isAdmin(session: { user?: { role?: string } } | null) {
   return (
     !!session?.user &&
-    ["ADMIN", "SUPER_ADMIN"].includes((session.user as { role?: string }).role ?? "")
+    isAdminRole((session.user as { role?: string }).role)
   );
 }
 

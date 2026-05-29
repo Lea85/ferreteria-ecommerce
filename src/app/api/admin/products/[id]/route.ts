@@ -1,16 +1,19 @@
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/db";
-import { auth } from "@/lib/auth";
+import { auth, isAdminRole, isFullAdmin, canViewProductCostPrice } from "@/lib/auth";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await auth();
-  if (!session?.user || !["ADMIN", "SUPER_ADMIN"].includes((session.user as any).role)) {
+  if (!session?.user || !isAdminRole((session.user as { role?: string }).role)) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
+
+  const role = (session.user as { role?: string }).role;
+  const showCost = canViewProductCostPrice(role);
 
   try {
     const { id } = await params;
@@ -59,7 +62,7 @@ export async function GET(
         sku: v.sku,
         ean: v.ean || "",
         price: Number(v.price),
-        costPrice: v.costPrice ? Number(v.costPrice) : null,
+        costPrice: showCost && v.costPrice ? Number(v.costPrice) : null,
         comparePrice: v.comparePrice ? Number(v.comparePrice) : null,
         stock: v.stock,
         weight: v.weight ? Number(v.weight) : null,
@@ -84,7 +87,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await auth();
-  if (!session?.user || !["ADMIN", "SUPER_ADMIN"].includes((session.user as any).role)) {
+  if (!session?.user || !isFullAdmin((session.user as { role?: string }).role)) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 

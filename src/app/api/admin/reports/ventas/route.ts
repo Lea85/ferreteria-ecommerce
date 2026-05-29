@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import type { Prisma } from "@/generated/prisma";
 import { OrderStatus } from "@/generated/prisma";
 import { prisma } from "@/lib/db";
-import { auth } from "@/lib/auth";
+import { auth, isFullAdmin } from "@/lib/auth";
 import { getOrderSalesChannel } from "@/lib/order-channel";
 
 const EXCLUDED_STATUSES: OrderStatus[] = [OrderStatus.CANCELLED, OrderStatus.REFUNDED];
@@ -115,7 +115,7 @@ export async function GET(request: Request) {
     const session = await auth();
     if (
       !session?.user ||
-      !["ADMIN", "SUPER_ADMIN"].includes((session.user as any).role)
+      !isFullAdmin((session.user as { role?: string }).role)
     ) {
       return NextResponse.json({ error: "No autorizado" }, { status: 403 });
     }

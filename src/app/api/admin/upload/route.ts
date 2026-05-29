@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { auth, isFullAdmin } from "@/lib/auth";
 import { supabaseAdmin, PRODUCT_IMAGES_BUCKET } from "@/lib/supabase";
 
 export async function POST(request: Request) {
   const session = await auth();
   if (
     !session?.user ||
-    !["ADMIN", "SUPER_ADMIN"].includes(
-      String((session.user as { role?: string }).role ?? ""),
-    )
+    !isFullAdmin(String((session.user as { role?: string }).role ?? ""))
   ) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }

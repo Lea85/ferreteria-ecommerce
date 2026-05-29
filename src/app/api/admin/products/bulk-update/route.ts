@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import type { Prisma } from "@/generated/prisma";
 import { prisma } from "@/lib/db";
-import { auth, isAdminRole } from "@/auth";
+import { auth, isFullAdmin } from "@/auth";
 
 type BulkField<T> = { value: T };
 
@@ -18,7 +18,7 @@ type BulkUpdateBody = {
 export async function POST(request: Request) {
   try {
     const session = await auth();
-    if (!session?.user?.id || !isAdminRole(session.user.role as string)) {
+    if (!session?.user?.id || !isFullAdmin(session.user.role as string)) {
       return NextResponse.json({ error: "No autorizado" }, { status: 403 });
     }
 

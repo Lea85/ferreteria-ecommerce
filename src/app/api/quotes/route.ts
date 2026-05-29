@@ -22,9 +22,14 @@ export async function POST(request: Request) {
       },
     });
 
-    const canQuote = userWithCategories?.customerCategories.some(
-      (uc) => uc.customerCategory.canGenerateQuotes,
-    );
+    const role = (session.user as { role?: string }).role;
+    const canQuote =
+      role === "MOSTRADOR" ||
+      role === "ADMIN" ||
+      role === "SUPER_ADMIN" ||
+      userWithCategories?.customerCategories.some(
+        (uc) => uc.customerCategory.canGenerateQuotes,
+      );
 
     if (!canQuote) {
       return NextResponse.json(
@@ -154,9 +159,14 @@ export async function GET(request: Request) {
         },
       });
 
-      const canQuote = userWithCategories?.customerCategories.some(
-        (uc) => uc.customerCategory.canGenerateQuotes,
-      );
+      const role = (session.user as { role?: string }).role;
+      const canQuote =
+        role === "MOSTRADOR" ||
+        role === "ADMIN" ||
+        role === "SUPER_ADMIN" ||
+        userWithCategories?.customerCategories.some(
+          (uc) => uc.customerCategory.canGenerateQuotes,
+        );
 
       return NextResponse.json({ canGenerateQuotes: !!canQuote });
     }

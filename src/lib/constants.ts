@@ -19,7 +19,7 @@ export type PaymentMethod =
 export type PriceRuleType = "ROLE" | "VOLUME" | "PROMO";
 export type DiscountType = "PERCENTAGE" | "FIXED_AMOUNT";
 export type PriceRuleScope = "ALL_PRODUCTS" | "SPECIFIC_PRODUCTS" | "SPECIFIC_CATEGORIES" | "SPECIFIC_BRANDS";
-export type UserRole = "CUSTOMER" | "ADMIN" | "SUPER_ADMIN";
+export type UserRole = "CUSTOMER" | "ADMIN" | "SUPER_ADMIN" | "MOSTRADOR";
 export type ShippingMethod = "STORE_PICKUP" | "OWN_DELIVERY" | "CARRIER";
 
 export const CUSTOMER_TYPE_LABELS: Record<CustomerType, string> = {

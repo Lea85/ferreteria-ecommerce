@@ -1,4 +1,4 @@
-import { auth, isAdminRole } from "@/auth";
+import { auth, canAccessAdminPanel } from "@/auth";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { Sidebar } from "@/components/admin/Sidebar";
 import { AuthSessionProvider } from "@/components/providers/session-provider";
@@ -21,7 +21,7 @@ export default async function AdminLayout({
     : session?.user;
 
   const allowed =
-    bypass || (session?.user && isAdminRole(session.user.role));
+    bypass || (session?.user && canAccessAdminPanel(session.user.role as string));
 
   if (!allowed) {
     return (
@@ -49,6 +49,7 @@ export default async function AdminLayout({
             name: user?.name,
             email: user?.email,
           }}
+          role={(user as { role?: string } | undefined)?.role}
         />
         <div className="lg:pl-64">
           <AdminHeader

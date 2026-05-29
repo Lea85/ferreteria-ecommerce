@@ -107,6 +107,20 @@ export const {
   },
 });
 
+export {
+  canAccessAdminPanel,
+  canAccessAdminPath,
+  canEditProducts,
+  canUseCounterSale,
+  canUseStoreQuotes,
+  canViewProductCostPrice,
+  isFullAdmin,
+  isStaffRole,
+} from "@/lib/admin-permissions";
+
+/** Acceso al panel admin (incluye MOSTRADOR). */
 export function isAdminRole(role: string | undefined): boolean {
-  return role === "ADMIN" || role === "SUPER_ADMIN";
+  return (
+    role === "ADMIN" || role === "SUPER_ADMIN" || role === "MOSTRADOR"
+  );
 }

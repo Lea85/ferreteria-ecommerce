@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 
 import { CustomerType, Prisma, UserRole } from "@/generated/prisma";
 import { prisma } from "@/lib/db";
-import { auth } from "@/lib/auth";
+import { auth, isAdminRole } from "@/lib/auth";
 
 const CUSTOMER_TYPES: CustomerType[] = ["CONSUMER", "TRADE", "WHOLESALE"];
-const USER_ROLES: UserRole[] = ["CUSTOMER", "ADMIN", "SUPER_ADMIN"];
+const USER_ROLES: UserRole[] = ["CUSTOMER", "ADMIN", "SUPER_ADMIN", "MOSTRADOR"];
 
 function isCustomerType(v: string): v is CustomerType {
   return CUSTOMER_TYPES.includes(v as CustomerType);
@@ -20,7 +20,7 @@ export async function GET(request: Request) {
     const session = await auth();
     if (
       !session?.user ||
-      !["ADMIN", "SUPER_ADMIN"].includes((session.user as any).role)
+      !isAdminRole((session.user as { role?: string }).role)
     ) {
       return NextResponse.json({ error: "No autorizado" }, { status: 403 });
     }
@@ -112,7 +112,7 @@ export async function PUT(request: Request) {
     const session = await auth();
     if (
       !session?.user ||
-      !["ADMIN", "SUPER_ADMIN"].includes((session.user as any).role)
+      !isAdminRole((session.user as { role?: string }).role)
     ) {
       return NextResponse.json({ error: "No autorizado" }, { status: 403 });
     }
@@ -219,7 +219,7 @@ export async function DELETE(request: Request) {
     const session = await auth();
     if (
       !session?.user ||
-      !["ADMIN", "SUPER_ADMIN"].includes((session.user as any).role)
+      !isAdminRole((session.user as { role?: string }).role)
     ) {
       return NextResponse.json({ error: "No autorizado" }, { status: 403 });
     }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/db";
-import { auth } from "@/lib/auth";
+import { auth, isFullAdmin } from "@/lib/auth";
 
 function getDateFrom(period: string): Date {
   const now = new Date();
@@ -18,7 +18,7 @@ function getDateFrom(period: string): Date {
 export async function GET(request: Request) {
   try {
     const session = await auth();
-    if (!session?.user || !["ADMIN", "SUPER_ADMIN"].includes((session.user as any).role)) {
+    if (!session?.user || !isFullAdmin((session.user as { role?: string }).role)) {
       return NextResponse.json({ error: "No autorizado" }, { status: 403 });
     }
 

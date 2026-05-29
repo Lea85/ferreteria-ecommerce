@@ -31,6 +31,7 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { canAccessAdminPath } from "@/lib/admin-permissions";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
@@ -91,9 +92,26 @@ export type AdminSidebarUser = {
 
 export type SidebarProps = {
   user: AdminSidebarUser;
+  role?: string;
 };
 
-export function Sidebar({ user }: SidebarProps) {
+function filterNavForRole(role: string | undefined, items: NavItem[]): NavItem[] {
+  return items
+    .map((item) => {
+      if (item.children?.length) {
+        const children = item.children.filter((c) =>
+          canAccessAdminPath(role, c.href),
+        );
+        if (children.length === 0) return null;
+        return { ...item, children };
+      }
+      return canAccessAdminPath(role, item.href) ? item : null;
+    })
+    .filter((item): item is NavItem => item !== null);
+}
+
+export function Sidebar({ user, role }: SidebarProps) {
+  const visibleNav = filterNavForRole(role, nav);
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState<string[]>(() => {
@@ -111,7 +129,7 @@ export function Sidebar({ user }: SidebarProps) {
 
   const NavLinks = (
     <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 py-4">
-      {nav.map((item) => {
+      {visibleNav.map((item) => {
         const hasChildren = item.children && item.children.length > 0;
         const isExpanded = expandedMenus.includes(item.href) || pathname.startsWith(item.href + "/");
         const active = hasChildren

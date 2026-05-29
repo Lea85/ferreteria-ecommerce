@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { auth, isAdminRole } from "@/auth";
+import { auth, isFullAdmin } from "@/auth";
 import { prisma } from "@/lib/db";
 
 const SOCIAL_KEYS = [
@@ -34,7 +34,7 @@ export async function GET(request: Request) {
 export async function PUT(request: Request) {
   try {
     const session = await auth();
-    if (!session?.user || !isAdminRole(session.user.role)) {
+    if (!session?.user || !isFullAdmin(session.user.role as string)) {
       return NextResponse.json({ error: "No autorizado." }, { status: 403 });
     }
 

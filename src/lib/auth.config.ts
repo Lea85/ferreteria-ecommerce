@@ -1,6 +1,8 @@
 import type { NextAuthConfig } from "next-auth";
 import { NextResponse } from "next/server";
 
+import { canAccessAdminPanel, canAccessAdminPath } from "@/lib/admin-permissions";
+
 export const authConfig = {
   pages: {
     signIn: "/login",
@@ -27,10 +29,15 @@ export const authConfig = {
       const { pathname } = request.nextUrl;
 
       if (pathname.startsWith("/admin")) {
-        const role = auth?.user?.role;
-        if (role !== "ADMIN" && role !== "SUPER_ADMIN") {
+        const role = auth?.user?.role as string | undefined;
+        if (!canAccessAdminPanel(role)) {
           const url = new URL("/login", request.url);
           url.searchParams.set("callbackUrl", pathname);
+          return NextResponse.redirect(url);
+        }
+        if (!canAccessAdminPath(role, pathname)) {
+          const url = new URL("/admin/dashboard", request.url);
+          url.searchParams.set("denied", "1");
           return NextResponse.redirect(url);
         }
       }

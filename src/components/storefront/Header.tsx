@@ -125,7 +125,7 @@ export function Header() {
               </Button>
             </nav>
 
-            {isLoggedIn && ((session.user as any)?.role === "ADMIN" || (session.user as any)?.role === "SUPER_ADMIN") ? (
+            {isLoggedIn && ["ADMIN", "SUPER_ADMIN", "MOSTRADOR"].includes((session.user as { role?: string })?.role ?? "") ? (
               <Button
                 variant="outline"
                 size="sm"
@@ -281,7 +281,7 @@ export function Header() {
 
           {isLoggedIn ? (
             <>
-              {((session?.user as any)?.role === "ADMIN" || (session?.user as any)?.role === "SUPER_ADMIN") && (
+              {["ADMIN", "SUPER_ADMIN", "MOSTRADOR"].includes((session?.user as { role?: string })?.role ?? "") && (
                 <Link
                   href="/admin/dashboard"
                   className="flex items-center gap-2 rounded-md bg-primary/10 px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/20"

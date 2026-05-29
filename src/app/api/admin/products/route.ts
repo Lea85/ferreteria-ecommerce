@@ -2,16 +2,13 @@ import { NextResponse } from "next/server";
 
 import type { Prisma } from "@/generated/prisma";
 import { prisma } from "@/lib/db";
-import { auth } from "@/lib/auth";
+import { auth, isAdminRole, isFullAdmin } from "@/lib/auth";
 import { findProductIdsByTextSearch } from "@/lib/product-search";
 
 export async function GET(request: Request) {
   try {
     const session = await auth();
-    if (
-      !session?.user ||
-      !["ADMIN", "SUPER_ADMIN"].includes((session.user as any).role)
-    ) {
+    if (!session?.user || !isAdminRole((session.user as { role?: string }).role)) {
       return NextResponse.json({ error: "No autorizado" }, { status: 403 });
     }
 
@@ -177,10 +174,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const session = await auth();
-    if (
-      !session?.user ||
-      !["ADMIN", "SUPER_ADMIN"].includes((session.user as any).role)
-    ) {
+    if (!session?.user || !isFullAdmin((session.user as { role?: string }).role)) {
       return NextResponse.json({ error: "No autorizado" }, { status: 403 });
     }
 

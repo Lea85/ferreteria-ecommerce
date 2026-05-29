@@ -28,6 +28,7 @@ import {
   BULK_IMPORT_TEMPLATE_ROW,
   BULK_UPDATE_TEMPLATE_ROW,
 } from "@/lib/bulk-products-spreadsheet";
+import { useIsFullAdmin } from "@/hooks/use-is-admin";
 import { formatPrice } from "@/lib/utils";
 
 type ProductApi = {
@@ -57,6 +58,7 @@ const UPDATE_TEMPLATE = [BULK_UPDATE_TEMPLATE_ROW];
 const LIMIT = 20;
 
 export default function AdminProductosPage() {
+  const isFullAdmin = useIsFullAdmin();
   const [activeFilter, setActiveFilter] = useState<string>("all");
   const [brandFilter, setBrandFilter] = useState<string>("all");
   const [supplierFilter, setSupplierFilter] = useState<string>("all");
@@ -96,27 +98,26 @@ export default function AdminProductosPage() {
 
     async function loadFilters() {
       try {
-        const [brandsRes, suppliersRes] = await Promise.all([
-          fetch("/api/admin/brands?limit=100"),
-          fetch("/api/admin/suppliers?limit=100"),
-        ]);
+        const suppliersRes = await fetch("/api/admin/suppliers?limit=100");
+        const suppliersData = await suppliersRes.json();
 
-        const [brandsData, suppliersData] = await Promise.all([
-          brandsRes.json(),
-          suppliersRes.json(),
-        ]);
-
-        if (!brandsRes.ok || !suppliersRes.ok) {
+        if (!suppliersRes.ok) {
           throw new Error("No se pudieron cargar filtros");
         }
 
         if (!cancelled) {
-          setBrands(
-            (brandsData.brands ?? []).map((brand: { id: string; name: string }) => ({
-              id: brand.id,
-              name: brand.name,
-            })),
-          );
+          if (isFullAdmin) {
+            const brandsRes = await fetch("/api/admin/brands?limit=100");
+            const brandsData = await brandsRes.json();
+            if (brandsRes.ok) {
+              setBrands(
+                (brandsData.brands ?? []).map((brand: { id: string; name: string }) => ({
+                  id: brand.id,
+                  name: brand.name,
+                })),
+              );
+            }
+          }
           setSuppliers(
             (suppliersData.suppliers ?? []).map((supplier: { id: string; name: string }) => ({
               id: supplier.id,
@@ -135,7 +136,7 @@ export default function AdminProductosPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isFullAdmin]);
 
   const loadProducts = useCallback(async () => {
     setLoading(true);
@@ -290,22 +291,26 @@ export default function AdminProductosPage() {
         header: "Estado",
         accessor: "isActive",
         sortable: true,
-        cell: (row) => (
-          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-            <Switch
-              checked={row.isActive}
-              onCheckedChange={() => handleToggleActive(row.id, !row.isActive)}
-              aria-label={row.isActive ? "Desactivar" : "Activar"}
-            />
-            <span className={`text-xs ${row.isActive ? "text-emerald-600" : "text-muted-foreground"}`}>
+        cell: (row) =>
+          isFullAdmin ? (
+            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+              <Switch
+                checked={row.isActive}
+                onCheckedChange={() => handleToggleActive(row.id, !row.isActive)}
+                aria-label={row.isActive ? "Desactivar" : "Activar"}
+              />
+              <span className={`text-xs ${row.isActive ? "text-emerald-600" : "text-muted-foreground"}`}>
+                {row.isActive ? "Activo" : "Inactivo"}
+              </span>
+            </div>
+          ) : (
+            <Badge variant={row.isActive ? "default" : "secondary"}>
               {row.isActive ? "Activo" : "Inactivo"}
-            </span>
-          </div>
-        ),
+            </Badge>
+          ),
       },
     ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+    [isFullAdmin],
   );
 
   async function handleToggleActive(productId: string, newState: boolean) {
@@ -334,52 +339,54 @@ export default function AdminProductosPage() {
         <p className="text-sm text-muted-foreground">
           Catálogo de ferretería y sanitarios.
         </p>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            disabled={selectedIds.size === 0}
-            onClick={() => setBulkEditOpen(true)}
-          >
-            <ListChecks className="size-4" />
-            Edición masiva web
-            {selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={() => {
-              setBulkMode("import");
-              setBulkResults(null);
-            }}
-          >
-            <Upload className="size-4" />
-            Alta masiva
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={() => {
-              setBulkMode("update");
-              setBulkResults(null);
-            }}
-          >
-            <Edit className="size-4" />
-            Modificación masiva
-          </Button>
-          <Button asChild variant="outline" size="sm" className="gap-2">
-            <Link href="/admin/productos/atributos">
-              <Layers className="size-4" />
-              Administrar Sub Categorías
-            </Link>
-          </Button>
-          <Button asChild>
-            <Link href="/admin/productos/nuevo">Nuevo producto</Link>
-          </Button>
-        </div>
+        {isFullAdmin ? (
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              disabled={selectedIds.size === 0}
+              onClick={() => setBulkEditOpen(true)}
+            >
+              <ListChecks className="size-4" />
+              Edición masiva web
+              {selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => {
+                setBulkMode("import");
+                setBulkResults(null);
+              }}
+            >
+              <Upload className="size-4" />
+              Alta masiva
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => {
+                setBulkMode("update");
+                setBulkResults(null);
+              }}
+            >
+              <Edit className="size-4" />
+              Modificación masiva
+            </Button>
+            <Button asChild variant="outline" size="sm" className="gap-2">
+              <Link href="/admin/productos/atributos">
+                <Layers className="size-4" />
+                Administrar Sub Categorías
+              </Link>
+            </Button>
+            <Button asChild>
+              <Link href="/admin/productos/nuevo">Nuevo producto</Link>
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
@@ -398,24 +405,26 @@ export default function AdminProductosPage() {
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-1.5">
-          <span className="text-xs font-medium text-muted-foreground">
-            Marca
-          </span>
-          <Select value={brandFilter} onValueChange={setBrandFilter}>
-            <SelectTrigger className="w-full min-w-[180px] border-border sm:w-56">
-              <SelectValue placeholder="Marca" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              {brands.map((brand) => (
-                <SelectItem key={brand.id} value={brand.id}>
-                  {brand.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {isFullAdmin ? (
+          <div className="space-y-1.5">
+            <span className="text-xs font-medium text-muted-foreground">
+              Marca
+            </span>
+            <Select value={brandFilter} onValueChange={setBrandFilter}>
+              <SelectTrigger className="w-full min-w-[180px] border-border sm:w-56">
+                <SelectValue placeholder="Marca" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {brands.map((brand) => (
+                  <SelectItem key={brand.id} value={brand.id}>
+                    {brand.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
         <div className="space-y-1.5">
           <span className="text-xs font-medium text-muted-foreground">
             Proveedor
@@ -442,11 +451,15 @@ export default function AdminProductosPage() {
         searchPlaceholder="Buscar por nombre, SKU o EAN…"
         externalSearch={{ value: searchInput, onChange: setSearchInput }}
         isLoading={loading}
-        showCheckbox
-        selection={{
-          selectedIds,
-          onSelectionChange: handleSelectionChange,
-        }}
+        showCheckbox={isFullAdmin}
+        selection={
+          isFullAdmin
+            ? {
+                selectedIds,
+                onSelectionChange: handleSelectionChange,
+              }
+            : undefined
+        }
         pagination={{
           page,
           pageSize: LIMIT,
@@ -465,14 +478,16 @@ export default function AdminProductosPage() {
                 <Eye className="size-4" />
               </Link>
             </Button>
-            <Button variant="ghost" size="icon" asChild>
-              <Link
-                href={`/admin/productos/${row.id}`}
-                aria-label="Editar"
-              >
-                <Edit className="size-4" />
-              </Link>
-            </Button>
+            {isFullAdmin ? (
+              <Button variant="ghost" size="icon" asChild>
+                <Link
+                  href={`/admin/productos/${row.id}`}
+                  aria-label="Editar"
+                >
+                  <Edit className="size-4" />
+                </Link>
+              </Button>
+            ) : null}
           </div>
         )}
       />

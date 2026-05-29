@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 
-import { auth, isAdminRole } from "@/auth";
+import { auth, isFullAdmin } from "@/auth";
 import { prisma } from "@/lib/db";
 
 export async function GET() {
   try {
     const session = await auth();
-    if (!session?.user || !isAdminRole(session.user.role))
+    if (!session?.user || !isFullAdmin(session.user.role as string))
       return NextResponse.json({ error: "No autorizado." }, { status: 403 });
 
     const documents = await prisma.legalDocument.findMany({ orderBy: { title: "asc" } });
@@ -20,7 +20,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const session = await auth();
-    if (!session?.user || !isAdminRole(session.user.role))
+    if (!session?.user || !isFullAdmin(session.user.role as string))
       return NextResponse.json({ error: "No autorizado." }, { status: 403 });
 
     const body = await request.json();
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
   try {
     const session = await auth();
-    if (!session?.user || !isAdminRole(session.user.role))
+    if (!session?.user || !isFullAdmin(session.user.role as string))
       return NextResponse.json({ error: "No autorizado." }, { status: 403 });
 
     const body = await request.json();
@@ -65,7 +65,7 @@ export async function PUT(request: Request) {
 export async function DELETE(request: Request) {
   try {
     const session = await auth();
-    if (!session?.user || !isAdminRole(session.user.role))
+    if (!session?.user || !isFullAdmin(session.user.role as string))
       return NextResponse.json({ error: "No autorizado." }, { status: 403 });
 
     const { searchParams } = new URL(request.url);

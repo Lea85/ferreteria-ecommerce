@@ -21,6 +21,7 @@ enum UserRole {
   CUSTOMER
   ADMIN
   SUPER_ADMIN
+  MOSTRADOR
 }
 
 enum OrderStatus {

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { OrderStatus, Prisma } from "@/generated/prisma";
 import { prisma } from "@/lib/db";
-import { auth } from "@/lib/auth";
+import { auth, isAdminRole } from "@/lib/auth";
 import { buildCreatedAtRangeFilter } from "@/lib/date-range";
 
 const ORDER_STATUSES = Object.values(OrderStatus) as string[];
@@ -45,7 +45,7 @@ export async function GET(request: Request) {
     const session = await auth();
     if (
       !session?.user ||
-      !["ADMIN", "SUPER_ADMIN"].includes((session.user as { role?: string }).role ?? "")
+      !isAdminRole((session.user as { role?: string }).role)
     ) {
       return NextResponse.json({ error: "No autorizado" }, { status: 403 });
     }

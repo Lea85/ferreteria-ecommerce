@@ -19,6 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useIsFullAdmin } from "@/hooks/use-is-admin";
 import { formatProfitMarginPercent } from "@/lib/profit-margin";
 import { formatPrice } from "@/lib/utils";
 
@@ -50,6 +51,7 @@ type ProductDetail = {
 };
 
 export default function ProductoDetallePage() {
+  const isFullAdmin = useIsFullAdmin();
   const params = useParams();
   const id = params.id as string;
 
@@ -103,12 +105,14 @@ export default function ProductoDetallePage() {
           <h1 className="text-xl font-bold text-foreground">{product.name}</h1>
           <p className="text-sm text-muted-foreground font-mono">/{product.slug}</p>
         </div>
-        <Button asChild className="gap-2">
-          <Link href={`/admin/productos/${id}`}>
-            <Edit className="size-4" />
-            Editar
-          </Link>
-        </Button>
+        {isFullAdmin ? (
+          <Button asChild className="gap-2">
+            <Link href={`/admin/productos/${id}`}>
+              <Edit className="size-4" />
+              Editar
+            </Link>
+          </Button>
+        ) : null}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -164,9 +168,13 @@ export default function ProductoDetallePage() {
                     <TableHead>SKU</TableHead>
                     <TableHead>EAN</TableHead>
                     <TableHead>Nombre</TableHead>
-                    <TableHead className="text-right">Precio de compra</TableHead>
+                    {isFullAdmin ? (
+                      <TableHead className="text-right">Precio de compra</TableHead>
+                    ) : null}
                     <TableHead className="text-right">Precio de publicación</TableHead>
-                    <TableHead className="text-center">Margen</TableHead>
+                    {isFullAdmin ? (
+                      <TableHead className="text-center">Margen</TableHead>
+                    ) : null}
                     <TableHead className="text-center">Stock</TableHead>
                     <TableHead className="text-center">Peso (kg)</TableHead>
                   </TableRow>
@@ -177,15 +185,19 @@ export default function ProductoDetallePage() {
                       <TableCell className="font-mono text-xs font-semibold">{v.sku}</TableCell>
                       <TableCell className="font-mono text-xs">{v.ean || "—"}</TableCell>
                       <TableCell>{v.name || "—"}</TableCell>
-                      <TableCell className="text-right font-mono text-muted-foreground">
-                        {v.costPrice != null ? formatPrice(v.costPrice) : "—"}
-                      </TableCell>
+                      {isFullAdmin ? (
+                        <TableCell className="text-right font-mono text-muted-foreground">
+                          {v.costPrice != null ? formatPrice(v.costPrice) : "—"}
+                        </TableCell>
+                      ) : null}
                       <TableCell className="text-right font-mono font-semibold">
                         {formatPrice(v.price)}
                       </TableCell>
-                      <TableCell className="text-center font-mono text-sm font-medium">
-                        {formatProfitMarginPercent(v.price, v.costPrice)}
-                      </TableCell>
+                      {isFullAdmin ? (
+                        <TableCell className="text-center font-mono text-sm font-medium">
+                          {formatProfitMarginPercent(v.price, v.costPrice)}
+                        </TableCell>
+                      ) : null}
                       <TableCell className="text-center">
                         <span className={v.stock <= 5 ? "text-destructive font-semibold" : ""}>
                           {v.stock}

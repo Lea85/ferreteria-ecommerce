@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/db";
-import { auth } from "@/lib/auth";
+import { auth, isFullAdmin } from "@/lib/auth";
 
 async function requireAdmin() {
   const session = await auth();
   if (
     !session?.user ||
-    !["ADMIN", "SUPER_ADMIN"].includes(
+    !isFullAdmin(
       String((session.user as { role?: string }).role ?? ""),
     )
   ) {
