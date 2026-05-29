@@ -14,7 +14,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useIsAdmin } from "@/hooks/use-is-admin";
 import { resolveCartQuantity } from "@/lib/cart-stock";
 import { cn, formatPrice } from "@/lib/utils";
@@ -289,36 +288,12 @@ export function ProductDetailContent({ product }: ProductDetailContentProps) {
             Agregar al carrito
           </Button>
 
-          <Tabs defaultValue="desc" className="mt-10">
-            <TabsList className="w-full justify-start">
-              <TabsTrigger value="desc">Descripción</TabsTrigger>
-              <TabsTrigger value="specs">Especificaciones</TabsTrigger>
-              <TabsTrigger value="reviews">Opiniones</TabsTrigger>
-            </TabsList>
-            <TabsContent value="desc">
+          <section className="mt-10">
+            <h2 className="text-lg font-semibold text-foreground">Descripción</h2>
+            <div className="mt-4">
               <RichTextContent content={product.description} />
-            </TabsContent>
-            <TabsContent value="specs">
-              <table className="w-full text-sm">
-                <tbody>
-                  {product.specs.map((row) => (
-                    <tr
-                      key={row.label}
-                      className="border-b border-border last:border-0"
-                    >
-                      <td className="py-2 font-medium text-muted-foreground">
-                        {row.label}
-                      </td>
-                      <td className="py-2 text-right">{row.value}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </TabsContent>
-            <TabsContent value="reviews" className="text-sm text-muted-foreground">
-              Próximamente podrás ver opiniones verificadas de compradores.
-            </TabsContent>
-          </Tabs>
+            </div>
+          </section>
         </div>
       </div>
 
