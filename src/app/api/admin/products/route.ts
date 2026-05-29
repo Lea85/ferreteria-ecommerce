@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import type { Prisma } from "@/generated/prisma";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
+import { findProductIdsByTextSearch } from "@/lib/product-search";
 
 export async function GET(request: Request) {
   try {
@@ -29,22 +30,11 @@ export async function GET(request: Request) {
     const where: Prisma.ProductWhereInput = {};
 
     if (search) {
-      where.OR = [
-        { name: { contains: search, mode: "insensitive" } },
-        { slug: { contains: search, mode: "insensitive" } },
-        { description: { contains: search, mode: "insensitive" } },
-        { shortDesc: { contains: search, mode: "insensitive" } },
-        {
-          variants: {
-            some: {
-              OR: [
-                { sku: { contains: search, mode: "insensitive" } },
-                { ean: { contains: search, mode: "insensitive" } },
-              ],
-            },
-          },
-        },
-      ];
+      const onlyActive = active === "true";
+      const searchIds = await findProductIdsByTextSearch(search, {
+        onlyActive: active === "all" ? false : onlyActive,
+      });
+      where.id = { in: searchIds.length > 0 ? searchIds : ["__no_match__"] };
     }
 
     if (active === "true") {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/db";
+import { findProductIdsByTextSearch } from "@/lib/product-search";
 
 type ListingRow = {
   id: string;
@@ -35,7 +36,7 @@ function sortProductsForListing(items: ListingRow[], sort: string) {
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const q = searchParams.get("q") || "";
+    const q = searchParams.get("q")?.trim() || "";
     const category = searchParams.get("category") || "";
     const marcas = searchParams.get("marcas") || "";
     const sort = searchParams.get("sort") || "newest";
@@ -48,11 +49,11 @@ export async function GET(request: Request) {
     const where: any = { isActive: true };
 
     if (q) {
-      where.OR = [
-        { name: { contains: q, mode: "insensitive" } },
-        { brand: { name: { contains: q, mode: "insensitive" } } },
-        { variants: { some: { sku: { contains: q, mode: "insensitive" } } } },
-      ];
+      const searchIds = await findProductIdsByTextSearch(q, { onlyActive: true });
+      if (searchIds.length === 0) {
+        return NextResponse.json({ products: [], total: 0, page, totalPages: 0 });
+      }
+      where.id = { in: searchIds };
     }
 
     if (category) {
@@ -60,8 +61,17 @@ export async function GET(request: Request) {
     }
 
     if (marcas) {
-      const brandNames = marcas.split(",").map((b) => b.trim());
-      where.brand = { name: { in: brandNames } };
+      const brandNames = marcas.split(",").map((b) => b.trim()).filter(Boolean);
+      if (brandNames.length > 0) {
+        where.AND = [
+          ...(Array.isArray(where.AND) ? where.AND : []),
+          {
+            OR: brandNames.map((name) => ({
+              brand: { name: { equals: name, mode: "insensitive" } },
+            })),
+          },
+        ];
+      }
     }
 
     if (inStock) {
