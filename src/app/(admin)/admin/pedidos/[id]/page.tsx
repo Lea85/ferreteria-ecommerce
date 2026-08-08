@@ -23,9 +23,11 @@ import {
   type PaymentMethod,
 } from "@/lib/constants";
 import { getOrderById } from "@/lib/services/order.service";
+import { isCounterPaymentMethod } from "@/lib/services/counter-sale.service";
 import { formatPrice } from "@/lib/utils";
 
 import { OrderDetailClient } from "./order-detail-client";
+import { OrderPrintButton } from "./order-print-button";
 
 const SHIPPING_METHOD_LABELS: Record<string, string> = {
   STORE_PICKUP: "Retiro en sucursal",
@@ -66,6 +68,7 @@ export default async function VentaDetallePage({ params }: PageProps) {
   const customerType = (order.customerType ?? "CONSUMER") as CustomerType;
   const status = order.status as OrderStatus;
   const paymentMethod = order.paymentMethod as PaymentMethod;
+  const isCounterSale = isCounterPaymentMethod(order.paymentMethod);
 
   const customerName =
     order.customerName ||
@@ -110,7 +113,40 @@ export default async function VentaDetallePage({ params }: PageProps) {
             <p className="mt-2 text-sm text-muted-foreground">{order.notes}</p>
           ) : null}
         </div>
-        <OrderDetailClient orderId={order.id} currentStatus={status} />
+        <div className="flex flex-wrap items-center gap-2">
+          {isCounterSale ? (
+            <OrderPrintButton
+              order={{
+                orderNumber: order.orderNumber,
+                paymentMethod: order.paymentMethod,
+                subtotal: Number(order.subtotal),
+                discountTotal: Number(order.discountTotal),
+                notes: order.notes,
+                total: Number(order.total),
+                createdAt: order.createdAt.toISOString(),
+                items: order.items.map((it) => ({
+                  productName: it.productName,
+                  variantName: it.variantName,
+                  sku: it.sku,
+                  quantity: it.quantity,
+                  unitPrice: Number(it.unitPrice),
+                  subtotal: Number(it.subtotal),
+                })),
+              }}
+            />
+          ) : null}
+          {status !== "CANCELLED" &&
+            status !== "REFUNDED" &&
+            status !== "PENDING" &&
+            status !== "PAYMENT_PENDING" && (
+              <Button variant="outline" asChild>
+                <Link href={`/admin/devoluciones?orderId=${order.id}`}>
+                  Registrar devolución
+                </Link>
+              </Button>
+            )}
+          <OrderDetailClient orderId={order.id} currentStatus={status} />
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">

@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 
-import type { Prisma } from "@/generated/prisma";
 import { prisma } from "@/lib/db";
 import { auth, isAdminRole, isFullAdmin } from "@/lib/auth";
-import { findProductIdsByTextSearch } from "@/lib/product-search";
+import { buildAdminProductsWhere, parseAdminProductsFilterParams } from "@/lib/admin-products-filters";
+import {
+  prismaErrorToProductSavePayload,
+  validateProductForSave,
+} from "@/lib/services/product-save-validation";
 
 export async function GET(request: Request) {
   try {
@@ -13,87 +16,29 @@ export async function GET(request: Request) {
     }
 
     const { searchParams } = new URL(request.url);
-    const search = searchParams.get("search")?.trim() || "";
-    const categoryParam = searchParams.get("category")?.trim();
-    const brandParam = searchParams.get("brand")?.trim();
-    const supplierParam = searchParams.get("supplier")?.trim();
-    const active = searchParams.get("active") ?? "all";
+    const filterParams = parseAdminProductsFilterParams(searchParams);
+    const search = filterParams.search?.trim() || "";
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1);
     const limit = Math.min(
       100,
       Math.max(1, parseInt(searchParams.get("limit") || "20", 10) || 20),
     );
 
-    const where: Prisma.ProductWhereInput = {};
+    const where = await buildAdminProductsWhere(filterParams);
 
-    if (search) {
-      const onlyActive = active === "true";
-      const searchIds = await findProductIdsByTextSearch(search, {
-        onlyActive: active === "all" ? false : onlyActive,
+    if (where === null) {
+      return NextResponse.json({
+        products: [],
+        total: 0,
+        page,
+        totalPages: 0,
       });
-      where.id = { in: searchIds.length > 0 ? searchIds : ["__no_match__"] };
     }
 
-    if (active === "true") {
-      where.isActive = true;
-    } else if (active === "false") {
-      where.isActive = false;
-    }
-
-    if (categoryParam) {
-      const cat = await prisma.category.findFirst({
-        where: {
-          OR: [{ id: categoryParam }, { slug: categoryParam }],
-        },
-        select: { id: true },
-      });
-      if (cat) {
-        where.categories = { some: { categoryId: cat.id } };
-      } else {
-        return NextResponse.json({
-          products: [],
-          total: 0,
-          page,
-          totalPages: 0,
-        });
-      }
-    }
-
-    if (brandParam) {
-      const brand = await prisma.brand.findFirst({
-        where: {
-          OR: [{ id: brandParam }, { slug: brandParam }],
-        },
-        select: { id: true },
-      });
-      if (brand) {
-        where.brandId = brand.id;
-      } else {
-        return NextResponse.json({
-          products: [],
-          total: 0,
-          page,
-          totalPages: 0,
-        });
-      }
-    }
-
-    if (supplierParam) {
-      const supplier = await prisma.supplier.findUnique({
-        where: { id: supplierParam },
-        select: { id: true },
-      });
-      if (supplier) {
-        where.suppliers = { some: { supplierId: supplier.id } };
-      } else {
-        return NextResponse.json({
-          products: [],
-          total: 0,
-          page,
-          totalPages: 0,
-        });
-      }
-    }
+    const orderBy =
+      search.length > 0
+        ? { name: "asc" as const }
+        : { createdAt: "desc" as const };
 
     const [total, rows] = await Promise.all([
       prisma.product.count({ where }),
@@ -101,7 +46,7 @@ export async function GET(request: Request) {
         where,
         skip: (page - 1) * limit,
         take: limit,
-        orderBy: { createdAt: "desc" },
+        orderBy,
         select: {
           id: true,
           name: true,
@@ -180,22 +125,9 @@ export async function POST(request: Request) {
 
     const body = await request.json();
 
-    if (!body.name?.trim()) {
-      return NextResponse.json({ error: "El nombre es obligatorio" }, { status: 400 });
-    }
-    if (!body.slug?.trim()) {
-      return NextResponse.json({ error: "El slug es obligatorio" }, { status: 400 });
-    }
-    if (!body.variants || body.variants.length === 0) {
-      return NextResponse.json({ error: "Debe tener al menos una variante" }, { status: 400 });
-    }
-
-    const existingSlug = await prisma.product.findUnique({
-      where: { slug: body.slug.trim() },
-      select: { id: true },
-    });
-    if (existingSlug) {
-      return NextResponse.json({ error: "Ya existe un producto con ese slug" }, { status: 409 });
+    const validationError = await validateProductForSave(body);
+    if (validationError) {
+      return NextResponse.json(validationError, { status: 400 });
     }
 
     const product = await prisma.product.create({
@@ -222,6 +154,7 @@ export async function POST(request: Request) {
             price: v.price ?? 0,
             costPrice: v.costPrice ?? null,
             comparePrice: v.comparePrice || null,
+            lowStockThreshold: v.lowStockThreshold ?? 5,
             stock: v.stock ?? 0,
             weight: v.weight || null,
           })),
@@ -270,6 +203,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, id: product.id, slug: body.slug });
   } catch (error) {
     console.error("Admin product CREATE error:", error);
-    return NextResponse.json({ error: "Error al crear el producto" }, { status: 500 });
+    const prismaPayload = prismaErrorToProductSavePayload(error);
+    if (prismaPayload) {
+      return NextResponse.json(prismaPayload, { status: 409 });
+    }
+    return NextResponse.json(
+      {
+        error: "Error al crear el producto",
+        errors: ["Error inesperado al crear el producto. Intentá de nuevo."],
+        fieldErrors: {},
+      },
+      { status: 500 },
+    );
   }
 }

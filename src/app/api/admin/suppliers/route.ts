@@ -25,10 +25,16 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search")?.trim() || "";
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1);
-    const limit = Math.min(
-      100,
-      Math.max(1, parseInt(searchParams.get("limit") || "20", 10) || 20),
-    );
+    const forFilter = searchParams.get("for") === "filter";
+    const limit = forFilter
+      ? Math.min(
+          500,
+          Math.max(1, parseInt(searchParams.get("limit") || "500", 10) || 500),
+        )
+      : Math.min(
+          100,
+          Math.max(1, parseInt(searchParams.get("limit") || "20", 10) || 20),
+        );
 
     const where: Prisma.SupplierWhereInput = {};
     if (search) {

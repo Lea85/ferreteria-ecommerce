@@ -31,17 +31,21 @@ async function main() {
   });
   console.log(`  Admin: ${admin.email}`);
 
-  // Mostrador user
+  // Mostrador user (permisos limitados en admin)
   const mostradorPassword = await bcrypt.hash("MOSTRADOR123", 10);
   const mostrador = await prisma.user.upsert({
     where: { email: "mostrador@ferrosan.com" },
-    update: {},
+    update: {
+      role: "MOSTRADOR",
+      passwordHash: mostradorPassword,
+      isApproved: true,
+    },
     create: {
       email: "mostrador@ferrosan.com",
-      name: "MOSTRADOR",
-      lastName: "",
+      name: "Mostrador",
+      lastName: "FerroSan",
       passwordHash: mostradorPassword,
-      role: "ADMIN",
+      role: "MOSTRADOR",
       customerType: "CONSUMER",
       isApproved: true,
     },

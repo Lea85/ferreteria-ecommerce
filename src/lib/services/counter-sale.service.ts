@@ -1,4 +1,11 @@
 import type { PaymentMethod } from "@/lib/constants";
+import {
+  computeCounterSaleTotals,
+  type CounterRoundingMode,
+  DEFAULT_ROUNDING_MULTIPLE,
+  isCounterDiscountPercent,
+  roundMoney,
+} from "@/lib/counter-sale-discount";
 import { prisma } from "@/lib/db";
 import { generateOrderNumber } from "@/lib/services/order.service";
 
@@ -15,6 +22,7 @@ const COUNTER_PAYMENT_METHODS: PaymentMethod[] = [
   "COUNTER_CREDIT_ABSORBE_BANCO",
   "COUNTER_DEBIT_CARD",
   "COUNTER_TRANSFER",
+  "COUNTER_MERCADOLIBRE",
 ];
 
 export function isCounterPaymentMethod(value: string): value is PaymentMethod {
@@ -58,6 +66,14 @@ export type CounterSaleOrderOptions = {
   adminUserId: string;
   adminName: string;
   paymentMethod: PaymentMethod;
+  /** Solo para COUNTER_MERCADOLIBRE: monto efectivamente cobrado. */
+  chargeTotal?: number;
+  /** Descuento mostrador: 0, 5, 10, 15, 20, 25 o 30 (%). */
+  discountPercent?: number;
+  /** Redondeo aplicado después del descuento porcentual. */
+  roundingMode?: CounterRoundingMode;
+  roundingMultiple?: number;
+  roundingManualTotal?: number;
   items: CounterSaleItemInput[];
   /** Al vender un presupuesto, se marca como SOLD en la misma transacción. */
   quoteId?: string;
@@ -72,6 +88,8 @@ export async function sellQuoteAsCounterSale(data: {
   adminUserId: string;
   adminName: string;
   paymentMethod: PaymentMethod;
+  chargeTotal?: number;
+  discountPercent?: number;
 }) {
   const quote = await prisma.quote.findUnique({
     where: { id: data.quoteId },
@@ -99,6 +117,8 @@ export async function sellQuoteAsCounterSale(data: {
     adminUserId: data.adminUserId,
     adminName: data.adminName,
     paymentMethod: data.paymentMethod,
+    chargeTotal: data.chargeTotal,
+    discountPercent: data.discountPercent,
     items: quote.items.map((item) => ({
       variantId: item.variantId,
       quantity: item.quantity,
@@ -167,6 +187,53 @@ export async function createCounterSaleOrder(data: CounterSaleOrderOptions) {
     });
   }
 
+  const discountPercent = data.discountPercent ?? 0;
+  if (!isCounterDiscountPercent(discountPercent)) {
+    throw new Error("Porcentaje de descuento inválido.");
+  }
+
+  const roundingMode = data.roundingMode ?? "none";
+  const saleTotals = computeCounterSaleTotals(subtotal, discountPercent, {
+    mode: roundingMode,
+    multiple:
+      roundingMode === "multiple"
+        ? data.roundingMultiple ?? DEFAULT_ROUNDING_MULTIPLE
+        : undefined,
+    manualTotal:
+      roundingMode === "manual" ? data.roundingManualTotal : undefined,
+  });
+
+  const totalAfterDiscount = saleTotals.totalAfterDiscount;
+
+  const orderTotal =
+    data.paymentMethod === "COUNTER_MERCADOLIBRE" && data.chargeTotal != null
+      ? data.chargeTotal
+      : saleTotals.finalTotal;
+
+  if (orderTotal <= 0) {
+    throw new Error("El total a cobrar debe ser mayor a cero.");
+  }
+
+  if (
+    data.paymentMethod === "COUNTER_MERCADOLIBRE" &&
+    data.chargeTotal == null
+  ) {
+    throw new Error("Indicá el total a cobrar para ventas MercadoLibre.");
+  }
+
+  const discountTotal = roundMoney(subtotal - orderTotal);
+  const roundingDiscount = saleTotals.roundingDiscount;
+
+  const discountNote =
+    discountPercent > 0
+      ? ` — descuento ${discountPercent}% (−${saleTotals.discountAmount.toFixed(2)})`
+      : "";
+
+  const roundingNote =
+    roundingDiscount > 0
+      ? ` — descuento redondeo (−${roundingDiscount.toFixed(2)})`
+      : "";
+
   return prisma.$transaction(async (tx) => {
     for (const item of orderItems) {
       await tx.productVariant.update({
@@ -175,9 +242,16 @@ export async function createCounterSaleOrder(data: CounterSaleOrderOptions) {
       });
     }
 
+    const mlNote =
+      data.paymentMethod === "COUNTER_MERCADOLIBRE" &&
+      data.chargeTotal != null &&
+      data.chargeTotal !== totalAfterDiscount
+        ? ` — total cobrado ML: ${orderTotal.toFixed(2)} (referencia ${totalAfterDiscount.toFixed(2)})`
+        : "";
+
     const notes = data.quoteNumber
-      ? `Compra mostrador — presupuesto ${data.quoteNumber} — operador: ${data.adminName}`
-      : `Compra mostrador — operador: ${data.adminName}`;
+      ? `Compra mostrador — presupuesto ${data.quoteNumber} — operador: ${data.adminName}${discountNote}${roundingNote}${mlNote}`
+      : `Compra mostrador — operador: ${data.adminName}${discountNote}${roundingNote}${mlNote}`;
 
     const order = await tx.order.create({
       data: {
@@ -192,10 +266,10 @@ export async function createCounterSaleOrder(data: CounterSaleOrderOptions) {
         customerPhone: data.customerPhone ?? null,
         billingName: data.customerName ?? "Consumidor final",
         subtotal,
-        discountTotal: 0,
+        discountTotal,
         shippingCost: 0,
         taxTotal: 0,
-        total: subtotal,
+        total: orderTotal,
         notes,
         items: {
           create: orderItems.map((item) => ({
@@ -258,6 +332,10 @@ export async function createCounterSaleOrder(data: CounterSaleOrderOptions) {
       orderNumber: order.orderNumber,
       paymentMethod: order.paymentMethod,
       subtotal: Number(order.subtotal),
+      discountTotal: Number(order.discountTotal),
+      discountPercent,
+      percentDiscountAmount: saleTotals.discountAmount,
+      roundingDiscount,
       total: Number(order.total),
       createdAt: order.createdAt.toISOString(),
       items: order.items.map((i) => ({

@@ -65,7 +65,20 @@ function parseDraftFromQuery(q: {
   };
 }
 
-export function FacetedFilters() {
+type FacetedFiltersProps = {
+  /** Marcas presentes en los resultados de búsqueda actuales. */
+  scopeBrands?: { name: string; count?: number }[];
+  /** Categorías presentes en los resultados de búsqueda actuales. */
+  scopeCategories?: { name: string; slug: string; count?: number }[];
+  /** Solo marca y categoría (sin precio ni stock). */
+  searchResultsMode?: boolean;
+};
+
+export function FacetedFilters({
+  scopeBrands,
+  scopeCategories,
+  searchResultsMode = false,
+}: FacetedFiltersProps = {}) {
   const [, setPage] = useQueryState("page", parseAsInteger.withDefault(1));
   const [query, setQuery] = useQueryStates(storefrontFilterParsers, {
     history: "replace",
@@ -80,15 +93,40 @@ export function FacetedFilters() {
     setDraft(parseDraftFromQuery(query));
   }, [query.min, query.max, query.marcas, query.category, query.stock]);
 
+  const scopedBrandNames = useMemo(
+    () => scopeBrands?.map((b) => b.name) ?? null,
+    [scopeBrands],
+  );
+  const scopedCategories = useMemo(
+    () => scopeCategories ?? null,
+    [scopeCategories],
+  );
+
   useEffect(() => {
+    if (scopedBrandNames) {
+      setBrandList(scopedBrandNames);
+    }
+    if (scopedCategories) {
+      setCatList(
+        scopedCategories.map((c) => ({
+          id: c.slug,
+          name: c.name,
+          slug: c.slug,
+        })),
+      );
+    }
+  }, [scopedBrandNames, scopedCategories]);
+
+  useEffect(() => {
+    if (scopedBrandNames || scopedCategories) return;
     fetch("/api/storefront/home")
       .then((r) => r.json())
       .then((d) => {
-        if (d.brands) setBrandList(d.brands.map((b: any) => b.name));
+        if (d.brands) setBrandList(d.brands.map((b: { name: string }) => b.name));
         if (d.categories) setCatList(d.categories);
       })
       .catch(() => {});
-  }, []);
+  }, [scopedBrandNames, scopedCategories]);
 
   function apply() {
     void setPage(1);
@@ -129,10 +167,26 @@ export function FacetedFilters() {
     });
   }
 
+  const brandLabel = (b: string) => {
+    const hit = scopeBrands?.find((x) => x.name === b);
+    return hit?.count != null ? `${b} (${hit.count})` : b;
+  };
+
+  const categoryLabel = (c: { name: string; slug: string }) => {
+    const hit = scopeCategories?.find((x) => x.slug === c.slug);
+    return hit?.count != null ? `${c.name} (${hit.count})` : c.name;
+  };
+
   const filterBody = (
     <div className="space-y-6">
       <div className="space-y-3 md:hidden">
-        <Accordion type="multiple" defaultValue={["precio", "marca", "cat", "stock"]}>
+        <Accordion
+          type="multiple"
+          defaultValue={
+            searchResultsMode ? ["marca", "cat"] : ["precio", "marca", "cat", "stock"]
+          }
+        >
+          {!searchResultsMode ? (
           <AccordionItem value="precio">
             <AccordionTrigger>Precio</AccordionTrigger>
             <AccordionContent>
@@ -164,21 +218,28 @@ export function FacetedFilters() {
               </div>
             </AccordionContent>
           </AccordionItem>
+          ) : null}
           <AccordionItem value="marca">
             <AccordionTrigger>Marca</AccordionTrigger>
             <AccordionContent className="space-y-3">
-              {brandList.map((b) => (
-                <label
-                  key={b}
-                  className="flex cursor-pointer items-center gap-2 text-sm"
-                >
-                  <Checkbox
-                    checked={draft.brands.has(b)}
-                    onCheckedChange={() => toggleBrand(b)}
-                  />
-                  {b}
-                </label>
-              ))}
+              {brandList.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No hay marcas en estos resultados.
+                </p>
+              ) : (
+                brandList.map((b) => (
+                  <label
+                    key={b}
+                    className="flex cursor-pointer items-center gap-2 text-sm"
+                  >
+                    <Checkbox
+                      checked={draft.brands.has(b)}
+                      onCheckedChange={() => toggleBrand(b)}
+                    />
+                    {brandLabel(b)}
+                  </label>
+                ))
+              )}
             </AccordionContent>
           </AccordionItem>
           <AccordionItem value="cat">
@@ -200,13 +261,14 @@ export function FacetedFilters() {
                   <SelectItem value="all">Todas</SelectItem>
                   {catList.map((c) => (
                     <SelectItem key={c.id} value={c.slug}>
-                      {c.name}
+                      {categoryLabel(c)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </AccordionContent>
           </AccordionItem>
+          {!searchResultsMode ? (
           <AccordionItem value="stock">
             <AccordionTrigger>Disponibilidad</AccordionTrigger>
             <AccordionContent>
@@ -224,10 +286,12 @@ export function FacetedFilters() {
               </div>
             </AccordionContent>
           </AccordionItem>
+          ) : null}
         </Accordion>
       </div>
 
       <div className="hidden space-y-8 md:block">
+        {!searchResultsMode ? (
         <div>
           <h3 className="mb-3 text-sm font-semibold">Precio</h3>
           <div className="flex gap-2">
@@ -257,21 +321,28 @@ export function FacetedFilters() {
             </div>
           </div>
         </div>
+        ) : null}
         <div>
           <h3 className="mb-3 text-sm font-semibold">Marca</h3>
           <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
-            {brandList.map((b) => (
-              <label
-                key={b}
-                className="flex cursor-pointer items-center gap-2 text-sm"
-              >
-                <Checkbox
-                  checked={draft.brands.has(b)}
-                  onCheckedChange={() => toggleBrand(b)}
-                />
-                {b}
-              </label>
-            ))}
+            {brandList.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No hay marcas en estos resultados.
+              </p>
+            ) : (
+              brandList.map((b) => (
+                <label
+                  key={b}
+                  className="flex cursor-pointer items-center gap-2 text-sm"
+                >
+                  <Checkbox
+                    checked={draft.brands.has(b)}
+                    onCheckedChange={() => toggleBrand(b)}
+                  />
+                  {brandLabel(b)}
+                </label>
+              ))
+            )}
           </div>
         </div>
         <div>
@@ -292,12 +363,13 @@ export function FacetedFilters() {
               <SelectItem value="all">Todas</SelectItem>
               {catList.map((c) => (
                 <SelectItem key={c.id} value={c.slug}>
-                  {c.name}
+                  {categoryLabel(c)}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
+        {!searchResultsMode ? (
         <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
           <Label htmlFor="solo-stock-d" className="cursor-pointer">
             Solo con stock
@@ -310,6 +382,7 @@ export function FacetedFilters() {
             }
           />
         </div>
+        ) : null}
       </div>
 
       <div className="flex flex-col gap-2 sm:flex-row">
@@ -329,7 +402,9 @@ export function FacetedFilters() {
 
   return (
     <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
-      <h2 className="mb-4 text-base font-bold text-foreground">Filtros</h2>
+      <h2 className="mb-4 text-base font-bold text-foreground">
+        {searchResultsMode ? "Filtrar resultados" : "Filtros"}
+      </h2>
       {filterBody}
     </div>
   );

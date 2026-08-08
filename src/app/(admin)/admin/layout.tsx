@@ -1,7 +1,7 @@
 import { auth, canAccessAdminPanel } from "@/auth";
 import { AdminHeader } from "@/components/admin/AdminHeader";
+import { AdminRoleProvider } from "@/components/admin/admin-role-context";
 import { Sidebar } from "@/components/admin/Sidebar";
-import { AuthSessionProvider } from "@/components/providers/session-provider";
 
 export const dynamic = "force-dynamic";
 
@@ -41,15 +41,17 @@ export default async function AdminLayout({
     );
   }
 
+  const role = (user as { role?: string } | undefined)?.role ?? "MOSTRADOR";
+
   return (
-    <AuthSessionProvider>
+    <AdminRoleProvider role={role}>
       <div className="min-h-screen bg-[#f8fafc]">
         <Sidebar
           user={{
             name: user?.name,
             email: user?.email,
           }}
-          role={(user as { role?: string } | undefined)?.role}
+          role={role}
         />
         <div className="lg:pl-64">
           <AdminHeader
@@ -63,6 +65,6 @@ export default async function AdminLayout({
           </main>
         </div>
       </div>
-    </AuthSessionProvider>
+    </AdminRoleProvider>
   );
 }

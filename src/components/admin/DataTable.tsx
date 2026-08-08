@@ -56,6 +56,8 @@ export type DataTableProps<T extends { id: string }> = {
     selectedIds: Set<string>;
     onSelectionChange: (ids: Set<string>) => void;
   };
+  /** Contenido alineado a la derecha, sobre la tabla (p. ej. exportar Excel). */
+  headerActions?: ReactNode;
 };
 
 function getCellValue<T>(row: T, col: DataTableColumn<T>): unknown {
@@ -78,6 +80,7 @@ export function DataTable<T extends { id: string }>({
   isLoading = false,
   showCheckbox = true,
   selection,
+  headerActions,
 }: DataTableProps<T>) {
   const [internalSearch, setInternalSearch] = useState("");
   const [sortCol, setSortCol] = useState<string | null>(null);
@@ -203,6 +206,11 @@ export function DataTable<T extends { id: string }>({
           onChange={(e) => setSearchValue(e.target.value)}
           className="max-w-sm border-border bg-background"
         />
+        {headerActions ? (
+          <div className="flex shrink-0 items-center justify-end gap-2">
+            {headerActions}
+          </div>
+        ) : null}
       </div>
 
       <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">

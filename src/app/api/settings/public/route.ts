@@ -8,6 +8,7 @@ const PUBLIC_KEYS = [
   "store_address",
   "store_phone",
   "google_maps_address",
+  "google_maps_api_key",
   "whatsapp_number",
   "whatsapp_message",
   "whatsapp_floating",

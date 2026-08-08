@@ -25,8 +25,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { COUNTER_PAYMENT_OPTIONS, type CounterPaymentMethod } from "@/lib/constants";
-import { resolveQuoteStoreBranding } from "@/lib/quote-branding";
+import {
+  COUNTER_DISCOUNT_PERCENTS,
+  COUNTER_ROUNDING_OPTIONS,
+  computeCounterSaleTotals,
+  DEFAULT_ROUNDING_MULTIPLE,
+  roundMoney,
+  type CounterRoundingMode,
+} from "@/lib/counter-sale-discount";
+import { COUNTER_PAYMENT_OPTIONS, counterPaymentAllowsCustomTotal, type CounterPaymentMethod } from "@/lib/constants";
+import { printQuote } from "@/lib/quote-print";
 import { cn, formatPrice } from "@/lib/utils";
 import { useCartStockSync } from "@/hooks/use-cart-stock-sync";
 import {
@@ -54,6 +62,13 @@ export default function CarritoPage() {
   const [generatingQuote, setGeneratingQuote] = useState(false);
   const [counterModalOpen, setCounterModalOpen] = useState(false);
   const [counterPayment, setCounterPayment] = useState<CounterPaymentMethod>("COUNTER_CASH");
+  const [counterDiscountPercent, setCounterDiscountPercent] = useState(0);
+  const [roundingMode, setRoundingMode] = useState<CounterRoundingMode>("none");
+  const [roundingMultiple, setRoundingMultiple] = useState(
+    String(DEFAULT_ROUNDING_MULTIPLE),
+  );
+  const [roundingManualTotal, setRoundingManualTotal] = useState("");
+  const [counterChargeTotal, setCounterChargeTotal] = useState("");
   const [processingCounterSale, setProcessingCounterSale] = useState(false);
 
   useEffect(() => {
@@ -74,6 +89,52 @@ export default function CarritoPage() {
 
   async function handleCounterSale() {
     if (items.length === 0) return;
+
+    try {
+      const totalsPreview = computeCounterSaleTotals(
+        summary.subtotal,
+        counterDiscountPercent,
+        {
+          mode: roundingMode,
+          multiple:
+            roundingMode === "multiple"
+              ? Number(roundingMultiple)
+              : undefined,
+          manualTotal:
+            roundingMode === "manual"
+              ? Number(roundingManualTotal)
+              : undefined,
+        },
+      );
+
+      if (
+        roundingMode === "manual" &&
+        Number(roundingManualTotal) >= totalsPreview.totalAfterDiscount
+      ) {
+        toast.error(
+          "El total manual debe ser menor al importe con el descuento aplicado.",
+        );
+        return;
+      }
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Datos de redondeo inválidos.",
+      );
+      return;
+    }
+
+    const chargeTotal = counterPaymentAllowsCustomTotal(counterPayment)
+      ? Number(counterChargeTotal)
+      : undefined;
+
+    if (
+      counterPaymentAllowsCustomTotal(counterPayment) &&
+      (!Number.isFinite(chargeTotal) || chargeTotal! <= 0)
+    ) {
+      toast.error("Indicá un total a cobrar válido para MercadoLibre.");
+      return;
+    }
+
     setProcessingCounterSale(true);
     try {
       const res = await fetch("/api/admin/counter-sale", {
@@ -81,6 +142,15 @@ export default function CarritoPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           paymentMethod: counterPayment,
+          discountPercent: counterDiscountPercent,
+          roundingMode,
+          ...(roundingMode === "multiple"
+            ? { roundingMultiple: Number(roundingMultiple) }
+            : {}),
+          ...(roundingMode === "manual"
+            ? { roundingManualTotal: Number(roundingManualTotal) }
+            : {}),
+          ...(chargeTotal != null ? { chargeTotal } : {}),
           items: items.map((i) => ({
             variantId: i.variantId,
             quantity: i.quantity,
@@ -127,146 +197,35 @@ export default function CarritoPage() {
 
       toast.success(`Presupuesto ${data.quote.quoteNumber} generado`);
 
-      generateQuotePDF(data.quote, data.storeSettings || {});
+      printQuote(
+        {
+          quoteNumber: data.quote.quoteNumber,
+          createdAt: data.quote.createdAt,
+          validUntil: data.quote.validUntil,
+          subtotal: Number(data.quote.subtotal),
+          total: Number(data.quote.total),
+          items: data.quote.items.map((item: {
+            sku: string;
+            productName: string;
+            variantName?: string | null;
+            quantity: number;
+            unitPrice: number;
+            subtotal: number;
+          }) => ({
+            sku: item.sku,
+            productName: item.productName,
+            variantName: item.variantName,
+            quantity: item.quantity,
+            unitPrice: Number(item.unitPrice),
+            subtotal: Number(item.subtotal),
+          })),
+        },
+        data.storeSettings || {},
+      );
     } catch {
       toast.error("Error al generar presupuesto");
     } finally {
       setGeneratingQuote(false);
-    }
-  }
-
-  function generateQuotePDF(
-    quote: any,
-    storeSettings: Record<string, string>,
-  ) {
-    const {
-      storeName,
-      storeAddress,
-      storePhone,
-      storeEmail,
-      validityDays,
-    } = resolveQuoteStoreBranding(storeSettings);
-
-    const validUntil = new Date(quote.validUntil).toLocaleDateString("es-AR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
-    const createdAt = new Date(quote.createdAt).toLocaleDateString("es-AR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
-
-    const itemRows = quote.items
-      .map(
-        (item: any) =>
-          `<tr>
-            <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-family:monospace;font-size:12px">${item.sku}</td>
-            <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px">${item.productName}${item.variantName ? ` - ${item.variantName}` : ""}</td>
-            <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:center">${item.quantity}</td>
-            <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:right;font-family:monospace">$${Number(item.unitPrice).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
-            <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:600;font-family:monospace">$${Number(item.subtotal).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
-          </tr>`,
-      )
-      .join("");
-
-    const html = `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <title>Presupuesto ${quote.quoteNumber}</title>
-  <style>
-    @page { size: A4; margin: 20mm; }
-    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #1f2937; margin: 0; padding: 0; }
-    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 3px solid #f97316; }
-    .logo-section h1 { margin: 0; font-size: 28px; color: #f97316; }
-    .logo-section p { margin: 4px 0 0; font-size: 12px; color: #6b7280; }
-    .quote-info { text-align: right; }
-    .quote-info h2 { margin: 0; font-size: 20px; color: #374151; }
-    .quote-info p { margin: 4px 0 0; font-size: 13px; color: #6b7280; }
-    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-    th { background: #f97316; color: white; padding: 10px 12px; text-align: left; font-size: 13px; font-weight: 600; }
-    th:nth-child(3), th:nth-child(4), th:nth-child(5) { text-align: center; }
-    th:nth-child(4), th:nth-child(5) { text-align: right; }
-    .totals { margin-top: 20px; text-align: right; }
-    .totals table { width: 300px; margin-left: auto; }
-    .totals td { padding: 6px 12px; font-size: 14px; }
-    .totals .total-row td { font-size: 18px; font-weight: 700; border-top: 2px solid #f97316; padding-top: 12px; }
-    .validity { margin-top: 30px; padding: 16px; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; text-align: center; }
-    .validity p { margin: 0; font-size: 14px; color: #9a3412; font-weight: 600; }
-    .validity span { font-size: 12px; color: #c2410c; }
-    .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 11px; color: #9ca3af; }
-    .footer p { margin: 2px 0; }
-    @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div class="logo-section">
-      <h1>${storeName}</h1>
-      ${storeAddress ? `<p>${storeAddress}</p>` : ""}
-      ${storePhone ? `<p>Tel: ${storePhone}</p>` : ""}
-      ${storeEmail ? `<p>Email: ${storeEmail}</p>` : ""}
-    </div>
-    <div class="quote-info">
-      <h2>PRESUPUESTO</h2>
-      <p><strong>N°:</strong> ${quote.quoteNumber}</p>
-      <p><strong>Fecha:</strong> ${createdAt}</p>
-      <p><strong>Válido hasta:</strong> ${validUntil}</p>
-    </div>
-  </div>
-
-  <table>
-    <thead>
-      <tr>
-        <th>SKU</th>
-        <th>Descripción</th>
-        <th>Cant.</th>
-        <th>P. Unit.</th>
-        <th>Total</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${itemRows}
-    </tbody>
-  </table>
-
-  <div class="totals">
-    <table>
-      <tr>
-        <td style="color:#6b7280">Subtotal</td>
-        <td style="text-align:right;font-family:monospace">$${Number(quote.subtotal).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
-      </tr>
-      <tr class="total-row">
-        <td>TOTAL</td>
-        <td style="text-align:right;font-family:monospace;color:#f97316">$${Number(quote.total).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
-      </tr>
-    </table>
-  </div>
-
-  <div class="validity">
-    <p>Presupuesto válido por ${validityDays} días hábiles</p>
-    <span>Vencimiento: ${validUntil}</span>
-  </div>
-
-  <div class="footer">
-    <p><strong>${storeName}</strong></p>
-    ${storeAddress ? `<p>${storeAddress}</p>` : ""}
-    ${storePhone ? `<p>Tel: ${storePhone}</p>` : ""}
-    ${storeEmail ? `<p>Email: ${storeEmail}</p>` : ""}
-    <p style="margin-top:8px">Este presupuesto no constituye factura. Los precios pueden variar sin previo aviso una vez vencido el plazo de validez.</p>
-  </div>
-</body>
-</html>`;
-
-    const printWindow = window.open("", "_blank");
-    if (printWindow) {
-      printWindow.document.write(html);
-      printWindow.document.close();
-      printWindow.onload = () => {
-        printWindow.print();
-      };
     }
   }
 
@@ -281,6 +240,82 @@ export default function CarritoPage() {
     () => ({ subtotal, discount, total }),
     [subtotal, discount, total],
   );
+
+  const counterSaleAmounts = useMemo(() => {
+    try {
+      return computeCounterSaleTotals(summary.subtotal, counterDiscountPercent, {
+        mode: roundingMode,
+        multiple:
+          roundingMode === "multiple" ? Number(roundingMultiple) : undefined,
+        manualTotal:
+          roundingMode === "manual" ? Number(roundingManualTotal) : undefined,
+      });
+    } catch {
+      return computeCounterSaleTotals(summary.subtotal, counterDiscountPercent, {
+        mode: "none",
+      });
+    }
+  }, [
+    summary.subtotal,
+    counterDiscountPercent,
+    roundingMode,
+    roundingMultiple,
+    roundingManualTotal,
+  ]);
+
+  function syncChargeTotalFromTotals(
+    totals: ReturnType<typeof computeCounterSaleTotals>,
+  ) {
+    if (counterPaymentAllowsCustomTotal(counterPayment)) {
+      setCounterChargeTotal(String(totals.finalTotal));
+    }
+  }
+
+  function openCounterSaleModal() {
+    setCounterDiscountPercent(0);
+    setRoundingMode("none");
+    setRoundingMultiple(String(DEFAULT_ROUNDING_MULTIPLE));
+    setRoundingManualTotal("");
+    setCounterPayment("COUNTER_CASH");
+    setCounterChargeTotal(String(summary.subtotal));
+    setCounterModalOpen(true);
+  }
+
+  function applyCounterDiscountPercent(percent: number) {
+    setCounterDiscountPercent(percent);
+    const totals = computeCounterSaleTotals(summary.subtotal, percent, {
+      mode: roundingMode,
+      multiple:
+        roundingMode === "multiple" ? Number(roundingMultiple) : undefined,
+      manualTotal:
+        roundingMode === "manual" ? Number(roundingManualTotal) : undefined,
+    });
+    syncChargeTotalFromTotals(totals);
+  }
+
+  function applyRoundingMode(mode: CounterRoundingMode) {
+    let manualValue = roundingManualTotal;
+    if (mode === "manual" && !manualValue) {
+      const afterDiscount = computeCounterSaleTotals(
+        summary.subtotal,
+        counterDiscountPercent,
+        { mode: "none" },
+      ).totalAfterDiscount;
+      const suggested =
+        afterDiscount > 1
+          ? roundMoney(Math.floor(afterDiscount - 1))
+          : roundMoney(afterDiscount / 2);
+      manualValue = String(suggested);
+      setRoundingManualTotal(manualValue);
+    }
+    setRoundingMode(mode);
+    const totals = computeCounterSaleTotals(summary.subtotal, counterDiscountPercent, {
+      mode,
+      multiple: mode === "multiple" ? Number(roundingMultiple) : undefined,
+      manualTotal: mode === "manual" ? Number(manualValue) : undefined,
+    });
+    syncChargeTotalFromTotals(totals);
+  }
 
   if (empty) {
     return (
@@ -463,7 +498,7 @@ export default function CarritoPage() {
             <Button
               type="button"
               className="mt-3 w-full gap-2 border border-emerald-300 bg-emerald-100 text-emerald-900 hover:bg-emerald-200"
-              onClick={() => setCounterModalOpen(true)}
+              onClick={openCounterSaleModal}
             >
               <Store className="size-4" />
               Compra Mostrador
@@ -500,10 +535,34 @@ export default function CarritoPage() {
             descontará el stock al confirmar.
           </p>
           <div className="space-y-2">
+            <Label htmlFor="counter-discount">Descuento</Label>
+            <Select
+              value={String(counterDiscountPercent)}
+              onValueChange={(v) => applyCounterDiscountPercent(Number(v))}
+            >
+              <SelectTrigger id="counter-discount" className="w-full">
+                <SelectValue placeholder="Sin descuento" />
+              </SelectTrigger>
+              <SelectContent>
+                {COUNTER_DISCOUNT_PERCENTS.map((p) => (
+                  <SelectItem key={p} value={String(p)}>
+                    {p === 0 ? "0% (sin descuento)" : `${p}%`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
             <Label htmlFor="counter-payment">Medio de pago</Label>
             <Select
               value={counterPayment}
-              onValueChange={(v) => setCounterPayment(v as CounterPaymentMethod)}
+              onValueChange={(v) => {
+                const method = v as CounterPaymentMethod;
+                setCounterPayment(method);
+                if (counterPaymentAllowsCustomTotal(method)) {
+                  setCounterChargeTotal(String(counterSaleAmounts.finalTotal));
+                }
+              }}
             >
               <SelectTrigger id="counter-payment" className="w-full">
                 <SelectValue placeholder="Elegir medio de pago" />
@@ -517,11 +576,133 @@ export default function CarritoPage() {
               </SelectContent>
             </Select>
           </div>
-          <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Total a cobrar</span>
-              <span className="font-bold">{formatPrice(summary.total)}</span>
+          <div className="space-y-2">
+            <Label htmlFor="counter-rounding">Redondeo</Label>
+            <Select
+              value={roundingMode}
+              onValueChange={(v) => applyRoundingMode(v as CounterRoundingMode)}
+            >
+              <SelectTrigger id="counter-rounding" className="w-full">
+                <SelectValue placeholder="Sin redondeo" />
+              </SelectTrigger>
+              <SelectContent>
+                {COUNTER_ROUNDING_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {roundingMode === "multiple" ? (
+            <div className="space-y-2">
+              <Label htmlFor="rounding-multiple">Múltiplo de redondeo</Label>
+              <Input
+                id="rounding-multiple"
+                type="number"
+                min="1"
+                step="1"
+                inputMode="numeric"
+                value={roundingMultiple}
+                onChange={(e) => {
+                  setRoundingMultiple(e.target.value);
+                  const totals = computeCounterSaleTotals(
+                    summary.subtotal,
+                    counterDiscountPercent,
+                    {
+                      mode: "multiple",
+                      multiple: Number(e.target.value),
+                    },
+                  );
+                  syncChargeTotalFromTotals(totals);
+                }}
+              />
+              <p className="text-xs text-muted-foreground">
+                El total baja al múltiplo inferior (ej. 321,13 con 50 → 300,00).
+              </p>
             </div>
+          ) : null}
+          {roundingMode === "manual" ? (
+            <div className="space-y-2">
+              <Label htmlFor="rounding-manual">Total final a cobrar</Label>
+              <Input
+                id="rounding-manual"
+                type="number"
+                min="0.01"
+                step="0.01"
+                inputMode="decimal"
+                value={roundingManualTotal}
+                onChange={(e) => {
+                  setRoundingManualTotal(e.target.value);
+                  const manual = Number(e.target.value);
+                  if (Number.isFinite(manual) && manual > 0) {
+                    const totals = computeCounterSaleTotals(
+                      summary.subtotal,
+                      counterDiscountPercent,
+                      { mode: "manual", manualTotal: manual },
+                    );
+                    syncChargeTotalFromTotals(totals);
+                  }
+                }}
+              />
+              <p className="text-xs text-muted-foreground">
+                Debe ser menor a{" "}
+                {formatPrice(counterSaleAmounts.totalAfterDiscount)} (importe con
+                descuento).
+              </p>
+            </div>
+          ) : null}
+          <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm space-y-2">
+            <div className="flex justify-between gap-3">
+              <span className="text-muted-foreground">Subtotal</span>
+              <span className="font-medium">{formatPrice(summary.subtotal)}</span>
+            </div>
+            {counterDiscountPercent > 0 ? (
+              <>
+                <div className="flex justify-between gap-3 text-emerald-700">
+                  <span>
+                    Descuento ({counterDiscountPercent}%)
+                  </span>
+                  <span className="font-medium">
+                    −{formatPrice(counterSaleAmounts.discountAmount)}
+                  </span>
+                </div>
+              </>
+            ) : null}
+            {counterSaleAmounts.roundingDiscount > 0 ? (
+              <div className="flex justify-between gap-3 text-emerald-700">
+                <span>Descuento redondeo</span>
+                <span className="font-medium">
+                  −{formatPrice(counterSaleAmounts.roundingDiscount)}
+                </span>
+              </div>
+            ) : null}
+            <div className="flex items-center justify-between gap-3 border-t border-border pt-2">
+              <span className="font-semibold text-foreground">Total a cobrar</span>
+              {counterPaymentAllowsCustomTotal(counterPayment) ? (
+                <Input
+                  id="counter-charge-total"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  inputMode="decimal"
+                  className="h-9 w-36 text-right font-bold"
+                  value={counterChargeTotal}
+                  onChange={(e) => setCounterChargeTotal(e.target.value)}
+                />
+              ) : (
+                <span className="text-lg font-bold">
+                  {formatPrice(counterSaleAmounts.finalTotal)}
+                </span>
+              )}
+            </div>
+            {counterPaymentAllowsCustomTotal(counterPayment) ? (
+              <p className="text-xs text-muted-foreground">
+                Referencia con descuento y redondeo:{" "}
+                {formatPrice(counterSaleAmounts.finalTotal)}. Podés ajustar el
+                monto cobrado por MercadoLibre.
+              </p>
+            ) : null}
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button

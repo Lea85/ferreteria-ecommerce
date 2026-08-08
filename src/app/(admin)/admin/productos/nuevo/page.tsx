@@ -7,6 +7,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { ProductForm, type ProductFormValues } from "@/components/admin/ProductForm";
+import { parseProductSaveApiResponse, type ProductSubmitResult } from "@/lib/product-form-errors";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -42,7 +43,7 @@ export default function NuevoProductoPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  async function handleSubmit(data: ProductFormValues) {
+  async function handleSubmit(data: ProductFormValues): Promise<ProductSubmitResult> {
     try {
       const res = await fetch("/api/admin/products", {
         method: "POST",
@@ -53,16 +54,21 @@ export default function NuevoProductoPage() {
       const result = await res.json();
 
       if (!res.ok) {
-        toast.error(result.error || "Error al crear el producto");
-        return;
+        return parseProductSaveApiResponse(result, "Error al crear el producto");
       }
 
       toast.success("Producto creado correctamente", {
         description: `${data.name} · ${data.variants.length} variante(s)`,
       });
       router.push("/admin/productos");
+      return { ok: true };
     } catch {
-      toast.error("Error de conexión al crear el producto");
+      return {
+        ok: false,
+        error: "Error de conexión al crear el producto",
+        errors: ["No se pudo conectar con el servidor. Revisá tu conexión e intentá de nuevo."],
+        fieldErrors: {},
+      };
     }
   }
 

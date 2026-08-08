@@ -8,15 +8,22 @@ import { CheckCircle2, Loader2, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { printCounterSale } from "@/lib/counter-sale-print";
+import {
+  COUNTER_SALE_PRINT_STORE_KEYS,
+  printCounterSale,
+} from "@/lib/counter-sale-print";
 import { PAYMENT_METHOD_LABELS, type PaymentMethod } from "@/lib/constants";
+import { splitCounterSaleDiscounts } from "@/lib/counter-sale-discount";
 import { formatPrice } from "@/lib/utils";
+import { useCartStore } from "@/stores/cart.store";
 
 type OrderData = {
   id: string;
   orderNumber: string;
   paymentMethod: string;
   subtotal: number;
+  discountTotal?: number;
+  notes?: string | null;
   total: number;
   createdAt: string;
   items: {
@@ -29,15 +36,18 @@ type OrderData = {
   }[];
 };
 
-const STORE_KEYS =
-  "store_name,store_address,google_maps_address,store_phone,contact_email,bank_holder";
-
 function MostradorExitoContent() {
   const params = useSearchParams();
   const orderId = params.get("orderId");
   const [order, setOrder] = useState<OrderData | null>(null);
   const [store, setStore] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (orderId) {
+      useCartStore.getState().clearCart();
+    }
+  }, [orderId]);
 
   useEffect(() => {
     if (!orderId) {
@@ -47,7 +57,9 @@ function MostradorExitoContent() {
 
     Promise.all([
       fetch(`/api/checkout/order?id=${orderId}`).then((r) => r.json()),
-      fetch(`/api/settings/public?keys=${STORE_KEYS}`).then((r) => r.json()),
+      fetch(`/api/settings/public?keys=${COUNTER_SALE_PRINT_STORE_KEYS}`).then(
+        (r) => r.json(),
+      ),
     ])
       .then(([orderData, settingsData]) => {
         if (orderData.order) setOrder(orderData.order);
@@ -81,6 +93,10 @@ function MostradorExitoContent() {
   const paymentLabel =
     PAYMENT_METHOD_LABELS[order.paymentMethod as PaymentMethod] ||
     order.paymentMethod;
+
+  const discountTotal = order.discountTotal ?? 0;
+  const { percentDiscountAmount, roundingDiscount, discountPercent } =
+    splitCounterSaleDiscounts(order.subtotal, discountTotal, order.notes);
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 px-4 py-8">
@@ -133,9 +149,34 @@ function MostradorExitoContent() {
 
           <Separator />
 
-          <div className="flex justify-between text-lg font-bold">
-            <span>Total</span>
-            <span>{formatPrice(order.total)}</span>
+          <div className="space-y-2">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Subtotal</span>
+              <span className="font-medium">{formatPrice(order.subtotal)}</span>
+            </div>
+            {percentDiscountAmount > 0 ? (
+              <div className="flex justify-between text-emerald-700">
+                <span>
+                  Descuento
+                  {discountPercent > 0 ? ` (${discountPercent}%)` : ""}
+                </span>
+                <span className="font-medium">
+                  −{formatPrice(percentDiscountAmount)}
+                </span>
+              </div>
+            ) : null}
+            {roundingDiscount > 0 ? (
+              <div className="flex justify-between text-emerald-700">
+                <span>Descuento redondeo</span>
+                <span className="font-medium">
+                  −{formatPrice(roundingDiscount)}
+                </span>
+              </div>
+            ) : null}
+            <div className="flex justify-between text-lg font-bold">
+              <span>Total a cobrar</span>
+              <span>{formatPrice(order.total)}</span>
+            </div>
           </div>
         </CardContent>
       </Card>

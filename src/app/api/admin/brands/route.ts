@@ -33,7 +33,10 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const q = searchParams.get("q") || "";
     const page = Math.max(1, Number(searchParams.get("page") || "1"));
-    const limit = Math.min(100, Math.max(1, Number(searchParams.get("limit") || "20")));
+    const forFilter = searchParams.get("for") === "filter";
+    const limit = forFilter
+      ? Math.min(500, Math.max(1, Number(searchParams.get("limit") || "500")))
+      : Math.min(100, Math.max(1, Number(searchParams.get("limit") || "20")));
 
     const where: any = {};
     if (q) {

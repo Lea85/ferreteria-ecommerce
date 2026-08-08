@@ -23,18 +23,30 @@ function RL({ htmlFor, children }: { htmlFor: string; children: React.ReactNode 
 const STORAGE_KEY = "checkout_datos";
 
 type DatosForm = {
-  nombre: string; apellido: string; email: string; telefono: string;
-  doc: string; condicionFiscal: string;
-  factNombre: string; factApellido: string; factDoc: string; factCondicion: string;
-  calle: string; piso: string; cp: string; localidad: string; provincia: string;
+  nombre: string;
+  apellido: string;
+  email: string;
+  telefono: string;
+  doc: string;
+  condicionFiscal: string;
+  factNombre: string;
+  factApellido: string;
+  factDoc: string;
+  factCondicion: string;
   sameAsBilling: boolean;
 };
 
 const EMPTY: DatosForm = {
-  nombre: "", apellido: "", email: "", telefono: "",
-  doc: "", condicionFiscal: "cf",
-  factNombre: "", factApellido: "", factDoc: "", factCondicion: "cf",
-  calle: "", piso: "", cp: "", localidad: "", provincia: "",
+  nombre: "",
+  apellido: "",
+  email: "",
+  telefono: "",
+  doc: "",
+  condicionFiscal: "cf",
+  factNombre: "",
+  factApellido: "",
+  factDoc: "",
+  factCondicion: "cf",
   sameAsBilling: true,
 };
 
@@ -48,9 +60,15 @@ export default function CheckoutDatosPage() {
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
-      try { setForm((prev) => ({ ...prev, ...JSON.parse(stored) })); } catch {}
+      try {
+        const parsed = JSON.parse(stored) as Partial<DatosForm>;
+        setForm((prev) => ({
+          ...prev,
+          ...parsed,
+        }));
+      } catch {}
     } else if (session?.user) {
-      const u = session.user as any;
+      const u = session.user as { name?: string; lastName?: string; email?: string; phone?: string };
       setForm((prev) => ({
         ...prev,
         nombre: u.name?.split(" ")[0] || "",
@@ -75,8 +93,10 @@ export default function CheckoutDatosPage() {
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_380px] lg:items-start">
       <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-        <h1 className="text-xl font-bold text-foreground">Datos de contacto y facturacion</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Completa tus datos. Los campos con <span className="text-destructive">*</span> son obligatorios.</p>
+        <h1 className="text-xl font-bold text-foreground">Datos de contacto y facturación</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Completá tus datos. La dirección de envío la vas a elegir en el siguiente paso.
+        </p>
 
         <form className="mt-8 space-y-8" onSubmit={(e) => e.preventDefault()}>
           <section className="space-y-4">
@@ -86,14 +106,14 @@ export default function CheckoutDatosPage() {
               <div className="space-y-2"><RL htmlFor="apellido">Apellido</RL><Input id="apellido" value={form.apellido} onChange={(e) => update("apellido", e.target.value)} required /></div>
             </div>
             <div className="space-y-2"><RL htmlFor="email">Email</RL><Input id="email" type="email" value={form.email} onChange={(e) => update("email", e.target.value)} required /></div>
-            <div className="space-y-2"><RL htmlFor="telefono">Telefono</RL><Input id="telefono" type="tel" value={form.telefono} onChange={(e) => update("telefono", e.target.value)} required /></div>
+            <div className="space-y-2"><RL htmlFor="telefono">Teléfono</RL><Input id="telefono" type="tel" value={form.telefono} onChange={(e) => update("telefono", e.target.value)} required /></div>
           </section>
 
           <section className="space-y-4">
-            <h2 className="text-sm font-semibold text-foreground">Facturacion</h2>
+            <h2 className="text-sm font-semibold text-foreground">Facturación</h2>
             <div className="flex items-start gap-3">
               <Checkbox id="sameBilling" checked={form.sameAsBilling} onCheckedChange={(v) => update("sameAsBilling", v === true)} />
-              <Label htmlFor="sameBilling" className="cursor-pointer text-sm">Usar los mismos datos de contacto para facturacion</Label>
+              <Label htmlFor="sameBilling" className="cursor-pointer text-sm">Usar los mismos datos de contacto para facturación</Label>
             </div>
             {!form.sameAsBilling && (
               <div className="space-y-4 rounded-lg border border-dashed border-border p-4">
@@ -103,7 +123,7 @@ export default function CheckoutDatosPage() {
                 </div>
                 <div className="space-y-2"><RL htmlFor="factDoc">DNI / CUIT</RL><Input id="factDoc" value={form.factDoc} onChange={(e) => update("factDoc", e.target.value)} required /></div>
                 <div className="space-y-2">
-                  <Label>Condicion fiscal</Label>
+                  <Label>Condición fiscal</Label>
                   <Select value={form.factCondicion} onValueChange={(v) => update("factCondicion", v)}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -117,7 +137,7 @@ export default function CheckoutDatosPage() {
             )}
             <div className="space-y-2"><RL htmlFor="doc">DNI / CUIT</RL><Input id="doc" value={form.doc} onChange={(e) => update("doc", e.target.value)} required /></div>
             <div className="space-y-2">
-              <Label>Condicion fiscal</Label>
+              <Label>Condición fiscal</Label>
               <Select value={form.condicionFiscal} onValueChange={(v) => update("condicionFiscal", v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -126,17 +146,6 @@ export default function CheckoutDatosPage() {
                   <SelectItem value="ri">Responsable inscripto</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-          </section>
-
-          <section className="space-y-4">
-            <h2 className="text-sm font-semibold text-foreground">Direccion de envio</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2 sm:col-span-2"><RL htmlFor="calle">Calle y numero</RL><Input id="calle" value={form.calle} onChange={(e) => update("calle", e.target.value)} required /></div>
-              <div className="space-y-2"><Label htmlFor="piso">Piso / Depto</Label><Input id="piso" value={form.piso} onChange={(e) => update("piso", e.target.value)} /></div>
-              <div className="space-y-2"><RL htmlFor="cp">Codigo postal</RL><Input id="cp" value={form.cp} onChange={(e) => update("cp", e.target.value)} required /></div>
-              <div className="space-y-2"><RL htmlFor="localidad">Localidad</RL><Input id="localidad" value={form.localidad} onChange={(e) => update("localidad", e.target.value)} required /></div>
-              <div className="space-y-2"><RL htmlFor="provincia">Provincia</RL><Input id="provincia" value={form.provincia} onChange={(e) => update("provincia", e.target.value)} required /></div>
             </div>
           </section>
 

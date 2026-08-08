@@ -124,7 +124,7 @@ export function SearchBar({ className, variant = "header" }: SearchBarProps) {
             setOpen(true);
           }}
           onFocus={() => setOpen(true)}
-          placeholder="Buscar productos, marcas y más..."
+          placeholder="Buscar por nombre, SKU o EAN..."
           className={cn("pl-9", variant === "header" && "md:min-w-[280px]")}
           aria-autocomplete="list"
           aria-expanded={open}

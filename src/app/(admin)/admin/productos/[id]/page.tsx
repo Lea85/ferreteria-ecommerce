@@ -1,16 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useParams, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { AdminProductsBackButton } from "@/components/admin/AdminProductsBackButton";
 import { ProductForm, type ProductFormValues } from "@/components/admin/ProductForm";
+import { resolveAdminProductsBackHref } from "@/lib/admin-products-list-url";
+import { parseProductSaveApiResponse, type ProductSubmitResult } from "@/lib/product-form-errors";
 
-export default function EditarProductoPage() {
+function EditarProductoContent() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const id = params?.id as string;
+  const backHref = resolveAdminProductsBackHref(searchParams);
 
   const [product, setProduct] = useState<any>(null);
   const [brands, setBrands] = useState<{ id: string; name: string }[]>([]);
@@ -29,17 +34,27 @@ export default function EditarProductoPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  async function handleSubmit(data: ProductFormValues) {
-    const res = await fetch(`/api/admin/products/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) {
-      toast.error("Error al guardar cambios");
-      return;
+  async function handleSubmit(data: ProductFormValues): Promise<ProductSubmitResult> {
+    try {
+      const res = await fetch(`/api/admin/products/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        return parseProductSaveApiResponse(result, "Error al guardar los cambios");
+      }
+      toast.success("Cambios guardados correctamente", { description: data.name });
+      return { ok: true };
+    } catch {
+      return {
+        ok: false,
+        error: "Error de conexión",
+        errors: ["No se pudo conectar con el servidor. Revisá tu conexión e intentá de nuevo."],
+        fieldErrors: {},
+      };
     }
-    toast.success("Cambios guardados correctamente", { description: data.name });
   }
 
   if (loading) {
@@ -50,18 +65,22 @@ export default function EditarProductoPage() {
     return (
       <div className="py-20 text-center">
         <h1 className="text-xl font-bold">Producto no encontrado</h1>
-        <Link href="/admin/productos" className="mt-4 text-sm text-primary hover:underline">Volver a productos</Link>
+        <Link href={backHref} className="mt-4 text-sm text-primary hover:underline">
+          Volver
+        </Link>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <nav className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-        <Link href="/admin/productos" className="hover:text-primary">Productos</Link>
-        <span aria-hidden>/</span>
-        <span className="font-medium text-foreground">Editar {product.name}</span>
-      </nav>
+      <div className="flex items-center gap-4">
+        <AdminProductsBackButton />
+        <div>
+          <h1 className="text-xl font-bold text-foreground">Editar producto</h1>
+          <p className="text-sm text-muted-foreground">{product.name}</p>
+        </div>
+      </div>
 
       <ProductForm
         initialData={product}
@@ -71,5 +90,19 @@ export default function EditarProductoPage() {
         submitLabel="Guardar cambios"
       />
     </div>
+  );
+}
+
+export default function EditarProductoPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="size-8 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      <EditarProductoContent />
+    </Suspense>
   );
 }

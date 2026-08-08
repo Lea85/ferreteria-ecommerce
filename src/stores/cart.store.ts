@@ -139,7 +139,19 @@ export const useCartStore = create<CartState>()(
             };
           }),
         })),
-      clearCart: () => set({ items: [] }),
+      clearCart: () => {
+        set({ items: [], isOpen: false });
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem(
+              "ferreteria-cart",
+              JSON.stringify({ state: { items: [] }, version: 0 }),
+            );
+          } catch {
+            /* ignore quota / private mode */
+          }
+        }
+      },
       getTotalCount: () =>
         get().items.reduce((sum, i) => sum + i.quantity, 0),
       getItemCount: () =>

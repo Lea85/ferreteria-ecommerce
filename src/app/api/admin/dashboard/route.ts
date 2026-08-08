@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/db";
-import { auth, isAdminRole } from "@/lib/auth";
+import { auth, isAdminRole, isFullAdmin } from "@/lib/auth";
+import { isLowStock } from "@/lib/low-stock";
 
 export async function GET() {
   try {
@@ -13,15 +14,31 @@ export async function GET() {
       return NextResponse.json({ error: "No autorizado" }, { status: 403 });
     }
 
-    const [revenueAgg, totalOrders, totalProducts, totalCustomers] =
+    const role = (session.user as { role?: string }).role;
+    const showRevenue = isFullAdmin(role);
+
+    const [revenueAgg, returnsAgg, totalOrders, totalProducts, totalCustomers] =
       await Promise.all([
-        prisma.order.aggregate({ _sum: { total: true } }),
+        showRevenue
+          ? prisma.order.aggregate({
+              where: { status: { not: "CANCELLED" } },
+              _sum: { total: true },
+            })
+          : Promise.resolve({ _sum: { total: null } }),
+        showRevenue
+          ? prisma.orderReturn.aggregate({
+              where: { status: "COMPLETED" },
+              _sum: { total: true },
+            })
+          : Promise.resolve({ _sum: { total: null } }),
         prisma.order.count(),
         prisma.product.count({ where: { isActive: true } }),
         prisma.user.count({ where: { role: "CUSTOMER" } }),
       ]);
 
-    const totalRevenue = Number(revenueAgg._sum.total ?? 0);
+    const totalRevenue = showRevenue
+      ? Number(revenueAgg._sum.total ?? 0) - Number(returnsAgg._sum.total ?? 0)
+      : null;
 
     const recentOrders = await prisma.order.findMany({
       take: 5,
@@ -37,8 +54,36 @@ export async function GET() {
       },
     });
 
+    const pendingApprovalWhere = {
+      role: "CUSTOMER" as const,
+      isApproved: false,
+    };
+
+    const [pendingApprovalsCount, pendingApprovalUsers] = await Promise.all([
+      prisma.user.count({ where: pendingApprovalWhere }),
+      prisma.user.findMany({
+        where: pendingApprovalWhere,
+        take: 8,
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          name: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          companyName: true,
+          taxId: true,
+          customerType: true,
+          createdAt: true,
+        },
+      }),
+    ]);
+
     const lowStockCandidates = await prisma.productVariant.findMany({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        product: { isActive: true },
+      },
       select: {
         sku: true,
         stock: true,
@@ -48,7 +93,7 @@ export async function GET() {
     });
 
     const lowStock = lowStockCandidates
-      .filter((v) => v.stock <= v.lowStockThreshold)
+      .filter((v) => isLowStock(v.stock, v.lowStockThreshold))
       .sort((a, b) => a.stock - b.stock)
       .slice(0, 8)
       .map((v) => ({
@@ -69,6 +114,18 @@ export async function GET() {
         total: Number(o.total),
       })),
       lowStock,
+      pendingApprovalsCount,
+      pendingApprovals: pendingApprovalUsers.map((u) => ({
+        id: u.id,
+        name: u.name,
+        lastName: u.lastName,
+        email: u.email,
+        phone: u.phone,
+        companyName: u.companyName,
+        taxId: u.taxId,
+        customerType: u.customerType,
+        createdAt: u.createdAt,
+      })),
     });
   } catch (error) {
     console.error("Admin dashboard GET error:", error);

@@ -1,6 +1,7 @@
 import type { Prisma } from "@/generated/prisma";
 
 import { prisma } from "@/lib/db";
+import { isLowStock } from "@/lib/low-stock";
 
 export class InsufficientStockError extends Error {
   constructor(
@@ -85,7 +86,7 @@ export async function getLowStockProducts(): Promise<LowStockProductRow[]> {
     const variants = await tx.productVariant.findMany({
       where: {
         isActive: true,
-        stock: { gt: 0 },
+        product: { isActive: true },
       },
       include: {
         product: { select: { id: true, name: true, slug: true } },
@@ -93,8 +94,8 @@ export async function getLowStockProducts(): Promise<LowStockProductRow[]> {
     });
 
     return variants
-      .filter(
-        (v: (typeof variants)[number]) => v.stock <= v.lowStockThreshold,
+      .filter((v: (typeof variants)[number]) =>
+        isLowStock(v.stock, v.lowStockThreshold),
       )
       .map((v: (typeof variants)[number]) => ({
         productId: v.product.id,

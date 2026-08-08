@@ -1,9 +1,9 @@
 "use client";
 
-import { ArrowLeft, Ban, Loader2, ShoppingCart } from "lucide-react";
+import { ArrowLeft, Ban, Loader2, Printer, ShoppingCart } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -25,7 +26,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { COUNTER_PAYMENT_OPTIONS, type CounterPaymentMethod } from "@/lib/constants";
+import {
+  COUNTER_DISCOUNT_PERCENTS,
+  computeCounterDiscountAmount,
+} from "@/lib/counter-sale-discount";
+import { COUNTER_PAYMENT_OPTIONS, counterPaymentAllowsCustomTotal, type CounterPaymentMethod } from "@/lib/constants";
 import {
   Table,
   TableBody,
@@ -35,6 +40,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatPrice } from "@/lib/utils";
+import { printQuote, QUOTE_PRINT_STORE_KEYS } from "@/lib/quote-print";
 
 const STATUS_LABELS: Record<string, string> = {
   ACTIVE: "Activo",
@@ -56,27 +62,60 @@ export default function AdminPresupuestoDetallePage() {
   const id = params.id as string;
 
   const [quote, setQuote] = useState<any>(null);
+  const [storeSettings, setStoreSettings] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [sellModalOpen, setSellModalOpen] = useState(false);
   const [counterPayment, setCounterPayment] = useState<CounterPaymentMethod>("COUNTER_CASH");
+  const [counterDiscountPercent, setCounterDiscountPercent] = useState(0);
+  const [counterChargeTotal, setCounterChargeTotal] = useState("");
   const [selling, setSelling] = useState(false);
   const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
-    fetch(`/api/admin/quotes/${id}`)
-      .then((r) => r.json())
-      .then((data) => setQuote(data.quote))
+    Promise.all([
+      fetch(`/api/admin/quotes/${id}`).then((r) => r.json()),
+      fetch(`/api/settings/public?keys=${QUOTE_PRINT_STORE_KEYS}`).then((r) =>
+        r.json(),
+      ),
+    ])
+      .then(([quoteData, settingsData]) => {
+        setQuote(quoteData.quote);
+        setStoreSettings(settingsData.settings || {});
+      })
       .catch(() => toast.error("Error al cargar presupuesto"))
       .finally(() => setLoading(false));
   }, [id]);
 
+  const quoteSubtotal = Number(quote?.subtotal ?? quote?.total ?? 0);
+  const counterSaleAmounts = useMemo(
+    () => computeCounterDiscountAmount(quoteSubtotal, counterDiscountPercent),
+    [quoteSubtotal, counterDiscountPercent],
+  );
+
   async function handleSell() {
+    const chargeTotal = counterPaymentAllowsCustomTotal(counterPayment)
+      ? Number(counterChargeTotal)
+      : undefined;
+
+    if (
+      counterPaymentAllowsCustomTotal(counterPayment) &&
+      (!Number.isFinite(chargeTotal) || chargeTotal! <= 0)
+    ) {
+      toast.error("Indicá un total a cobrar válido para MercadoLibre.");
+      return;
+    }
+
     setSelling(true);
     try {
       const res = await fetch(`/api/admin/quotes/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "sell", paymentMethod: counterPayment }),
+        body: JSON.stringify({
+          action: "sell",
+          paymentMethod: counterPayment,
+          discountPercent: counterDiscountPercent,
+          ...(chargeTotal != null ? { chargeTotal } : {}),
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -134,6 +173,50 @@ export default function AdminPresupuestoDetallePage() {
   const isActive = quote.status === "ACTIVE";
   const isExpired = new Date(quote.validUntil) < new Date() && isActive;
 
+  function openSellModal() {
+    setCounterDiscountPercent(0);
+    setCounterPayment("COUNTER_CASH");
+    setCounterChargeTotal(String(quoteSubtotal));
+    setSellModalOpen(true);
+  }
+
+  function applyQuoteDiscountPercent(percent: number) {
+    setCounterDiscountPercent(percent);
+    const { totalToCharge } = computeCounterDiscountAmount(quoteSubtotal, percent);
+    if (counterPaymentAllowsCustomTotal(counterPayment)) {
+      setCounterChargeTotal(String(totalToCharge));
+    }
+  }
+
+  function handlePrintQuote() {
+    if (!quote) return;
+    printQuote(
+      {
+        quoteNumber: quote.quoteNumber,
+        createdAt: quote.createdAt,
+        validUntil: quote.validUntil,
+        subtotal: Number(quote.subtotal),
+        total: Number(quote.total),
+        items: quote.items.map((item: {
+          sku: string;
+          productName: string;
+          variantName?: string | null;
+          quantity: number;
+          unitPrice: unknown;
+          subtotal: unknown;
+        }) => ({
+          sku: item.sku,
+          productName: item.productName,
+          variantName: item.variantName,
+          quantity: item.quantity,
+          unitPrice: Number(item.unitPrice),
+          subtotal: Number(item.subtotal),
+        })),
+      },
+      storeSettings,
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -155,9 +238,20 @@ export default function AdminPresupuestoDetallePage() {
             })}
           </p>
         </div>
-        <Badge variant={STATUS_COLORS[quote.status] as any} className="text-sm">
-          {isExpired ? "Vencido" : STATUS_LABELS[quote.status] || quote.status}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="gap-2"
+            onClick={handlePrintQuote}
+          >
+            <Printer className="size-4" />
+            Imprimir
+          </Button>
+          <Badge variant={STATUS_COLORS[quote.status] as any} className="text-sm">
+            {isExpired ? "Vencido" : STATUS_LABELS[quote.status] || quote.status}
+          </Badge>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -272,7 +366,7 @@ export default function AdminPresupuestoDetallePage() {
             <div className="space-y-3">
               <Button
                 className="w-full gap-2 bg-emerald-100 text-emerald-900 hover:bg-emerald-200"
-                onClick={() => setSellModalOpen(true)}
+                onClick={openSellModal}
                 disabled={selling}
               >
                 <ShoppingCart className="size-4" />
@@ -322,10 +416,34 @@ export default function AdminPresupuestoDetallePage() {
             descontará el stock y el presupuesto quedará como vendido.
           </p>
           <div className="space-y-2">
+            <Label htmlFor="quote-counter-discount">Descuento</Label>
+            <Select
+              value={String(counterDiscountPercent)}
+              onValueChange={(v) => applyQuoteDiscountPercent(Number(v))}
+            >
+              <SelectTrigger id="quote-counter-discount" className="w-full">
+                <SelectValue placeholder="Sin descuento" />
+              </SelectTrigger>
+              <SelectContent>
+                {COUNTER_DISCOUNT_PERCENTS.map((p) => (
+                  <SelectItem key={p} value={String(p)}>
+                    {p === 0 ? "0% (sin descuento)" : `${p}%`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
             <Label htmlFor="quote-counter-payment">Medio de pago</Label>
             <Select
               value={counterPayment}
-              onValueChange={(v) => setCounterPayment(v as CounterPaymentMethod)}
+              onValueChange={(v) => {
+                const method = v as CounterPaymentMethod;
+                setCounterPayment(method);
+                if (counterPaymentAllowsCustomTotal(method)) {
+                  setCounterChargeTotal(String(counterSaleAmounts.totalToCharge));
+                }
+              }}
             >
               <SelectTrigger id="quote-counter-payment" className="w-full">
                 <SelectValue placeholder="Elegir medio de pago" />
@@ -339,11 +457,45 @@ export default function AdminPresupuestoDetallePage() {
               </SelectContent>
             </Select>
           </div>
-          <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Total a cobrar</span>
-              <span className="font-bold">{formatPrice(Number(quote.total))}</span>
+          <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm space-y-2">
+            <div className="flex justify-between gap-3">
+              <span className="text-muted-foreground">Subtotal</span>
+              <span className="font-medium">{formatPrice(quoteSubtotal)}</span>
             </div>
+            {counterDiscountPercent > 0 ? (
+              <div className="flex justify-between gap-3 text-emerald-700">
+                <span>Descuento ({counterDiscountPercent}%)</span>
+                <span className="font-medium">
+                  −{formatPrice(counterSaleAmounts.discountAmount)}
+                </span>
+              </div>
+            ) : null}
+            <div className="flex items-center justify-between gap-3 border-t border-border pt-2">
+              <span className="font-semibold text-foreground">Total a cobrar</span>
+              {counterPaymentAllowsCustomTotal(counterPayment) ? (
+                <Input
+                  id="quote-counter-charge-total"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  inputMode="decimal"
+                  className="h-9 w-36 text-right font-bold"
+                  value={counterChargeTotal}
+                  onChange={(e) => setCounterChargeTotal(e.target.value)}
+                />
+              ) : (
+                <span className="text-lg font-bold">
+                  {formatPrice(counterSaleAmounts.totalToCharge)}
+                </span>
+              )}
+            </div>
+            {counterPaymentAllowsCustomTotal(counterPayment) ? (
+              <p className="text-xs text-muted-foreground">
+                Referencia con descuento:{" "}
+                {formatPrice(counterSaleAmounts.totalToCharge)}. Podés ajustar el
+                monto cobrado por MercadoLibre.
+              </p>
+            ) : null}
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button

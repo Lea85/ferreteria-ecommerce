@@ -3,6 +3,63 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { findProductIdsByTextSearch } from "@/lib/product-search";
 
+type SearchFacets = {
+  brands: { name: string; count: number }[];
+  categories: { name: string; slug: string; count: number }[];
+};
+
+async function computeSearchFacets(
+  searchWhere: { id: { in: string[] }; isActive: boolean },
+): Promise<SearchFacets> {
+  const rows = await prisma.product.findMany({
+    where: searchWhere,
+    select: {
+      brand: { select: { name: true } },
+      categories: {
+        select: { category: { select: { name: true, slug: true } } },
+      },
+    },
+  });
+
+  const brandCounts = new Map<string, number>();
+  const categoryCounts = new Map<
+    string,
+    { name: string; slug: string; count: number }
+  >();
+
+  for (const row of rows) {
+    if (row.brand?.name) {
+      brandCounts.set(
+        row.brand.name,
+        (brandCounts.get(row.brand.name) ?? 0) + 1,
+      );
+    }
+    for (const pc of row.categories) {
+      const cat = pc.category;
+      if (!cat?.slug) continue;
+      const existing = categoryCounts.get(cat.slug);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        categoryCounts.set(cat.slug, {
+          name: cat.name,
+          slug: cat.slug,
+          count: 1,
+        });
+      }
+    }
+  }
+
+  return {
+    brands: [...brandCounts.entries()]
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => a.name.localeCompare(b.name, "es")),
+    categories: [...categoryCounts.values()].sort((a, b) =>
+      a.name.localeCompare(b.name, "es"),
+    ),
+  };
+}
+
 type ListingRow = {
   id: string;
   name: string;
@@ -47,13 +104,27 @@ export async function GET(request: Request) {
     const inStock = searchParams.get("inStock") === "true";
 
     const where: any = { isActive: true };
+    let facets: SearchFacets | null = null;
 
     if (q) {
-      const searchIds = await findProductIdsByTextSearch(q, { onlyActive: true });
+      const searchIds = await findProductIdsByTextSearch(q, {
+        onlyActive: true,
+        onlyActiveVariants: true,
+      });
       if (searchIds.length === 0) {
-        return NextResponse.json({ products: [], total: 0, page, totalPages: 0 });
+        return NextResponse.json({
+          products: [],
+          total: 0,
+          page,
+          totalPages: 0,
+          facets: { brands: [], categories: [] },
+        });
       }
       where.id = { in: searchIds };
+      facets = await computeSearchFacets({
+        id: { in: searchIds },
+        isActive: true,
+      });
     }
 
     if (category) {
@@ -124,7 +195,13 @@ export async function GET(request: Request) {
       .map((p) => p.id);
 
     if (pageIds.length === 0) {
-      return NextResponse.json({ products: [], total, page, totalPages });
+      return NextResponse.json({
+        products: [],
+        total,
+        page,
+        totalPages,
+        ...(facets ? { facets } : {}),
+      });
     }
 
     const products = await prisma.product.findMany({
@@ -185,7 +262,13 @@ export async function GET(request: Request) {
         };
       });
 
-    return NextResponse.json({ products: result, total, page, totalPages });
+    return NextResponse.json({
+      products: result,
+      total,
+      page,
+      totalPages,
+      ...(facets ? { facets } : {}),
+    });
   } catch (error) {
     console.error("Products API error:", error);
     return NextResponse.json({ products: [], total: 0, page: 1, totalPages: 0 });

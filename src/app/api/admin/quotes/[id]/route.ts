@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { auth, isAdminRole } from "@/auth";
 import type { PaymentMethod } from "@/lib/constants";
 import { prisma } from "@/lib/db";
+import { parseCounterDiscountPercent } from "@/lib/counter-sale-discount";
 import {
   isCounterPaymentMethod,
   sellQuoteAsCounterSale,
@@ -68,6 +69,35 @@ export async function PUT(
         );
       }
 
+      const chargeTotal =
+        paymentMethod === "COUNTER_MERCADOLIBRE"
+          ? Number(body.chargeTotal)
+          : undefined;
+
+      if (paymentMethod === "COUNTER_MERCADOLIBRE") {
+        if (!Number.isFinite(chargeTotal) || chargeTotal! <= 0) {
+          return NextResponse.json(
+            { error: "Indicá un total a cobrar válido para MercadoLibre." },
+            { status: 400 },
+          );
+        }
+      } else if (body.chargeTotal != null) {
+        return NextResponse.json(
+          { error: "El total personalizado solo aplica a Compra MercadoLibre." },
+          { status: 400 },
+        );
+      }
+
+      let discountPercent = 0;
+      try {
+        discountPercent = parseCounterDiscountPercent(body.discountPercent ?? 0);
+      } catch {
+        return NextResponse.json(
+          { error: "Porcentaje de descuento inválido." },
+          { status: 400 },
+        );
+      }
+
       const adminName =
         [session.user.name, (session.user as { lastName?: string }).lastName]
           .filter(Boolean)
@@ -79,6 +109,8 @@ export async function PUT(
         adminUserId: session.user.id,
         adminName,
         paymentMethod: paymentMethod as PaymentMethod,
+        chargeTotal,
+        discountPercent,
       });
 
       return NextResponse.json({

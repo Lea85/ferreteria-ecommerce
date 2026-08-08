@@ -3,6 +3,10 @@ import { NextResponse } from "next/server";
 import { auth, isAdminRole } from "@/auth";
 import type { PaymentMethod } from "@/lib/constants";
 import {
+  parseCounterDiscountPercent,
+  parseCounterRoundingMode,
+} from "@/lib/counter-sale-discount";
+import {
   createCounterSaleOrder,
   isCounterPaymentMethod,
 } from "@/lib/services/counter-sale.service";
@@ -64,6 +68,50 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Ítems inválidos." }, { status: 400 });
     }
 
+    const chargeTotal =
+      paymentMethod === "COUNTER_MERCADOLIBRE"
+        ? Number(body.chargeTotal)
+        : undefined;
+
+    if (paymentMethod === "COUNTER_MERCADOLIBRE") {
+      if (!Number.isFinite(chargeTotal) || chargeTotal! <= 0) {
+        return NextResponse.json(
+          { error: "Indicá un total a cobrar válido para MercadoLibre." },
+          { status: 400 },
+        );
+      }
+    } else if (body.chargeTotal != null) {
+      return NextResponse.json(
+        { error: "El total personalizado solo aplica a Compra MercadoLibre." },
+        { status: 400 },
+      );
+    }
+
+    let discountPercent = 0;
+    try {
+      discountPercent = parseCounterDiscountPercent(body.discountPercent ?? 0);
+    } catch {
+      return NextResponse.json(
+        { error: "Porcentaje de descuento inválido." },
+        { status: 400 },
+      );
+    }
+
+    let roundingMode = "none" as ReturnType<typeof parseCounterRoundingMode>;
+    try {
+      roundingMode = parseCounterRoundingMode(body.roundingMode ?? "none");
+    } catch {
+      return NextResponse.json(
+        { error: "Modo de redondeo inválido." },
+        { status: 400 },
+      );
+    }
+
+    const roundingMultiple =
+      roundingMode === "multiple" ? Number(body.roundingMultiple) : undefined;
+    const roundingManualTotal =
+      roundingMode === "manual" ? Number(body.roundingManualTotal) : undefined;
+
     const adminName =
       [session.user.name, (session.user as { lastName?: string }).lastName]
         .filter(Boolean)
@@ -74,6 +122,11 @@ export async function POST(request: Request) {
       adminUserId: session.user.id,
       adminName,
       paymentMethod: paymentMethod as PaymentMethod,
+      chargeTotal,
+      discountPercent,
+      roundingMode,
+      roundingMultiple,
+      roundingManualTotal,
       items: parsedItems,
     });
 

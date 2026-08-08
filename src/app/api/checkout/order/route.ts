@@ -44,6 +44,8 @@ export async function GET(request: Request) {
         shippingState: order.shippingState,
         shippingZip: order.shippingZip,
         subtotal: Number(order.subtotal),
+        discountTotal: Number(order.discountTotal),
+        notes: order.notes,
         total: Number(order.total),
         createdAt: order.createdAt.toISOString(),
         items: order.items.map((i) => ({

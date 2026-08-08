@@ -10,6 +10,7 @@ const statusStyles: Record<string, string> = {
   SHIPPED: "border-purple-200 bg-purple-50 text-purple-900",
   DELIVERED: "border-emerald-200 bg-emerald-50 text-emerald-900",
   CANCELLED: "border-red-200 bg-red-50 text-red-900",
+  PARTIALLY_REFUNDED: "border-amber-200 bg-amber-50 text-amber-800",
   REFUNDED: "border-slate-200 bg-slate-100 text-slate-700",
 };
 

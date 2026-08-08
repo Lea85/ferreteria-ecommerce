@@ -38,9 +38,10 @@ export type ProductCardProduct = {
 type ProductCardProps = {
   product: ProductCardProduct;
   className?: string;
+  layout?: "grid" | "list";
 };
 
-export function ProductCard({ product, className }: ProductCardProps) {
+export function ProductCard({ product, className, layout = "grid" }: ProductCardProps) {
   const router = useRouter();
   const addItem = useCartStore((s) => s.addItem);
   const openCart = useCartStore((s) => s.openCart);
@@ -68,6 +69,132 @@ export function ProductCard({ product, className }: ProductCardProps) {
   );
   const outOfStock = product.stock <= 0;
   const canAddToCart = Boolean(product.defaultVariantId) && (isAdmin || !outOfStock);
+
+  function handleAddToCart() {
+    if (!product.defaultVariantId) return;
+    addItem({
+      productId: product.id,
+      variantId: product.defaultVariantId,
+      name: product.name,
+      slug: product.slug,
+      image: product.image || "/placeholder-product.webp",
+      price: product.price,
+      stock: product.stock,
+      quantity: 1,
+      sku: product.defaultSku,
+    });
+    openCart();
+  }
+
+  const priceBlock = product.maxPrice ? (
+    <span className="text-lg font-bold text-primary">
+      Desde {formatPrice(product.price)} a {formatPrice(product.maxPrice)}
+    </span>
+  ) : (
+    <span className="text-lg font-bold text-primary">
+      {formatPrice(product.price)}
+    </span>
+  );
+
+  if (layout === "list") {
+    return (
+      <article
+        className={cn(
+          "group flex gap-4 rounded-xl border border-border/80 bg-card p-3 shadow-sm transition-shadow hover:shadow-md sm:items-center sm:p-4",
+          className,
+        )}
+      >
+        <Link
+          href={`/productos/${product.slug}`}
+          className="relative size-20 shrink-0 overflow-hidden rounded-lg bg-muted sm:size-24"
+        >
+          <Image
+            src={product.image || "/placeholder-product.webp"}
+            alt=""
+            fill
+            unoptimized={!!(product.image && product.image.startsWith("http"))}
+            className="object-cover transition-transform duration-500 group-hover:scale-105"
+            sizes="96px"
+          />
+          {outOfStock ? (
+            <Badge
+              variant="secondary"
+              className="absolute left-1 top-1 bg-background/90 text-[10px]"
+            >
+              Sin stock
+            </Badge>
+          ) : null}
+        </Link>
+
+        <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0 flex-1 space-y-1">
+            {product.brand ? (
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                {product.brand}
+              </p>
+            ) : null}
+            <Link href={`/productos/${product.slug}`}>
+              <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-foreground hover:text-primary sm:text-base">
+                {product.name}
+              </h3>
+            </Link>
+            <div className="flex flex-wrap items-center gap-2">
+              {onSale ? (
+                <Badge className="border-0 bg-store-orange text-store-orange-foreground">
+                  Oferta
+                </Badge>
+              ) : null}
+              {(product.variantCount ?? 0) > 1 ? (
+                <Badge variant="outline" className="text-[10px]">
+                  {product.variantCount} variantes
+                </Badge>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="flex shrink-0 flex-wrap items-center gap-3 sm:flex-col sm:items-end lg:flex-row lg:items-center">
+            <div className="flex flex-wrap items-baseline gap-2">
+              {priceBlock}
+              {onSale && !product.maxPrice ? (
+                <span className="text-sm text-muted-foreground line-through">
+                  {formatPrice(product.comparePrice!)}
+                </span>
+              ) : null}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="icon"
+                className={cn(
+                  "size-9 rounded-full border border-border",
+                  isFavorite && "text-red-500",
+                )}
+                onClick={onToggleFavorite}
+                disabled={favLoading}
+                aria-label={
+                  isFavorite ? "Quitar de favoritos" : "Agregar a favoritos"
+                }
+                aria-pressed={isFavorite}
+              >
+                <Heart className={cn("size-4", isFavorite && "fill-current")} />
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="bg-store-orange text-store-orange-foreground hover:bg-store-orange/90"
+                disabled={!canAddToCart}
+                onClick={handleAddToCart}
+              >
+                <ShoppingCart className="size-4" />
+                <span className="hidden sm:inline">Agregar</span>
+              </Button>
+            </div>
+          </div>
+        </div>
+      </article>
+    );
+  }
 
   return (
     <Card
@@ -128,15 +255,7 @@ export function ProductCard({ product, className }: ProductCardProps) {
           </h3>
         </Link>
         <div className="mt-auto flex flex-wrap items-baseline gap-2 pt-2">
-          {product.maxPrice ? (
-            <span className="text-lg font-bold text-primary">
-              Desde {formatPrice(product.price)} a {formatPrice(product.maxPrice)}
-            </span>
-          ) : (
-            <span className="text-lg font-bold text-primary">
-              {formatPrice(product.price)}
-            </span>
-          )}
+          {priceBlock}
           {onSale && !product.maxPrice ? (
             <span className="text-sm text-muted-foreground line-through">
               {formatPrice(product.comparePrice!)}
@@ -154,21 +273,7 @@ export function ProductCard({ product, className }: ProductCardProps) {
           type="button"
           className="w-full bg-store-orange text-store-orange-foreground hover:bg-store-orange/90"
           disabled={!canAddToCart}
-          onClick={() => {
-            if (!product.defaultVariantId) return;
-            addItem({
-              productId: product.id,
-              variantId: product.defaultVariantId,
-              name: product.name,
-              slug: product.slug,
-              image: product.image || "/placeholder-product.webp",
-              price: product.price,
-              stock: product.stock,
-              quantity: 1,
-              sku: product.defaultSku,
-            });
-            openCart();
-          }}
+          onClick={handleAddToCart}
         >
           <ShoppingCart className="size-4" />
           Agregar al carrito

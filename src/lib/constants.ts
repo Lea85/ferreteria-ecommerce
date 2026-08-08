@@ -3,9 +3,10 @@ export const IVA_RATE = 0.21;
 export const CURRENCY = "ARS";
 
 export const ORDER_PREFIX = "FER";
+export const RETURN_PREFIX = "DEV";
 
 export type CustomerType = "CONSUMER" | "TRADE" | "WHOLESALE";
-export type OrderStatus = "PENDING" | "PAYMENT_PENDING" | "PAYMENT_APPROVED" | "PREPARING" | "SHIPPED" | "DELIVERED" | "CANCELLED" | "REFUNDED";
+export type OrderStatus = "PENDING" | "PAYMENT_PENDING" | "PAYMENT_APPROVED" | "PREPARING" | "SHIPPED" | "DELIVERED" | "CANCELLED" | "PARTIALLY_REFUNDED" | "REFUNDED";
 export type PaymentMethod =
   | "MERCADO_PAGO"
   | "BANK_TRANSFER"
@@ -15,7 +16,8 @@ export type PaymentMethod =
   | "COUNTER_CREDIT_ABSORBE_LOCAL"
   | "COUNTER_CREDIT_ABSORBE_BANCO"
   | "COUNTER_DEBIT_CARD"
-  | "COUNTER_TRANSFER";
+  | "COUNTER_TRANSFER"
+  | "COUNTER_MERCADOLIBRE";
 export type PriceRuleType = "ROLE" | "VOLUME" | "PROMO";
 export type DiscountType = "PERCENTAGE" | "FIXED_AMOUNT";
 export type PriceRuleScope = "ALL_PRODUCTS" | "SPECIFIC_PRODUCTS" | "SPECIFIC_CATEGORIES" | "SPECIFIC_BRANDS";
@@ -36,6 +38,7 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   SHIPPED: "Despachado",
   DELIVERED: "Entregado",
   CANCELLED: "Cancelado",
+  PARTIALLY_REFUNDED: "Devolución parcial",
   REFUNDED: "Reembolsado",
 };
 
@@ -49,7 +52,23 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   COUNTER_CREDIT_ABSORBE_BANCO: "Tarjeta de crédito absorbe banco",
   COUNTER_DEBIT_CARD: "Tarjeta de débito",
   COUNTER_TRANSFER: "Transferencia",
+  COUNTER_MERCADOLIBRE: "Compra MercadoLibre",
 };
+
+const COUNTER_CREDIT_PRINT_LABEL_METHODS = new Set<PaymentMethod>([
+  "COUNTER_CREDIT_ABSORBE_LOCAL",
+  "COUNTER_CREDIT_ABSORBE_BANCO",
+]);
+
+/** Etiqueta de pago solo para impresión de venta mostrador (no altera pantalla ni admin). */
+export function getCounterSalePrintPaymentLabel(paymentMethod: string): string {
+  if (COUNTER_CREDIT_PRINT_LABEL_METHODS.has(paymentMethod as PaymentMethod)) {
+    return "Tarjeta de crédito";
+  }
+  return (
+    PAYMENT_METHOD_LABELS[paymentMethod as PaymentMethod] || paymentMethod
+  );
+}
 
 export const COUNTER_PAYMENT_OPTIONS = [
   { value: "COUNTER_CASH", label: "Efectivo" },
@@ -57,9 +76,17 @@ export const COUNTER_PAYMENT_OPTIONS = [
   { value: "COUNTER_CREDIT_ABSORBE_BANCO", label: "Tarjeta de crédito absorbe banco" },
   { value: "COUNTER_DEBIT_CARD", label: "Tarjeta de débito" },
   { value: "COUNTER_TRANSFER", label: "Transferencia" },
+  { value: "COUNTER_MERCADOLIBRE", label: "Compra MercadoLibre" },
 ] as const;
 
 export type CounterPaymentMethod = (typeof COUNTER_PAYMENT_OPTIONS)[number]["value"];
+
+/** Medios de pago mostrador que permiten editar el total a cobrar. */
+export function counterPaymentAllowsCustomTotal(
+  method: string,
+): method is "COUNTER_MERCADOLIBRE" {
+  return method === "COUNTER_MERCADOLIBRE";
+}
 
 export const PRICE_RULE_TYPE_LABELS: Record<PriceRuleType, string> = {
   ROLE: "Por tipo de cliente",

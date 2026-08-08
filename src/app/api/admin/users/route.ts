@@ -29,6 +29,7 @@ export async function GET(request: Request) {
     const search = searchParams.get("search")?.trim() || "";
     const typeParam = searchParams.get("type")?.trim();
     const roleParam = searchParams.get("role")?.trim();
+    const approvedParam = searchParams.get("approved")?.trim();
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1);
     const limit = Math.min(
       100,
@@ -51,6 +52,12 @@ export async function GET(request: Request) {
 
     if (roleParam && isUserRole(roleParam)) {
       where.role = roleParam;
+    }
+
+    if (approvedParam === "true") {
+      where.isApproved = true;
+    } else if (approvedParam === "false") {
+      where.isApproved = false;
     }
 
     const [total, users] = await Promise.all([
@@ -126,6 +133,7 @@ export async function PUT(request: Request) {
       phone,
       customerType,
       isApproved,
+      role,
     } = body as {
       id?: string;
       name?: string;
@@ -134,6 +142,7 @@ export async function PUT(request: Request) {
       phone?: string | null;
       customerType?: string;
       isApproved?: boolean;
+      role?: string;
     };
 
     if (!id) {
@@ -155,6 +164,12 @@ export async function PUT(request: Request) {
       data.customerType = customerType;
     }
     if (isApproved !== undefined) data.isApproved = isApproved;
+    if (role !== undefined) {
+      if (!isUserRole(role)) {
+        return NextResponse.json({ error: "Rol inválido" }, { status: 400 });
+      }
+      data.role = role;
+    }
 
     const { customerCategoryIds } = body as { customerCategoryIds?: string[] };
 

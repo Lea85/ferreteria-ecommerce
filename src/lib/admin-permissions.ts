@@ -4,6 +4,7 @@ export type AdminModule =
   | "dashboard"
   | "productos"
   | "ventas"
+  | "devoluciones"
   | "presupuestos"
   | "clientes"
   | "almacen"
@@ -28,6 +29,7 @@ const MOSTRADOR_MODULES: AdminModule[] = [
   "dashboard",
   "productos",
   "ventas",
+  "devoluciones",
   "presupuestos",
   "clientes",
   "almacen",

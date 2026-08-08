@@ -1,11 +1,12 @@
 "use client";
 
-import { ArrowLeft, Edit, ImageIcon, Loader2 } from "lucide-react";
+import { Edit, ImageIcon, Loader2 } from "lucide-react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useParams, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { AdminProductsBackButton } from "@/components/admin/AdminProductsBackButton";
 import { RichTextContent } from "@/components/storefront/RichTextContent";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useIsFullAdmin } from "@/hooks/use-is-admin";
+import {
+  appendAdminProductsNavParams,
+  sanitizeAdminProductsReturnTo,
+} from "@/lib/admin-products-list-url";
 import { formatProfitMarginPercent } from "@/lib/profit-margin";
 import { formatPrice } from "@/lib/utils";
 
@@ -50,10 +55,26 @@ type ProductDetail = {
   images: { url: string; altText: string }[];
 };
 
-export default function ProductoDetallePage() {
+function ProductoDetalleContent() {
   const isFullAdmin = useIsFullAdmin();
   const params = useParams();
+  const searchParams = useSearchParams();
   const id = params.id as string;
+
+  const listReturnTo =
+    sanitizeAdminProductsReturnTo(searchParams.get("returnTo")) ??
+    "/admin/productos";
+
+  const editHref = useMemo(() => {
+    const detailPath = appendAdminProductsNavParams(
+      `/admin/productos/detalle/${id}`,
+      { returnTo: listReturnTo },
+    );
+    return appendAdminProductsNavParams(`/admin/productos/${id}`, {
+      returnTo: listReturnTo,
+      back: detailPath,
+    });
+  }, [id, listReturnTo]);
 
   const [product, setProduct] = useState<ProductDetail | null>(null);
   const [brands, setBrands] = useState<{ id: string; name: string }[]>([]);
@@ -96,18 +117,14 @@ export default function ProductoDetallePage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" asChild>
-          <Link href="/admin/productos">
-            <ArrowLeft className="size-5" />
-          </Link>
-        </Button>
+        <AdminProductsBackButton />
         <div className="flex-1">
           <h1 className="text-xl font-bold text-foreground">{product.name}</h1>
           <p className="text-sm text-muted-foreground font-mono">/{product.slug}</p>
         </div>
         {isFullAdmin ? (
           <Button asChild className="gap-2">
-            <Link href={`/admin/productos/${id}`}>
+            <Link href={editHref}>
               <Edit className="size-4" />
               Editar
             </Link>
@@ -273,5 +290,19 @@ export default function ProductoDetallePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ProductoDetallePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="size-8 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      <ProductoDetalleContent />
+    </Suspense>
   );
 }

@@ -1,6 +1,11 @@
-import { PAYMENT_METHOD_LABELS, type PaymentMethod } from "@/lib/constants";
+import { getCounterSalePrintPaymentLabel } from "@/lib/constants";
+import { splitCounterSaleDiscounts } from "@/lib/counter-sale-discount";
+import { resolveQuoteStoreBranding } from "@/lib/quote-branding";
 
-type CounterSalePrintItem = {
+export const COUNTER_SALE_PRINT_STORE_KEYS =
+  "store_name,store_address,google_maps_address,whatsapp_number,contact_email";
+
+export type CounterSalePrintItem = {
   productName: string;
   variantName?: string | null;
   sku?: string | null;
@@ -9,10 +14,12 @@ type CounterSalePrintItem = {
   subtotal: number;
 };
 
-type CounterSalePrintOrder = {
+export type CounterSalePrintOrder = {
   orderNumber: string;
   paymentMethod: string;
   subtotal: number;
+  discountTotal?: number;
+  notes?: string | null;
   total: number;
   createdAt: string;
   items: CounterSalePrintItem[];
@@ -22,16 +29,13 @@ export function generateCounterSalePrintHtml(
   order: CounterSalePrintOrder,
   store: Record<string, string>,
 ): string {
-  const storeName = store.store_name || "Ferretería";
-  const legalName = store.bank_holder || storeName;
-  const address =
-    store.store_address || store.google_maps_address || "";
-  const phone = store.store_phone || "";
-  const email = store.contact_email || "";
+  const { storeName, storeAddress, storePhone, storeEmail } =
+    resolveQuoteStoreBranding(store);
 
-  const paymentLabel =
-    PAYMENT_METHOD_LABELS[order.paymentMethod as PaymentMethod] ||
-    order.paymentMethod;
+  const paymentLabel = getCounterSalePrintPaymentLabel(order.paymentMethod);
+  const discountTotal = order.discountTotal ?? 0;
+  const { percentDiscountAmount, roundingDiscount, discountPercent } =
+    splitCounterSaleDiscounts(order.subtotal, discountTotal, order.notes);
 
   const createdAt = new Date(order.createdAt).toLocaleString("es-AR", {
     day: "2-digit",
@@ -156,10 +160,9 @@ export function generateCounterSalePrintHtml(
     <div class="header">
       <div class="company">
         <h1>${storeName}</h1>
-        ${legalName !== storeName ? `<p class="legal">${legalName}</p>` : ""}
-        ${address ? `<p>${address}</p>` : ""}
-        ${phone ? `<p>Tel: ${phone}</p>` : ""}
-        ${email ? `<p>${email}</p>` : ""}
+        ${storeAddress ? `<p>${storeAddress}</p>` : ""}
+        ${storePhone ? `<p>Tel: ${storePhone}</p>` : ""}
+        ${storeEmail ? `<p>${storeEmail}</p>` : ""}
       </div>
       <div class="doc-title">
         <h2>Compra mostrador</h2>
@@ -193,8 +196,24 @@ export function generateCounterSalePrintHtml(
           <td>Subtotal</td>
           <td class="num mono">${formatMoney(order.subtotal)}</td>
         </tr>
+        ${
+          percentDiscountAmount > 0
+            ? `<tr>
+          <td>Descuento${discountPercent > 0 ? ` (${discountPercent}%)` : ""}</td>
+          <td class="num mono">−${formatMoney(percentDiscountAmount)}</td>
+        </tr>`
+            : ""
+        }
+        ${
+          roundingDiscount > 0
+            ? `<tr>
+          <td>Descuento redondeo</td>
+          <td class="num mono">−${formatMoney(roundingDiscount)}</td>
+        </tr>`
+            : ""
+        }
         <tr class="grand">
-          <td>TOTAL</td>
+          <td>TOTAL A COBRAR</td>
           <td class="num mono">${formatMoney(order.total)}</td>
         </tr>
       </table>

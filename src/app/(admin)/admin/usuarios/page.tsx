@@ -2,7 +2,8 @@
 
 import { CheckCircle2, Edit, Loader2, Tag, Trash2, XCircle } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
@@ -53,8 +54,14 @@ type UserRow = UserApi;
 
 const LIMIT = 20;
 
-export default function AdminUsuariosPage() {
-  const [typeFilter, setTypeFilter] = useState<string>("all");
+function AdminUsuariosPageInner() {
+  const searchParams = useSearchParams();
+  const [typeFilter, setTypeFilter] = useState<string>(
+    () => searchParams.get("type") ?? "all",
+  );
+  const [statusFilter, setStatusFilter] = useState<string>(
+    () => searchParams.get("approved") ?? "all",
+  );
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -69,6 +76,7 @@ export default function AdminUsuariosPage() {
     email: "",
     phone: "",
     customerType: "CONSUMER" as CustomerType,
+    role: "CUSTOMER",
     isApproved: true,
   });
   const [editCategoryIds, setEditCategoryIds] = useState<Set<string>>(new Set());
@@ -91,7 +99,7 @@ export default function AdminUsuariosPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, typeFilter]);
+  }, [debouncedSearch, typeFilter, statusFilter]);
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
@@ -99,6 +107,7 @@ export default function AdminUsuariosPage() {
       const params = new URLSearchParams();
       if (debouncedSearch) params.set("search", debouncedSearch);
       if (typeFilter !== "all") params.set("type", typeFilter);
+      if (statusFilter !== "all") params.set("approved", statusFilter);
       params.set("page", String(page));
       params.set("limit", String(LIMIT));
       const res = await fetch(`/api/admin/users?${params.toString()}`);
@@ -121,7 +130,7 @@ export default function AdminUsuariosPage() {
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch, typeFilter, page]);
+  }, [debouncedSearch, typeFilter, statusFilter, page]);
 
   useEffect(() => {
     void loadUsers();
@@ -135,6 +144,7 @@ export default function AdminUsuariosPage() {
       email: user.email,
       phone: user.phone ?? "",
       customerType: user.customerType,
+      role: user.role || "CUSTOMER",
       isApproved: user.isApproved,
     });
     setEditCategoryIds(new Set(user.customerCategoryIds || []));
@@ -154,6 +164,7 @@ export default function AdminUsuariosPage() {
           email: editForm.email.trim(),
           phone: editForm.phone.trim() || null,
           customerType: editForm.customerType,
+          role: editForm.role,
           isApproved: editForm.isApproved,
           customerCategoryIds: Array.from(editCategoryIds),
         }),
@@ -251,6 +262,25 @@ export default function AdminUsuariosPage() {
         ),
       },
       {
+        id: "role",
+        header: "Rol",
+        accessor: "role",
+        sortable: true,
+        cell: (row) => {
+          const labels: Record<string, string> = {
+            CUSTOMER: "Cliente",
+            MOSTRADOR: "Mostrador",
+            ADMIN: "Admin",
+            SUPER_ADMIN: "Super admin",
+          };
+          return (
+            <Badge variant={row.role === "CUSTOMER" ? "outline" : "default"}>
+              {labels[row.role] ?? row.role}
+            </Badge>
+          );
+        },
+      },
+      {
         id: "orders",
         header: "Pedidos",
         accessor: (row) => row._count.orders,
@@ -294,6 +324,16 @@ export default function AdminUsuariosPage() {
               Categorías de Clientes
             </Link>
           </Button>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-44 border-border">
+              <SelectValue placeholder="Estado" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos los estados</SelectItem>
+              <SelectItem value="false">Pendientes de aprobación</SelectItem>
+              <SelectItem value="true">Aprobados</SelectItem>
+            </SelectContent>
+          </Select>
           <Select value={typeFilter} onValueChange={setTypeFilter}>
             <SelectTrigger className="w-44 border-border">
               <SelectValue placeholder="Tipo" />
@@ -420,6 +460,29 @@ export default function AdminUsuariosPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-2">
+              <Label>Rol en la plataforma</Label>
+              <Select
+                value={editForm.role}
+                onValueChange={(v) =>
+                  setEditForm((f) => ({ ...f, role: v }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="CUSTOMER">Cliente</SelectItem>
+                  <SelectItem value="MOSTRADOR">Mostrador</SelectItem>
+                  <SelectItem value="ADMIN">Administrador</SelectItem>
+                  <SelectItem value="SUPER_ADMIN">Super administrador</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Administrador y mostrador habilitan venta mostrador y presupuestos.
+                La usuaria debe cerrar sesión y volver a entrar para aplicar el cambio.
+              </p>
+            </div>
             <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
               <div className="space-y-0.5">
                 <Label htmlFor="approved-switch">Cuenta aprobada</Label>
@@ -505,5 +568,19 @@ export default function AdminUsuariosPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function AdminUsuariosPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="size-8 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      <AdminUsuariosPageInner />
+    </Suspense>
   );
 }

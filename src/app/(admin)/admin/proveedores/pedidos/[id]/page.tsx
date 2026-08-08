@@ -5,6 +5,11 @@ import Link from "next/link";
 import { use, useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import {
+  SupplierOrderDraftEditor,
+  type SupplierOrderDraftItem,
+} from "@/components/admin/SupplierOrderDraftEditor";
+import { SupplierOrderMarginCell } from "@/components/admin/SupplierOrderMarginCell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { formatPrice } from "@/lib/utils";
 
 type OrderItem = {
   id: string;
@@ -26,6 +32,8 @@ type OrderItem = {
   currentStock: number;
   productId: string;
   variantId: string | null;
+  costPrice: number;
+  salePrice: number;
 };
 
 type OrderDetail = {
@@ -33,6 +41,7 @@ type OrderDetail = {
   orderNumber: string;
   status: string;
   notes: string | null;
+  supplierId: string | null;
   supplierName: string;
   items: OrderItem[];
   createdAt: string;
@@ -55,7 +64,11 @@ export default function PedidoDetallePage({
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [receivedQtys, setReceivedQtys] = useState<Record<string, number>>({});
+  const [draftSnapshot, setDraftSnapshot] = useState<SupplierOrderDraftItem[]>(
+    [],
+  );
   const [saving, setSaving] = useState(false);
+  const [sending, setSending] = useState(false);
 
   const fetchOrder = useCallback(async () => {
     setLoading(true);
@@ -66,7 +79,8 @@ export default function PedidoDetallePage({
       setOrder(data.order);
       const qtys: Record<string, number> = {};
       for (const item of data.order.items) {
-        qtys[item.id] = item.receivedQty;
+        qtys[item.id] =
+          item.receivedQty > 0 ? item.receivedQty : item.requestedQty;
       }
       setReceivedQtys(qtys);
     } catch {
@@ -86,7 +100,9 @@ export default function PedidoDetallePage({
     try {
       const items = order.items.map((item) => ({
         id: item.id,
-        receivedQty: receivedQtys[item.id] ?? item.receivedQty,
+        receivedQty:
+          receivedQtys[item.id] ??
+          (item.receivedQty > 0 ? item.receivedQty : item.requestedQty),
       }));
       const res = await fetch(`/api/admin/supplier-orders/${id}`, {
         method: "PUT",
@@ -106,18 +122,61 @@ export default function PedidoDetallePage({
     }
   }
 
+  async function handleMarkSent() {
+    setSending(true);
+    try {
+      const itemsForSend = (draftSnapshot.length > 0
+        ? draftSnapshot
+        : draftItems
+      )
+        .filter((item) => !item.id.startsWith("temp-"))
+        .map((item) => ({
+          id: item.id,
+          costPrice: item.costPrice,
+          salePrice: item.salePrice,
+        }));
+
+      const res = await fetch(`/api/admin/supplier-orders/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "SENT", items: itemsForSend }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      toast.success(
+        `Pedido marcado como enviado. Stock y precios actualizados en el catálogo.`,
+      );
+      fetchOrder();
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof Error ? err.message : "Error al marcar como enviado",
+      );
+    } finally {
+      setSending(false);
+    }
+  }
+
   async function changeStatus(status: string) {
+    if (status === "SENT") {
+      await handleMarkSent();
+      return;
+    }
     try {
       const res = await fetch(`/api/admin/supplier-orders/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
       });
-      if (!res.ok) throw new Error();
-      toast.success(`Estado actualizado a ${statusLabel[status] || status}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      toast.success(
+        `Estado actualizado a ${statusLabel[data.status || status] || status}`,
+      );
       fetchOrder();
-    } catch {
-      toast.error("Error al actualizar estado");
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof Error ? err.message : "Error al actualizar estado",
+      );
     }
   }
 
@@ -136,6 +195,19 @@ export default function PedidoDetallePage({
   }
 
   const isEditable = order.status !== "RECEIVED" && order.status !== "CANCELLED";
+  const isDraft = order.status === "DRAFT";
+
+  const draftItems: SupplierOrderDraftItem[] = order.items.map((item) => ({
+    id: item.id,
+    productId: item.productId,
+    variantId: item.variantId,
+    productName: item.productName,
+    sku: item.sku,
+    requestedQty: item.requestedQty,
+    currentStock: item.currentStock,
+    costPrice: item.costPrice,
+    salePrice: item.salePrice,
+  }));
 
   return (
     <div className="space-y-6">
@@ -170,8 +242,14 @@ export default function PedidoDetallePage({
                   size="sm"
                   variant="outline"
                   onClick={() => changeStatus("SENT")}
+                  disabled={sending}
                 >
-                  <Send className="mr-1 size-4" /> Marcar enviado
+                  {sending ? (
+                    <Loader2 className="mr-1 size-4 animate-spin" />
+                  ) : (
+                    <Send className="mr-1 size-4" />
+                  )}
+                  Marcar enviado
                 </Button>
               )}
               <Button
@@ -188,59 +266,102 @@ export default function PedidoDetallePage({
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Producto</TableHead>
-              <TableHead>SKU</TableHead>
-              <TableHead className="text-center">Stock actual</TableHead>
-              <TableHead className="text-center">Solicitado</TableHead>
-              <TableHead className="text-center">Recibido</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {order.items.map((item) => (
-              <TableRow key={item.id}>
-                <TableCell>{item.productName}</TableCell>
-                <TableCell className="font-mono text-sm">{item.sku}</TableCell>
-                <TableCell className="text-center">{item.currentStock}</TableCell>
-                <TableCell className="text-center font-semibold">
-                  {item.requestedQty}
-                </TableCell>
-                <TableCell className="text-center">
-                  {isEditable ? (
-                    <Input
-                      type="number"
-                      min={0}
-                      className="mx-auto w-20 text-center"
-                      value={receivedQtys[item.id] ?? 0}
-                      onChange={(e) =>
-                        setReceivedQtys((prev) => ({
-                          ...prev,
-                          [item.id]: Math.max(0, parseInt(e.target.value) || 0),
-                        }))
-                      }
-                    />
-                  ) : (
-                    <span
-                      className={
-                        item.receivedQty >= item.requestedQty
-                          ? "text-green-600 font-semibold"
-                          : "text-amber-600"
-                      }
-                    >
-                      {item.receivedQty}
-                    </span>
-                  )}
-                </TableCell>
+      {isDraft ? (
+        <SupplierOrderDraftEditor
+          orderId={order.id}
+          supplierId={order.supplierId}
+          items={draftItems}
+          onItemsChange={setDraftSnapshot}
+          onSaved={(items) =>
+            setOrder((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    items: items.map((item) => {
+                      const existing = prev.items.find((i) => i.id === item.id);
+                      return {
+                        ...item,
+                        receivedQty: existing?.receivedQty ?? 0,
+                      };
+                    }),
+                  }
+                : prev,
+            )
+          }
+        />
+      ) : (
+        <div className="overflow-x-auto rounded-lg border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Producto</TableHead>
+                <TableHead>SKU</TableHead>
+                <TableHead className="text-center">Stock actual</TableHead>
+                <TableHead className="text-center">Solicitado</TableHead>
+                <TableHead className="text-right">P. compra</TableHead>
+                <TableHead className="text-right">P. venta</TableHead>
+                <TableHead className="text-center">% ganancia</TableHead>
+                <TableHead className="text-center">Recibido</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+            </TableHeader>
+            <TableBody>
+              {order.items.map((item) => (
+                <TableRow key={item.id}>
+                  <TableCell>{item.productName}</TableCell>
+                  <TableCell className="font-mono text-sm">{item.sku}</TableCell>
+                  <TableCell className="text-center">{item.currentStock}</TableCell>
+                  <TableCell className="text-center font-semibold">
+                    {item.requestedQty}
+                  </TableCell>
+                  <TableCell className="text-right font-mono text-sm">
+                    {formatPrice(item.costPrice)}
+                  </TableCell>
+                  <TableCell className="text-right font-mono text-sm">
+                    {formatPrice(item.salePrice)}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <SupplierOrderMarginCell
+                      costPrice={item.costPrice}
+                      salePrice={item.salePrice}
+                    />
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {isEditable ? (
+                      <Input
+                        type="number"
+                        min={0}
+                        className="mx-auto w-20 text-center"
+                        value={receivedQtys[item.id] ?? item.requestedQty}
+                        onChange={(e) =>
+                          setReceivedQtys((prev) => ({
+                            ...prev,
+                            [item.id]: Math.max(
+                              0,
+                              parseInt(e.target.value, 10) || 0,
+                            ),
+                          }))
+                        }
+                      />
+                    ) : (
+                      <span
+                        className={
+                          item.receivedQty >= item.requestedQty
+                            ? "text-green-600 font-semibold"
+                            : "text-amber-600"
+                        }
+                      >
+                        {item.receivedQty}
+                      </span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
 
-      {isEditable && (
+      {isEditable && !isDraft && (
         <div className="flex gap-2">
           <Button onClick={handleReceive} disabled={saving}>
             {saving ? (
@@ -256,6 +377,14 @@ export default function PedidoDetallePage({
             </Link>
           </Button>
         </div>
+      )}
+
+      {isDraft && (
+        <Button asChild variant="outline">
+          <Link href="/admin/proveedores/pedidos">
+            <ArrowLeft className="mr-2 size-4" /> Volver a pedidos
+          </Link>
+        </Button>
       )}
     </div>
   );

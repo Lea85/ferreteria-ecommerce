@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Copy, ImageIcon, Link2, Loader2 as Spinner, MapPin, Plus, RefreshCw, Trash2, Upload, X } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
-import { Controller, useForm, useFieldArray, useWatch, type Control, type Resolver } from "react-hook-form";
+import { Controller, useForm, useFieldArray, useWatch, type Control, type FieldErrors, type Resolver, type UseFormReturn } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -32,6 +32,15 @@ import {
 import { RichTextEditor } from "@/components/admin/RichTextEditor";
 import { Textarea } from "@/components/ui/textarea";
 import { formatProfitMarginPercent } from "@/lib/profit-margin";
+import {
+  applyProductFieldErrors,
+  collectProductFormErrors,
+  getProductFieldError,
+  inputErrorClass,
+  sectionErrorClass,
+  showProductFormErrorsToast,
+  type ProductSubmitResult,
+} from "@/lib/product-form-errors";
 import { cn } from "@/lib/utils";
 
 function slugify(text: string): string {
@@ -50,6 +59,7 @@ const variantSchema = z.object({
   costPrice: z.coerce.number().min(0).optional().nullable(),
   price: z.coerce.number().min(0, "Precio de publicación inválido"),
   comparePrice: z.coerce.number().min(0).optional().nullable(),
+  lowStockThreshold: z.coerce.number().int().min(0),
   stock: z.coerce.number().int().min(0),
   weight: z.coerce.number().min(0).optional().nullable(),
   attributeValueIds: z.array(z.string()).optional(),
@@ -90,7 +100,7 @@ export type ProductFormProps = {
   initialData?: ProductFormInitial;
   brands: ProductFormOption[];
   categories: ProductFormOption[];
-  onSubmit: (data: ProductFormValues) => void | Promise<void>;
+  onSubmit: (data: ProductFormValues) => ProductSubmitResult | Promise<ProductSubmitResult>;
   submitLabel?: string;
   className?: string;
 };
@@ -212,7 +222,7 @@ export function ProductForm({
       metaDesc: initialData?.metaDesc ?? "",
       variants: initialData?.variants?.length
         ? initialData.variants
-        : [{ sku: "", ean: "", costPrice: null, price: 0, comparePrice: null, stock: 0, weight: null, attributeValueIds: [] }],
+        : [{ sku: "", ean: "", costPrice: null, price: 0, comparePrice: null, lowStockThreshold: 5, stock: 0, weight: null, attributeValueIds: [] }],
     }),
     [initialData],
   );
@@ -313,6 +323,7 @@ export function ProductForm({
       costPrice: null as number | null,
       price,
       comparePrice: null as number | null,
+      lowStockThreshold: 5,
       stock: 0,
       weight: null as number | null,
       attributeValueIds: c.valueIds,
@@ -410,36 +421,45 @@ export function ProductForm({
   async function handleFormSubmit(data: ProductFormValues) {
     setSubmitting(true);
     try {
-      await onSubmit({
+      const result = await onSubmit({
         ...data,
         images,
         supplierIds: Array.from(selectedSupplierIds),
-      } as any);
+      } as ProductFormValues);
+
+      if (!result.ok) {
+        applyProductFieldErrors(
+          form as unknown as UseFormReturn<Record<string, unknown>>,
+          result.fieldErrors,
+        );
+        showProductFormErrorsToast(
+          result.error || "No se pudo guardar el producto",
+          result.errors.length > 0 ? result.errors : [result.error],
+        );
+      }
     } finally {
       setSubmitting(false);
     }
   }
 
-  function handleFormError(errors: any) {
-    const messages: string[] = [];
-    if (errors.name) messages.push(`Nombre: ${errors.name.message}`);
-    if (errors.slug) messages.push(`Slug: ${errors.slug.message}`);
-    if (errors.categoryIds) messages.push(`Categorías: ${errors.categoryIds.message || "Elegí al menos una"}`);
-    if (errors.variants) {
-      if (errors.variants.message) {
-        messages.push(`Variantes: ${errors.variants.message}`);
-      } else if (Array.isArray(errors.variants)) {
-        for (let i = 0; i < errors.variants.length; i++) {
-          const ve = errors.variants[i];
-          if (ve?.sku) messages.push(`Variante ${i + 1} - SKU: ${ve.sku.message}`);
-          if (ve?.price) messages.push(`Variante ${i + 1} - Precio: ${ve.price.message}`);
-        }
-      }
-    }
-    toast.error("Faltan datos obligatorios", {
-      description: messages.length > 0 ? messages.join(" · ") : "Revisá los campos marcados con *",
-    });
+  function handleFormError(errors: FieldErrors<ProductFormValues>) {
+    const { messages, fieldErrors } = collectProductFormErrors(
+      errors as FieldErrors<Record<string, unknown>>,
+    );
+    applyProductFieldErrors(
+      form as unknown as UseFormReturn<Record<string, unknown>>,
+      fieldErrors,
+    );
+    showProductFormErrorsToast(
+      `Se encontraron ${messages.length} problema(s) en el formulario`,
+      messages,
+    );
   }
+
+  const formErrors = form.formState.errors as FieldErrors<Record<string, unknown>>;
+  const nameError = getProductFieldError(formErrors, "name");
+  const slugError = getProductFieldError(formErrors, "slug");
+  const categoryError = getProductFieldError(formErrors, "categoryIds");
 
   const { isValid } = form.formState;
   const nameVal = form.watch("name");
@@ -464,9 +484,13 @@ export function ProductForm({
         <CardContent className="grid gap-6 md:grid-cols-2">
           <div className="space-y-2 md:col-span-2">
             <Label htmlFor="name">Nombre <span className="text-destructive">*</span></Label>
-            <Input id="name" {...form.register("name")} className="border-border" />
-            {form.formState.errors.name && (
-              <p className="text-sm text-destructive">{form.formState.errors.name.message}</p>
+            <Input
+              id="name"
+              {...form.register("name")}
+              className={inputErrorClass(!!nameError, "border-border")}
+            />
+            {nameError && (
+              <p className="text-sm text-destructive">{nameError}</p>
             )}
           </div>
           <div className="space-y-2 md:col-span-2">
@@ -474,14 +498,14 @@ export function ProductForm({
             <Input
               id="slug"
               {...form.register("slug")}
-              className="border-border font-mono text-sm"
+              className={inputErrorClass(!!slugError, "border-border font-mono text-sm")}
               onChange={(e) => {
                 setSlugTouched(true);
                 form.register("slug").onChange(e);
               }}
             />
-            {form.formState.errors.slug && (
-              <p className="text-sm text-destructive">{form.formState.errors.slug.message}</p>
+            {slugError && (
+              <p className="text-sm text-destructive">{slugError}</p>
             )}
             <p className="text-xs text-muted-foreground">
               Se genera desde el nombre; podés editarlo manualmente.
@@ -542,7 +566,12 @@ export function ProductForm({
           </div>
           <div className="space-y-2 md:col-span-2">
             <Label>Categorías <span className="text-destructive">*</span></Label>
-            <div className="grid gap-2 rounded-md border border-border bg-muted/30 p-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div
+              className={sectionErrorClass(
+                !!categoryError,
+                "grid gap-2 rounded-md border border-border bg-muted/30 p-4 sm:grid-cols-2 lg:grid-cols-3",
+              )}
+            >
               {categories.map((c) => (
                 <label key={c.id} className="flex cursor-pointer items-center gap-2 text-sm">
                   <Checkbox checked={categoryIds.includes(c.id)} onCheckedChange={() => toggleCategory(c.id)} />
@@ -550,8 +579,8 @@ export function ProductForm({
                 </label>
               ))}
             </div>
-            {form.formState.errors.categoryIds && (
-              <p className="text-sm text-destructive">{form.formState.errors.categoryIds.message as string}</p>
+            {categoryError && (
+              <p className="text-sm text-destructive">{categoryError}</p>
             )}
           </div>
           <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
@@ -687,7 +716,7 @@ export function ProductForm({
             size="sm"
             className="gap-1"
             onClick={() =>
-              append({ sku: "", ean: "", costPrice: null, price: 0, comparePrice: null, stock: 0, weight: null, attributeValueIds: [] })
+              append({ sku: "", ean: "", costPrice: null, price: 0, comparePrice: null, lowStockThreshold: 5, stock: 0, weight: null, attributeValueIds: [] })
             }
           >
             <Plus className="size-4" /> Agregar variante
@@ -706,6 +735,7 @@ export function ProductForm({
                 <TableHead>Precio de compra</TableHead>
                 <TableHead>Precio de publicación <span className="text-destructive">*</span></TableHead>
                 <TableHead className="text-center">Margen</TableHead>
+                <TableHead>Stock mínimo</TableHead>
                 <TableHead>Stock</TableHead>
                 <TableHead>Peso (kg)</TableHead>
                 <TableHead className="w-12" />
@@ -715,6 +745,14 @@ export function ProductForm({
               {fields.map((field, index) => {
                 const attrLabels = getVariantAttributeLabels(
                   form.watch(`variants.${index}.attributeValueIds`),
+                );
+                const skuError = getProductFieldError(formErrors, `variants.${index}.sku`);
+                const priceError = getProductFieldError(formErrors, `variants.${index}.price`);
+                const eanError = getProductFieldError(formErrors, `variants.${index}.ean`);
+                const stockError = getProductFieldError(formErrors, `variants.${index}.stock`);
+                const costPriceError = getProductFieldError(
+                  formErrors,
+                  `variants.${index}.costPrice`,
                 );
                 return (
                   <TableRow key={field.id}>
@@ -728,10 +766,23 @@ export function ProductForm({
                       </TableCell>
                     )}
                     <TableCell>
-                      <Input {...form.register(`variants.${index}.sku`)} className="h-9 min-w-[120px] border-border" />
+                      <Input
+                        {...form.register(`variants.${index}.sku`)}
+                        className={inputErrorClass(!!skuError, "h-9 min-w-[120px] border-border")}
+                      />
+                      {skuError ? (
+                        <p className="mt-1 max-w-[160px] text-xs text-destructive">{skuError}</p>
+                      ) : null}
                     </TableCell>
                     <TableCell>
-                      <Input {...form.register(`variants.${index}.ean`)} className="h-9 min-w-[120px] border-border" placeholder="EAN-13" />
+                      <Input
+                        {...form.register(`variants.${index}.ean`)}
+                        className={inputErrorClass(!!eanError, "h-9 min-w-[120px] border-border")}
+                        placeholder="EAN-13"
+                      />
+                      {eanError ? (
+                        <p className="mt-1 max-w-[160px] text-xs text-destructive">{eanError}</p>
+                      ) : null}
                     </TableCell>
                     <TableCell>
                       <Input
@@ -740,8 +791,11 @@ export function ProductForm({
                         min={0}
                         placeholder="0.00"
                         {...form.register(`variants.${index}.costPrice`)}
-                        className="h-9 w-28 border-border"
+                        className={inputErrorClass(!!costPriceError, "h-9 w-28 border-border")}
                       />
+                      {costPriceError ? (
+                        <p className="mt-1 max-w-[120px] text-xs text-destructive">{costPriceError}</p>
+                      ) : null}
                     </TableCell>
                     <TableCell>
                       <Input
@@ -749,8 +803,11 @@ export function ProductForm({
                         step="0.01"
                         min={0}
                         {...form.register(`variants.${index}.price`)}
-                        className="h-9 w-28 border-border"
+                        className={inputErrorClass(!!priceError, "h-9 w-28 border-border")}
                       />
+                      {priceError ? (
+                        <p className="mt-1 max-w-[120px] text-xs text-destructive">{priceError}</p>
+                      ) : null}
                     </TableCell>
                     <TableCell className="text-center">
                       <VariantProfitMargin control={form.control} index={index} />
@@ -758,9 +815,21 @@ export function ProductForm({
                     <TableCell>
                       <Input
                         type="number"
-                        {...form.register(`variants.${index}.stock`)}
+                        min={0}
+                        title="Stock mínimo: se usa para alertas del dashboard y pedidos de reposición"
+                        {...form.register(`variants.${index}.lowStockThreshold`)}
                         className="h-9 w-24 border-border"
                       />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        type="number"
+                        {...form.register(`variants.${index}.stock`)}
+                        className={inputErrorClass(!!stockError, "h-9 w-24 border-border")}
+                      />
+                      {stockError ? (
+                        <p className="mt-1 max-w-[100px] text-xs text-destructive">{stockError}</p>
+                      ) : null}
                     </TableCell>
                     <TableCell>
                       <Input

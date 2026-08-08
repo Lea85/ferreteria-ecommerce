@@ -5,6 +5,10 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import {
+  SupplierOrderDraftEditor,
+  type SupplierOrderDraftItem,
+} from "@/components/admin/SupplierOrderDraftEditor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,19 +30,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type SupplierOption = { id: string; name: string };
 
-type OrderItem = {
-  id: string;
-  productName: string;
-  sku: string;
-  requestedQty: number;
-  currentStock: number;
-};
-
 type GeneratedOrder = {
   id: string;
   orderNumber: string;
+  supplierId: string | null;
   supplierName: string;
-  items: OrderItem[];
+  items: SupplierOrderDraftItem[];
   createdAt: string;
 };
 
@@ -130,9 +127,11 @@ export default function PedidosProveedoresPage() {
   function downloadCSV() {
     if (!generatedOrder) return;
     const BOM = "\uFEFF";
-    const header = "Producto,SKU,Stock Actual,Cantidad Solicitada";
+    const header =
+      "Producto,SKU,Stock Actual,Cantidad Solicitada,Precio Compra,Precio Venta";
     const rows = generatedOrder.items.map(
-      (i) => `"${i.productName}","${i.sku}",${i.currentStock},${i.requestedQty}`,
+      (i) =>
+        `"${i.productName}","${i.sku}",${i.currentStock},${i.requestedQty},${i.costPrice},${i.salePrice}`,
     );
     const csv = BOM + [header, ...rows].join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -197,49 +196,37 @@ export default function PedidosProveedoresPage() {
 
           {generatedOrder && (
             <div className="space-y-4 rounded-lg border p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold">
-                    Pedido {generatedOrder.orderNumber}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    Proveedor: {generatedOrder.supplierName} &bull;{" "}
-                    {generatedOrder.items.length} items
-                  </p>
-                </div>
-                <Button variant="outline" onClick={downloadCSV}>
-                  <Download className="mr-2 size-4" /> Descargar CSV
-                </Button>
+              <div>
+                <h3 className="text-lg font-semibold">
+                  Pedido {generatedOrder.orderNumber}
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Proveedor: {generatedOrder.supplierName} &bull;{" "}
+                  {generatedOrder.items.length} items &bull;{" "}
+                  <Link
+                    href={`/admin/proveedores/pedidos/${generatedOrder.id}`}
+                    className="text-primary hover:underline"
+                  >
+                    Ver detalle
+                  </Link>
+                </p>
               </div>
 
-              <div className="overflow-x-auto rounded border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Producto</TableHead>
-                      <TableHead>SKU</TableHead>
-                      <TableHead className="text-center">Stock actual</TableHead>
-                      <TableHead className="text-center">Solicitado</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {generatedOrder.items.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell>{item.productName}</TableCell>
-                        <TableCell className="font-mono text-sm">{item.sku}</TableCell>
-                        <TableCell className="text-center">
-                          <Badge variant={item.currentStock === 0 ? "destructive" : "outline"}>
-                            {item.currentStock}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-center font-semibold">
-                          {item.requestedQty}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+              <SupplierOrderDraftEditor
+                orderId={generatedOrder.id}
+                supplierId={generatedOrder.supplierId}
+                items={generatedOrder.items}
+                onSaved={(items) =>
+                  setGeneratedOrder((prev) =>
+                    prev ? { ...prev, items } : prev,
+                  )
+                }
+                headerActions={
+                  <Button variant="outline" size="sm" onClick={downloadCSV}>
+                    <Download className="mr-2 size-4" /> Descargar CSV
+                  </Button>
+                }
+              />
             </div>
           )}
         </TabsContent>

@@ -2,6 +2,14 @@ import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/db";
 import { auth, isAdminRole, isFullAdmin, canViewProductCostPrice } from "@/lib/auth";
+import {
+  prismaErrorToProductSavePayload,
+  validateProductForSave,
+} from "@/lib/services/product-save-validation";
+import {
+  deleteProductById,
+  ProductDeleteError,
+} from "@/lib/services/product-delete.service";
 
 export async function GET(
   _request: Request,
@@ -27,7 +35,7 @@ export async function GET(
         variants: {
           select: {
             id: true, name: true, sku: true, ean: true, price: true, costPrice: true, comparePrice: true,
-            stock: true, weight: true, isActive: true,
+            stock: true, lowStockThreshold: true, weight: true, isActive: true,
             attributes: { select: { attributeValueId: true } },
           },
           orderBy: { price: "asc" },
@@ -64,6 +72,7 @@ export async function GET(
         price: Number(v.price),
         costPrice: showCost && v.costPrice ? Number(v.costPrice) : null,
         comparePrice: v.comparePrice ? Number(v.comparePrice) : null,
+        lowStockThreshold: v.lowStockThreshold,
         stock: v.stock,
         weight: v.weight ? Number(v.weight) : null,
         name: v.name || "",
@@ -104,6 +113,11 @@ export async function PUT(
 
       const updated = await prisma.product.update({ where: { id }, data: partialData });
       return NextResponse.json({ success: true, id: updated.id });
+    }
+
+    const validationError = await validateProductForSave(body, { productId: id });
+    if (validationError) {
+      return NextResponse.json(validationError, { status: 400 });
     }
 
     const updated = await prisma.product.update({
@@ -156,6 +170,7 @@ export async function PUT(
               price: v.price,
               costPrice: v.costPrice ?? null,
               comparePrice: v.comparePrice || null,
+              lowStockThreshold: v.lowStockThreshold ?? 5,
               stock: v.stock ?? 0,
               weight: v.weight || null,
               name: v.name || null,
@@ -171,6 +186,7 @@ export async function PUT(
               price: v.price,
               costPrice: v.costPrice ?? null,
               comparePrice: v.comparePrice || null,
+              lowStockThreshold: v.lowStockThreshold ?? 5,
               stock: v.stock ?? 0,
               weight: v.weight || null,
               name: v.name || null,
@@ -211,6 +227,42 @@ export async function PUT(
     return NextResponse.json({ success: true, id: updated.id });
   } catch (error) {
     console.error("Admin product update error:", error);
-    return NextResponse.json({ error: "Error al actualizar" }, { status: 500 });
+    const prismaPayload = prismaErrorToProductSavePayload(error);
+    if (prismaPayload) {
+      return NextResponse.json(prismaPayload, { status: 409 });
+    }
+    return NextResponse.json(
+      {
+        error: "Error al guardar los cambios",
+        errors: ["Error inesperado al guardar. Intentá de nuevo."],
+        fieldErrors: {},
+      },
+      { status: 500 },
+    );
+  }
+}
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const session = await auth();
+  if (!session?.user || !isFullAdmin((session.user as { role?: string }).role)) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  }
+
+  try {
+    const { id } = await params;
+    await deleteProductById(id);
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    if (error instanceof ProductDeleteError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.code === "NOT_FOUND" ? 404 : 400 },
+      );
+    }
+    console.error("Admin product delete error:", error);
+    return NextResponse.json({ error: "Error al eliminar el producto" }, { status: 500 });
   }
 }

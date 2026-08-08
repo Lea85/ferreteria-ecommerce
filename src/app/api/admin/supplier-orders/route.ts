@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import type { Prisma } from "@/generated/prisma";
 import { prisma } from "@/lib/db";
 import { auth, isAdminRole } from "@/lib/auth";
+import { isLowStock } from "@/lib/low-stock";
 
 async function requireAdmin() {
   const session = await auth();
@@ -83,18 +84,17 @@ export async function POST(request: Request) {
 
     const variantWhere: Prisma.ProductVariantWhereInput = {
       isActive: true,
-      stock: { lt: prisma.productVariant.fields.lowStockThreshold },
+      product: { isActive: true },
     };
 
     const lowStockVariants = await prisma.productVariant.findMany({
-      where: {
-        isActive: true,
-        product: { isActive: true },
-      },
+      where: variantWhere,
       select: {
         id: true,
         sku: true,
         stock: true,
+        price: true,
+        costPrice: true,
         lowStockThreshold: true,
         productId: true,
         product: {
@@ -106,7 +106,9 @@ export async function POST(request: Request) {
       },
     });
 
-    let filtered = lowStockVariants.filter((v) => v.stock < v.lowStockThreshold);
+    let filtered = lowStockVariants.filter((v) =>
+      isLowStock(v.stock, v.lowStockThreshold),
+    );
 
     if (supplierId) {
       filtered = filtered.filter((v) =>
@@ -172,6 +174,8 @@ export async function POST(request: Request) {
       return {
         ...item,
         currentStock: variant?.stock ?? 0,
+        costPrice: variant?.costPrice != null ? Number(variant.costPrice) : 0,
+        salePrice: variant ? Number(variant.price) : 0,
       };
     });
 
@@ -181,6 +185,7 @@ export async function POST(request: Request) {
           id: order.id,
           orderNumber: order.orderNumber,
           status: order.status,
+          supplierId: order.supplierId,
           supplierName: order.supplier?.name || "Todos",
           items: itemsWithStock,
           createdAt: order.createdAt.toISOString(),

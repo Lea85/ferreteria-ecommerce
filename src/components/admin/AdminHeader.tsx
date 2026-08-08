@@ -31,6 +31,8 @@ function titleFromPath(pathname: string): string {
   if (pathname === "/admin/reportes/sitio") return "Analisis del sitio";
   if (pathname === "/admin/reportes/ventas") return "Analisis de ventas";
   if (pathname === "/admin/reportes/clientes") return "Analisis de clientes";
+  if (pathname === "/admin/reportes/vendedores")
+    return "Rendimiento de vendedores";
   if (pathname === "/admin/newsletter") return "Newsletter";
   if (pathname === "/admin/integraciones") return "Integraciones";
   if (pathname === "/admin/alquileres") return "Alquiler de herramientas";

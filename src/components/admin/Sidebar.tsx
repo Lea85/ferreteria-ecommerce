@@ -22,6 +22,8 @@ import {
   Ticket,
   TrendingUp,
   Truck,
+  Undo2,
+  Trophy,
   Users,
   Warehouse,
   Wrench,
@@ -52,6 +54,7 @@ const nav: NavItem[] = [
     icon: ShoppingCart,
     children: [
       { href: "/admin/pedidos", label: "Ventas", icon: ShoppingCart },
+      { href: "/admin/devoluciones", label: "Devoluciones", icon: Undo2 },
       { href: "/admin/presupuestos", label: "Presupuestos", icon: FileText },
     ],
   },
@@ -78,6 +81,11 @@ const nav: NavItem[] = [
       { href: "/admin/reportes/sitio", label: "Analisis del sitio", icon: TrendingUp },
       { href: "/admin/reportes/ventas", label: "Analisis de ventas", icon: LineChart },
       { href: "/admin/reportes/clientes", label: "Analisis de clientes", icon: Users },
+      {
+        href: "/admin/reportes/vendedores",
+        label: "Rendimiento de vendedores",
+        icon: Trophy,
+      },
     ],
   },
   { href: "/admin/newsletter", label: "Newsletter", icon: Mail },
