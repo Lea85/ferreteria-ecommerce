@@ -30,6 +30,11 @@ import { Separator } from "@/components/ui/separator";
 
 import { cn, formatPrice } from "@/lib/utils";
 
+import {
+  computeBestCategoryDiscount,
+  type CategoryBenefit,
+} from "@/lib/customer-category-discount";
+
 import { cartHasOverStock, toastCheckoutBlockedOverStock } from "@/lib/cart-stock";
 
 import {
@@ -186,6 +191,20 @@ export default function CheckoutPagoPage() {
 
   const clearCart = useCartStore((s) => s.clearCart);
 
+  const [categoryBenefits, setCategoryBenefits] = useState<CategoryBenefit[]>([]);
+
+  const totalQuantity = items.reduce((sum, i) => sum + i.quantity, 0);
+
+  const categoryDiscount = computeBestCategoryDiscount(
+    categoryBenefits,
+    subtotal,
+    totalQuantity,
+  );
+
+  const discountAmount = categoryDiscount?.amount ?? 0;
+
+  const totalToPay = Math.max(0, subtotal - discountAmount);
+
   const router = useRouter();
 
 
@@ -207,6 +226,20 @@ export default function CheckoutPagoPage() {
       .then((r) => r.json())
 
       .then((d) => setMpEnabled(Boolean(d.enabled && d.publicKey)))
+
+      .catch(() => {});
+
+
+
+    fetch("/api/user/discount")
+
+      .then((r) => (r.ok ? r.json() : null))
+
+      .then((d) => {
+
+        if (Array.isArray(d?.benefits)) setCategoryBenefits(d.benefits);
+
+      })
 
       .catch(() => {});
 
@@ -556,11 +589,25 @@ export default function CheckoutPagoPage() {
 
         <div className="mt-8 rounded-lg border border-border p-4">
 
+          {discountAmount > 0 && (
+            <>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Subtotal</span>
+                <span className="font-medium">{formatPrice(subtotal)}</span>
+              </div>
+              <div className="mt-1 flex justify-between text-sm text-emerald-600">
+                <span>{categoryDiscount?.label ?? "Descuento"}</span>
+                <span className="font-medium">-{formatPrice(discountAmount)}</span>
+              </div>
+              <Separator className="my-3" />
+            </>
+          )}
+
           <div className="flex justify-between text-sm">
 
             <span className="text-muted-foreground">Total a pagar</span>
 
-            <span className="text-lg font-bold text-primary">{formatPrice(subtotal)}</span>
+            <span className="text-lg font-bold text-primary">{formatPrice(totalToPay)}</span>
 
           </div>
 
@@ -624,7 +671,7 @@ export default function CheckoutPagoPage() {
 
           preferenceId={mpSession.preferenceId}
 
-          amount={subtotal}
+          amount={totalToPay}
 
           orderId={mpSession.orderId}
 

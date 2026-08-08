@@ -19,6 +19,7 @@ export type QuotePrintData = {
   subtotal: number;
   total: number;
   items: QuotePrintItem[];
+  discountLabel?: string | null;
 };
 
 export function generateQuotePrintHtml(
@@ -32,6 +33,11 @@ export function generateQuotePrintHtml(
     storeEmail,
     validityDays,
   } = resolveQuoteStoreBranding(storeSettings);
+
+  const discountAmount = Math.max(
+    0,
+    Number(quote.subtotal) - Number(quote.total),
+  );
 
   const validUntil = new Date(quote.validUntil).toLocaleDateString("es-AR", {
     day: "2-digit",
@@ -124,6 +130,14 @@ export function generateQuotePrintHtml(
         <td style="color:#6b7280">Subtotal</td>
         <td style="text-align:right;font-family:monospace">$${Number(quote.subtotal).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
       </tr>
+      ${
+        discountAmount > 0
+          ? `<tr>
+        <td style="color:#059669">${quote.discountLabel || "Descuento"}</td>
+        <td style="text-align:right;font-family:monospace;color:#059669">-$${discountAmount.toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
+      </tr>`
+          : ""
+      }
       <tr class="total-row">
         <td>TOTAL</td>
         <td style="text-align:right;font-family:monospace;color:#f97316">$${Number(quote.total).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>

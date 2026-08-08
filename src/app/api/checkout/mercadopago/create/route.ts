@@ -39,6 +39,11 @@ export async function POST(request: Request) {
       status: "PENDING",
     });
 
+    const orderSubtotal = Number(order.subtotal) || 0;
+    const orderTotal = Number(order.total) || 0;
+    const discountRatio =
+      orderSubtotal > 0 ? orderTotal / orderSubtotal : 1;
+
     const preference = await createMercadoPagoPreference({
       config: mpConfig,
       orderId: order.id,
@@ -47,6 +52,7 @@ export async function POST(request: Request) {
       subtotal,
       payerEmail: contactData.email,
       payerName: `${contactData.nombre} ${contactData.apellido}`.trim(),
+      discountRatio,
     });
 
     if (preference.id) {

@@ -20,9 +20,26 @@ export async function createMercadoPagoPreference(params: {
   subtotal: number;
   payerEmail: string;
   payerName: string;
+  /** Proporción del total a cobrar respecto del subtotal (1 = sin descuento). */
+  discountRatio?: number;
 }) {
-  const { config, orderId, orderNumber, items, subtotal, payerEmail, payerName } =
-    params;
+  const {
+    config,
+    orderId,
+    orderNumber,
+    items,
+    subtotal,
+    payerEmail,
+    payerName,
+    discountRatio = 1,
+  } = params;
+
+  const ratio =
+    Number.isFinite(discountRatio) && discountRatio > 0 && discountRatio <= 1
+      ? discountRatio
+      : 1;
+
+  const round2 = (n: number) => Math.round(n * 100) / 100;
 
   const baseUrl = getAppBaseUrl();
   const preferenceClient = new Preference(mpClient(config));
@@ -33,7 +50,7 @@ export async function createMercadoPagoPreference(params: {
           id: item.variantId || item.productId || item.name,
           title: item.name.slice(0, 256),
           quantity: Number(item.quantity) || 1,
-          unit_price: Number(item.price) || 0,
+          unit_price: round2((Number(item.price) || 0) * ratio),
           currency_id: "ARS",
         }))
       : [
@@ -41,7 +58,7 @@ export async function createMercadoPagoPreference(params: {
             id: orderNumber,
             title: `Pedido ${orderNumber}`,
             quantity: 1,
-            unit_price: Number(subtotal) || 0,
+            unit_price: round2((Number(subtotal) || 0) * ratio),
             currency_id: "ARS",
           },
         ];

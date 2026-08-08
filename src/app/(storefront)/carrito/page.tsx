@@ -34,6 +34,11 @@ import {
   type CounterRoundingMode,
 } from "@/lib/counter-sale-discount";
 import { COUNTER_PAYMENT_OPTIONS, counterPaymentAllowsCustomTotal, type CounterPaymentMethod } from "@/lib/constants";
+import {
+  computeBestCategoryDiscount,
+  type AppliedDiscount,
+  type CategoryBenefit,
+} from "@/lib/customer-category-discount";
 import { printQuote } from "@/lib/quote-print";
 import { cn, formatPrice } from "@/lib/utils";
 import { useCartStockSync } from "@/hooks/use-cart-stock-sync";
@@ -57,6 +62,7 @@ export default function CarritoPage() {
 
   const [coupon, setCoupon] = useState("");
   const [applied, setApplied] = useState(false);
+  const [categoryBenefits, setCategoryBenefits] = useState<CategoryBenefit[]>([]);
   const [canGenerateQuotes, setCanGenerateQuotes] = useState(false);
   const [canCounterSale, setCanCounterSale] = useState(false);
   const [generatingQuote, setGeneratingQuote] = useState(false);
@@ -79,10 +85,14 @@ export default function CarritoPage() {
       fetch("/api/admin/counter-sale?checkPermission=true").then((r) =>
         r.ok ? r.json() : null,
       ),
+      fetch("/api/user/discount").then((r) => (r.ok ? r.json() : null)),
     ])
-      .then(([quotesData, counterData]) => {
+      .then(([quotesData, counterData, discountData]) => {
         if (quotesData?.canGenerateQuotes) setCanGenerateQuotes(true);
         if (counterData?.canCounterSale) setCanCounterSale(true);
+        if (Array.isArray(discountData?.benefits)) {
+          setCategoryBenefits(discountData.benefits);
+        }
       })
       .catch(() => {});
   }, []);
@@ -204,6 +214,7 @@ export default function CarritoPage() {
           validUntil: data.quote.validUntil,
           subtotal: Number(data.quote.subtotal),
           total: Number(data.quote.total),
+          discountLabel: data.discount?.label ?? null,
           items: data.quote.items.map((item: {
             sku: string;
             productName: string;
@@ -230,9 +241,20 @@ export default function CarritoPage() {
   }
 
   const subtotal = getSubtotal();
-  const discount = applied ? Math.round(subtotal * 0.05) : 0;
+  const totalQuantity = useMemo(
+    () => items.reduce((sum, i) => sum + i.quantity, 0),
+    [items],
+  );
+
+  const categoryDiscount: AppliedDiscount | null = useMemo(
+    () => computeBestCategoryDiscount(categoryBenefits, subtotal, totalQuantity),
+    [categoryBenefits, subtotal, totalQuantity],
+  );
+
+  const couponDiscount = applied ? Math.round(subtotal * 0.05) : 0;
+  const discount = (categoryDiscount?.amount ?? 0) + couponDiscount;
   const shippingNote = "A calcular";
-  const total = subtotal - discount;
+  const total = Math.max(0, subtotal - discount);
 
   const empty = items.length === 0;
 
@@ -453,7 +475,9 @@ export default function CarritoPage() {
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Descuento</span>
+              <span className="text-muted-foreground">
+                {categoryDiscount ? categoryDiscount.label : "Descuento"}
+              </span>
               <span
                 className={cn(
                   "font-medium",

@@ -335,6 +335,14 @@ export default function AdminPresupuestoDetallePage() {
                 <span className="text-muted-foreground">Subtotal</span>
                 <span className="font-mono">{formatPrice(Number(quote.subtotal))}</span>
               </div>
+              {Number(quote.subtotal) - Number(quote.total) > 0 ? (
+                <div className="flex justify-between text-sm text-emerald-600">
+                  <span>{quote.notes || "Descuento"}</span>
+                  <span className="font-mono">
+                    −{formatPrice(Number(quote.subtotal) - Number(quote.total))}
+                  </span>
+                </div>
+              ) : null}
               <Separator />
               <div className="flex justify-between text-lg font-bold">
                 <span>Total</span>

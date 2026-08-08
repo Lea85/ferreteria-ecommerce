@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { getIntegracionesSettings } from "@/lib/integraciones-settings";
+import { resolveUserCategoryDiscount } from "@/lib/services/customer-discount.service";
 
 export async function POST(request: Request) {
   try {
@@ -104,6 +105,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No se encontraron productos válidos." }, { status: 400 });
     }
 
+    const totalQuantity = quoteItems.reduce((sum, i) => sum + i.quantity, 0);
+    const categoryDiscount = await resolveUserCategoryDiscount(
+      userId,
+      subtotal,
+      totalQuantity,
+    );
+    const discountAmount = categoryDiscount?.amount ?? 0;
+    const total = Math.max(0, subtotal - discountAmount);
+
     const lastQuote = await prisma.quote.findFirst({
       orderBy: { createdAt: "desc" },
       select: { quoteNumber: true },
@@ -121,8 +131,11 @@ export async function POST(request: Request) {
         quoteNumber,
         userId,
         subtotal,
-        total: subtotal,
+        total,
         validUntil,
+        notes: categoryDiscount
+          ? `${categoryDiscount.label}: -${discountAmount.toFixed(2)}`
+          : null,
         items: {
           create: quoteItems,
         },
@@ -132,7 +145,16 @@ export async function POST(request: Request) {
 
     const storeSettings = await getIntegracionesSettings();
 
-    return NextResponse.json({ quote, storeSettings }, { status: 201 });
+    return NextResponse.json(
+      {
+        quote,
+        discount: categoryDiscount
+          ? { label: categoryDiscount.label, amount: discountAmount }
+          : null,
+        storeSettings,
+      },
+      { status: 201 },
+    );
   } catch (error) {
     console.error("Quote creation error:", error);
     return NextResponse.json({ error: "Error interno." }, { status: 500 });

@@ -2,6 +2,7 @@ import type { OrderStatus, PaymentMethod, ShippingMethod } from "@/generated/pri
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { resolveUserCategoryDiscount } from "@/lib/services/customer-discount.service";
 import { createUserAddress } from "@/lib/services/user-address.service";
 
 export type CheckoutCartItem = {
@@ -115,6 +116,18 @@ export async function createCheckoutOrder(input: CreateCheckoutOrderInput) {
     }
   }
 
+  const totalQuantity = items.reduce(
+    (sum, i) => sum + (Number(i.quantity) || 0),
+    0,
+  );
+  const categoryDiscount = await resolveUserCategoryDiscount(
+    session?.user?.id ?? null,
+    subtotal,
+    totalQuantity,
+  );
+  const discountTotal = categoryDiscount?.amount ?? 0;
+  const orderTotal = Math.max(0, subtotal - discountTotal);
+
   let shippingAddressId: string | null = shippingAddress?.addressId ?? null;
 
   if (
@@ -162,7 +175,8 @@ export async function createCheckoutOrder(input: CreateCheckoutOrderInput) {
         shippingMethod: shippingMethod as ShippingMethod,
         subtotal,
         shippingCost: 0,
-        total: subtotal,
+        discountTotal,
+        total: orderTotal,
         customerName: `${contactData.nombre} ${contactData.apellido}`,
         customerEmail: contactData.email,
         customerPhone: contactData.telefono,
