@@ -44,12 +44,22 @@ export async function POST(request: Request) {
     const discountRatio =
       orderSubtotal > 0 ? orderTotal / orderSubtotal : 1;
 
+    // Usamos los ítems reales del pedido (precios recalculados en el servidor),
+    // nunca los precios enviados por el cliente.
+    const trustedItems = order.items.map((i) => ({
+      variantId: i.variantId ?? undefined,
+      productId: i.productId ?? undefined,
+      name: i.productName,
+      quantity: i.quantity,
+      price: Number(i.unitPrice),
+    }));
+
     const preference = await createMercadoPagoPreference({
       config: mpConfig,
       orderId: order.id,
       orderNumber: order.orderNumber,
-      items,
-      subtotal,
+      items: trustedItems,
+      subtotal: orderSubtotal,
       payerEmail: contactData.email,
       payerName: `${contactData.nombre} ${contactData.apellido}`.trim(),
       discountRatio,

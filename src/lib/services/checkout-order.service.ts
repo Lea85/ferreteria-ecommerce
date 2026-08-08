@@ -72,7 +72,6 @@ export async function createCheckoutOrder(input: CreateCheckoutOrderInput) {
     billingData,
     shippingAddress,
     items,
-    subtotal,
     status = "PENDING",
     paymentExternalId = null,
     paymentStatus = null,
@@ -90,11 +89,21 @@ export async function createCheckoutOrder(input: CreateCheckoutOrderInput) {
 
   const variants = await prisma.productVariant.findMany({
     where: { id: { in: variantIds } },
-    select: { id: true, stock: true, sku: true, product: { select: { name: true } } },
+    select: {
+      id: true,
+      stock: true,
+      sku: true,
+      price: true,
+      isActive: true,
+      productId: true,
+      product: { select: { name: true, isActive: true } },
+    },
   });
   const variantMap = new Map(variants.map((v) => [v.id, v]));
 
-  for (const item of items) {
+  // Recalculamos precios y subtotal SIEMPRE desde la base: nunca confiamos
+  // en el precio que envía el cliente (evita manipulación de precios).
+  const lineItems = items.map((item) => {
     const variantId = item.variantId;
     const qty = Number(item.quantity) || 0;
     if (!variantId) {
@@ -106,6 +115,11 @@ export async function createCheckoutOrder(input: CreateCheckoutOrderInput) {
         `Variante no encontrada (${item.name ?? variantId}).`,
       );
     }
+    if (!variant.isActive || !variant.product.isActive) {
+      throw new CheckoutOrderError(
+        `El producto "${variant.product.name}" ya no está disponible.`,
+      );
+    }
     if (qty < 1) {
       throw new CheckoutOrderError("Cantidad invalida.");
     }
@@ -114,12 +128,22 @@ export async function createCheckoutOrder(input: CreateCheckoutOrderInput) {
         `Stock insuficiente para "${variant.product.name}" (SKU ${variant.sku}). Disponible: ${variant.stock}.`,
       );
     }
-  }
 
-  const totalQuantity = items.reduce(
-    (sum, i) => sum + (Number(i.quantity) || 0),
-    0,
-  );
+    const unitPrice = Number(variant.price);
+    return {
+      variantId: variant.id,
+      productId: variant.productId,
+      productName: variant.product.name,
+      quantity: qty,
+      unitPrice,
+      subtotal: Math.round(unitPrice * qty * 100) / 100,
+    };
+  });
+
+  const subtotal =
+    Math.round(lineItems.reduce((sum, i) => sum + i.subtotal, 0) * 100) / 100;
+  const totalQuantity = lineItems.reduce((sum, i) => sum + i.quantity, 0);
+
   const categoryDiscount = await resolveUserCategoryDiscount(
     session?.user?.id ?? null,
     subtotal,
@@ -158,11 +182,10 @@ export async function createCheckoutOrder(input: CreateCheckoutOrderInput) {
   const orderNumber = `FS-${Date.now().toString(36).toUpperCase()}`;
 
   const order = await prisma.$transaction(async (tx) => {
-    for (const item of items) {
-      if (!item.variantId) continue;
+    for (const item of lineItems) {
       await tx.productVariant.update({
         where: { id: item.variantId },
-        data: { stock: { decrement: Number(item.quantity) } },
+        data: { stock: { decrement: item.quantity } },
       });
     }
 
@@ -192,16 +215,17 @@ export async function createCheckoutOrder(input: CreateCheckoutOrderInput) {
         paymentExternalId,
         paymentStatus,
         items: {
-          create: items.map((i) => ({
-            productId: i.productId || null,
-            variantId: i.variantId || null,
-            productName: i.name,
+          create: lineItems.map((i) => ({
+            productId: i.productId,
+            variantId: i.variantId,
+            productName: i.productName,
             quantity: i.quantity,
-            unitPrice: i.price,
-            subtotal: i.price * i.quantity,
+            unitPrice: i.unitPrice,
+            subtotal: i.subtotal,
           })),
         },
       },
+      include: { items: true },
     });
   });
 

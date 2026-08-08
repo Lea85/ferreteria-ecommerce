@@ -38,10 +38,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "El pedido fue cancelado." }, { status: 400 });
     }
 
+    // El monto a cobrar se fuerza al total real del pedido calculado en el
+    // servidor, ignorando cualquier importe que envíe el cliente.
+    const safeFormData: Record<string, unknown> = {
+      ...formData,
+      transaction_amount: Number(order.total),
+    };
+
     const payment = await processMercadoPagoPayment({
       config: mpConfig,
       orderId,
-      formData,
+      formData: safeFormData,
     });
 
     const paymentStatus = payment.status ?? "pending";
