@@ -111,7 +111,13 @@ export const useCartStore = create<CartState>()(
       setAdminStockBypass: (enabled) => set({ adminStockBypass: enabled }),
       loginAs: async (userId, mergeGuestCart) => {
         const guestItems = get().items;
-        set({ userId, _suppressSave: true });
+        // Al cambiar de usuario (sin fusión) se vacía de inmediato para no
+        // mostrar los ítems del usuario anterior mientras carga el servidor.
+        set({
+          userId,
+          _suppressSave: true,
+          items: mergeGuestCart ? guestItems : [],
+        });
         try {
           if (mergeGuestCart && guestItems.length > 0) {
             const merged = await pushCart(guestItems, "merge");
