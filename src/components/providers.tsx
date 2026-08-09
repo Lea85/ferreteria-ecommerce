@@ -7,6 +7,7 @@ import { useState } from "react";
 import { Toaster } from "sonner";
 
 import { CartAdminStockBypass } from "@/components/storefront/CartAdminStockBypass";
+import { CartUserSync } from "@/components/storefront/CartUserSync";
 import { FavoritesSync } from "@/components/storefront/FavoritesSync";
 import { StoreConfigProvider } from "@/contexts/store-config";
 
@@ -28,6 +29,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <QueryClientProvider client={queryClient}>
         <StoreConfigProvider>
           <FavoritesSync />
+          <CartUserSync />
           <CartAdminStockBypass />
           <NuqsAdapter>
             {children}
