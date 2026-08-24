@@ -226,19 +226,22 @@ export default function PedidoDetallePage({
 
   const isEditable = order.status !== "RECEIVED" && order.status !== "CANCELLED";
   const isDraft = order.status === "DRAFT";
+  const currentOrder = order;
 
   function handleDownloadPdf() {
     const sourceItems =
-      isDraft && draftSnapshot.length > 0 ? draftSnapshot : order.items;
+      isDraft && draftSnapshot.length > 0
+        ? draftSnapshot
+        : currentOrder.items;
 
     printSupplierOrder(
       {
-        orderNumber: order.orderNumber,
-        status: order.status,
-        statusLabel: statusLabel[order.status] || order.status,
-        supplierName: order.supplierName,
-        notes: order.notes,
-        createdAt: order.createdAt,
+        orderNumber: currentOrder.orderNumber,
+        status: currentOrder.status,
+        statusLabel: statusLabel[currentOrder.status] || currentOrder.status,
+        supplierName: currentOrder.supplierName,
+        notes: currentOrder.notes,
+        createdAt: currentOrder.createdAt,
         items: sourceItems.map((item) => ({
           sku: item.sku,
           productName: item.productName,
