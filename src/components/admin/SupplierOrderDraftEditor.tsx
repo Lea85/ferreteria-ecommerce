@@ -66,6 +66,32 @@ function isTempId(id: string) {
   return id.startsWith("temp-");
 }
 
+function sameDraftItems(
+  a: SupplierOrderDraftItem[],
+  b: SupplierOrderDraftItem[],
+): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i];
+    const y = b[i];
+    if (
+      x.id !== y.id ||
+      x.productId !== y.productId ||
+      x.variantId !== y.variantId ||
+      x.requestedQty !== y.requestedQty ||
+      x.costPrice !== y.costPrice ||
+      x.salePrice !== y.salePrice ||
+      x.currentStock !== y.currentStock ||
+      x.sku !== y.sku ||
+      x.productName !== y.productName
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export function SupplierOrderDraftEditor({
   orderId,
   supplierId,
@@ -82,9 +108,11 @@ export function SupplierOrderDraftEditor({
   const [searching, setSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchProduct[]>([]);
 
+  // Solo sincroniza si el contenido cambió de verdad. Evita un loop de
+  // re-renders cuando el padre recrea el array `items` en cada render.
   useEffect(() => {
-    setDraftItems(items);
-    setRemovedItemIds([]);
+    setDraftItems((prev) => (sameDraftItems(prev, items) ? prev : items));
+    setRemovedItemIds((prev) => (prev.length === 0 ? prev : []));
   }, [items, orderId]);
 
   useEffect(() => {

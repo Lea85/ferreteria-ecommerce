@@ -118,6 +118,22 @@ function filterNavForRole(role: string | undefined, items: NavItem[]): NavItem[]
     .filter((item): item is NavItem => item !== null);
 }
 
+/** Activo solo el hijo más específico (evita que /proveedores y /proveedores/pedidos queden ambos marcados). */
+function isChildNavActive(
+  pathname: string,
+  href: string,
+  siblingHrefs: string[],
+): boolean {
+  const matches = pathname === href || pathname.startsWith(`${href}/`);
+  if (!matches) return false;
+  return !siblingHrefs.some(
+    (other) =>
+      other !== href &&
+      other.length > href.length &&
+      (pathname === other || pathname.startsWith(`${other}/`)),
+  );
+}
+
 export function Sidebar({ user, role }: SidebarProps) {
   const visibleNav = filterNavForRole(role, nav);
   const pathname = usePathname();
@@ -164,7 +180,12 @@ export function Sidebar({ user, role }: SidebarProps) {
               {isExpanded && (
                 <div className="ml-4 mt-0.5 space-y-0.5 border-l border-border pl-3">
                   {item.children!.map((child) => {
-                    const childActive = pathname === child.href || pathname.startsWith(child.href);
+                    const siblingHrefs = item.children!.map((c) => c.href);
+                    const childActive = isChildNavActive(
+                      pathname,
+                      child.href,
+                      siblingHrefs,
+                    );
                     return (
                       <Link
                         key={child.href}

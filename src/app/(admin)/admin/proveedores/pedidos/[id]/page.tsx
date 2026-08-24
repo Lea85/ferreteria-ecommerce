@@ -1,8 +1,8 @@
 "use client";
 
-import { ArrowLeft, Check, Loader2, Send, X } from "lucide-react";
+import { ArrowLeft, Check, FileDown, Loader2, Send, X } from "lucide-react";
 import Link from "next/link";
-import { use, useCallback, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -21,6 +21,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  printSupplierOrder,
+  SUPPLIER_ORDER_PRINT_STORE_KEYS,
+} from "@/lib/supplier-order-print";
 import { formatPrice } from "@/lib/utils";
 
 type OrderItem = {
@@ -69,6 +73,16 @@ export default function PedidoDetallePage({
   );
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
+  const [storeSettings, setStoreSettings] = useState<Record<string, string>>(
+    {},
+  );
+
+  useEffect(() => {
+    fetch(`/api/settings/public?keys=${SUPPLIER_ORDER_PRINT_STORE_KEYS}`)
+      .then((r) => r.json())
+      .then((data) => setStoreSettings(data.settings || {}))
+      .catch(() => {});
+  }, []);
 
   const fetchOrder = useCallback(async () => {
     setLoading(true);
@@ -93,6 +107,22 @@ export default function PedidoDetallePage({
   useEffect(() => {
     fetchOrder();
   }, [fetchOrder]);
+
+  const draftItems: SupplierOrderDraftItem[] = useMemo(
+    () =>
+      (order?.items ?? []).map((item) => ({
+        id: item.id,
+        productId: item.productId,
+        variantId: item.variantId,
+        productName: item.productName,
+        sku: item.sku,
+        requestedQty: item.requestedQty,
+        currentStock: item.currentStock,
+        costPrice: item.costPrice,
+        salePrice: item.salePrice,
+      })),
+    [order?.items],
+  );
 
   async function handleReceive() {
     if (!order) return;
@@ -144,7 +174,7 @@ export default function PedidoDetallePage({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       toast.success(
-        `Pedido marcado como enviado. Stock y precios actualizados en el catálogo.`,
+        `Pedido marcado como recibido. Stock y precios actualizados en el catálogo.`,
       );
       fetchOrder();
     } catch (err: unknown) {
@@ -197,17 +227,34 @@ export default function PedidoDetallePage({
   const isEditable = order.status !== "RECEIVED" && order.status !== "CANCELLED";
   const isDraft = order.status === "DRAFT";
 
-  const draftItems: SupplierOrderDraftItem[] = order.items.map((item) => ({
-    id: item.id,
-    productId: item.productId,
-    variantId: item.variantId,
-    productName: item.productName,
-    sku: item.sku,
-    requestedQty: item.requestedQty,
-    currentStock: item.currentStock,
-    costPrice: item.costPrice,
-    salePrice: item.salePrice,
-  }));
+  function handleDownloadPdf() {
+    const sourceItems =
+      isDraft && draftSnapshot.length > 0 ? draftSnapshot : order.items;
+
+    printSupplierOrder(
+      {
+        orderNumber: order.orderNumber,
+        status: order.status,
+        statusLabel: statusLabel[order.status] || order.status,
+        supplierName: order.supplierName,
+        notes: order.notes,
+        createdAt: order.createdAt,
+        items: sourceItems.map((item) => ({
+          sku: item.sku,
+          productName: item.productName,
+          requestedQty: item.requestedQty,
+          receivedQty:
+            "receivedQty" in item
+              ? Number((item as OrderItem).receivedQty) || 0
+              : 0,
+          currentStock: item.currentStock,
+          costPrice: item.costPrice,
+          salePrice: item.salePrice,
+        })),
+      },
+      storeSettings,
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -231,10 +278,19 @@ export default function PedidoDetallePage({
             {new Date(order.createdAt).toLocaleDateString("es-AR")}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Badge variant="secondary" className="text-sm">
             {statusLabel[order.status] || order.status}
           </Badge>
+          <Button
+            size="sm"
+            variant="outline"
+            type="button"
+            onClick={handleDownloadPdf}
+          >
+            <FileDown className="mr-1 size-4" />
+            Descargar PDF
+          </Button>
           {isEditable && (
             <>
               {order.status === "DRAFT" && (
@@ -249,7 +305,7 @@ export default function PedidoDetallePage({
                   ) : (
                     <Send className="mr-1 size-4" />
                   )}
-                  Marcar enviado
+                  Marcar como recibido
                 </Button>
               )}
               <Button
@@ -379,7 +435,7 @@ export default function PedidoDetallePage({
         </div>
       )}
 
-      {isDraft && (
+      {(!isEditable || isDraft) && (
         <Button asChild variant="outline">
           <Link href="/admin/proveedores/pedidos">
             <ArrowLeft className="mr-2 size-4" /> Volver a pedidos
