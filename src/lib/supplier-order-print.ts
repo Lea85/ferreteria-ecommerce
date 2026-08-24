@@ -27,12 +27,6 @@ function formatMoney(n: number) {
   return `$${Number(n).toLocaleString("es-AR", { minimumFractionDigits: 2 })}`;
 }
 
-function marginPercent(cost: number, sale: number): string {
-  if (cost <= 0) return "—";
-  const pct = ((sale - cost) / cost) * 100;
-  return `${pct.toLocaleString("es-AR", { maximumFractionDigits: 1 })}%`;
-}
-
 export function generateSupplierOrderPrintHtml(
   order: SupplierOrderPrintData,
   storeSettings: Record<string, string>,
@@ -50,10 +44,6 @@ export function generateSupplierOrderPrintHtml(
     (sum, item) => sum + item.costPrice * item.requestedQty,
     0,
   );
-  const totalSale = order.items.reduce(
-    (sum, item) => sum + item.salePrice * item.requestedQty,
-    0,
-  );
   const totalUnits = order.items.reduce(
     (sum, item) => sum + item.requestedQty,
     0,
@@ -64,12 +54,8 @@ export function generateSupplierOrderPrintHtml(
       (item) => `<tr>
         <td class="mono">${item.sku || "—"}</td>
         <td>${item.productName}</td>
-        <td class="num">${item.currentStock}</td>
         <td class="num"><strong>${item.requestedQty}</strong></td>
-        <td class="num">${item.receivedQty}</td>
         <td class="num mono">${formatMoney(item.costPrice)}</td>
-        <td class="num mono">${formatMoney(item.salePrice)}</td>
-        <td class="num">${marginPercent(item.costPrice, item.salePrice)}</td>
         <td class="num mono"><strong>${formatMoney(item.costPrice * item.requestedQty)}</strong></td>
       </tr>`,
     )
@@ -194,40 +180,27 @@ export function generateSupplierOrderPrintHtml(
       <tr>
         <th>SKU</th>
         <th>Producto</th>
-        <th class="num">Stock</th>
-        <th class="num">Solic.</th>
-        <th class="num">Recib.</th>
-        <th class="num">P. compra</th>
-        <th class="num">P. venta</th>
-        <th class="num">% gan.</th>
+        <th class="num">Unidades solicitadas</th>
+        <th class="num">Precio de compra</th>
         <th class="num">Subtotal</th>
       </tr>
     </thead>
     <tbody>
-      ${itemRows || `<tr><td colspan="9" style="text-align:center;color:#6b7280">Sin ítems</td></tr>`}
+      ${itemRows || `<tr><td colspan="5" style="text-align:center;color:#6b7280">Sin ítems</td></tr>`}
     </tbody>
   </table>
 
   <table class="totals">
-    <tr>
-      <td class="label">Total compra</td>
-      <td class="value">${formatMoney(totalCost)}</td>
-    </tr>
-    <tr>
-      <td class="label">Total venta estimado</td>
-      <td class="value">${formatMoney(totalSale)}</td>
-    </tr>
     <tr class="grand">
-      <td class="label">Diferencia</td>
-      <td class="value">${formatMoney(totalSale - totalCost)}</td>
+      <td class="label">Total estimado compra</td>
+      <td class="value">${formatMoney(totalCost)}</td>
     </tr>
   </table>
 
   ${notesBlock}
 
   <div class="footer">
-    <p><strong>${storeName}</strong> — Pedido interno a proveedor</p>
-    <p>Documento generado desde el panel de administración. No constituye factura.</p>
+    <p><strong>${storeName}</strong></p>
   </div>
 </body>
 </html>`;
