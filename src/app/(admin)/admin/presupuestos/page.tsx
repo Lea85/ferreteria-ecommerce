@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatPrice } from "@/lib/utils";
-import { Eye } from "lucide-react";
+import { Edit, Eye } from "lucide-react";
 
 type QuoteApi = {
   id: string;
@@ -235,6 +235,16 @@ export default function AdminPresupuestosPage() {
                 <Eye className="size-4" />
               </Link>
             </Button>
+            {row.status === "ACTIVE" ? (
+              <Button variant="ghost" size="icon" asChild>
+                <Link
+                  href={`/admin/presupuestos/${row.id}/editar`}
+                  aria-label="Editar presupuesto"
+                >
+                  <Edit className="size-4" />
+                </Link>
+              </Button>
+            ) : null}
           </div>
         )}
       />

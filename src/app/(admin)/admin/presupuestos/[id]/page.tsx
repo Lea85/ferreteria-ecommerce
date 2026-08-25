@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Ban, Loader2, Printer, ShoppingCart } from "lucide-react";
+import { ArrowLeft, Ban, Edit, Loader2, Printer, ShoppingCart } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -372,6 +372,12 @@ export default function AdminPresupuestoDetallePage() {
 
           {isActive && (
             <div className="space-y-3">
+              <Button variant="outline" className="w-full gap-2" asChild>
+                <Link href={`/admin/presupuestos/${id}/editar`}>
+                  <Edit className="size-4" />
+                  Editar presupuesto
+                </Link>
+              </Button>
               <Button
                 className="w-full gap-2 bg-emerald-100 text-emerald-900 hover:bg-emerald-200"
                 onClick={openSellModal}

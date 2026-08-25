@@ -8,6 +8,7 @@ import {
   isCounterPaymentMethod,
   sellQuoteAsCounterSale,
 } from "@/lib/services/counter-sale.service";
+import { updateQuoteItems } from "@/lib/services/quote-update.service";
 
 export async function GET(
   _request: Request,
@@ -127,6 +128,12 @@ export async function PUT(
         data: { status: "CANCELLED" },
       });
       return NextResponse.json({ success: true });
+    }
+
+    if (action === "update") {
+      const items = Array.isArray(body.items) ? body.items : [];
+      const quote = await updateQuoteItems(id, items);
+      return NextResponse.json({ success: true, quote });
     }
 
     return NextResponse.json({ error: "Acción no reconocida." }, { status: 400 });
