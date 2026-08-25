@@ -386,7 +386,8 @@ export function SupplierOrderDraftEditor({
                     <Input
                       type="number"
                       min={1}
-                      className="mx-auto w-20 text-center"
+                      inputMode="numeric"
+                      className="mx-auto w-20 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                       value={item.requestedQty}
                       onChange={(e) =>
                         updateRequestedQty(
@@ -401,7 +402,8 @@ export function SupplierOrderDraftEditor({
                       type="number"
                       min={0}
                       step="0.01"
-                      className="mx-auto w-24 text-center"
+                      inputMode="decimal"
+                      className="mx-auto w-24 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                       value={item.costPrice}
                       onChange={(e) => updateCostPrice(item.id, e.target.value)}
                     />
@@ -411,7 +413,8 @@ export function SupplierOrderDraftEditor({
                       type="number"
                       min={0}
                       step="0.01"
-                      className="mx-auto w-24 text-center"
+                      inputMode="decimal"
+                      className="mx-auto w-24 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                       value={item.salePrice}
                       onChange={(e) => updateSalePrice(item.id, e.target.value)}
                     />

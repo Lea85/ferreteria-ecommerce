@@ -389,7 +389,8 @@ export default function PedidoDetallePage({
                       <Input
                         type="number"
                         min={0}
-                        className="mx-auto w-20 text-center"
+                        inputMode="numeric"
+                        className="mx-auto w-20 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                         value={receivedQtys[item.id] ?? item.requestedQty}
                         onChange={(e) =>
                           setReceivedQtys((prev) => ({
