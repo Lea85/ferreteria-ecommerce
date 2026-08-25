@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Copy,
   Download,
   Edit,
   Eye,
@@ -742,6 +743,17 @@ function AdminProductosPageInner() {
             </Button>
             {isFullAdmin ? (
               <>
+                <Button variant="ghost" size="icon" asChild>
+                  <Link
+                    href={appendAdminProductsNavParams(
+                      `/admin/productos/nuevo?cloneFrom=${row.id}`,
+                      { returnTo: listReturnTo },
+                    )}
+                    aria-label="Clonar producto"
+                  >
+                    <Copy className="size-4" />
+                  </Link>
+                </Button>
                 <Button variant="ghost" size="icon" asChild>
                   <Link
                     href={appendAdminProductsNavParams(

@@ -90,10 +90,13 @@ export type ProductFormValues = z.infer<typeof productSchema>;
 export type ProductFormOption = { id: string; name: string };
 
 export type ProductFormInitial = Partial<
-  Omit<ProductFormValues, "variants" | "categoryIds">
+  Omit<ProductFormValues, "variants" | "categoryIds" | "images">
 > & {
   categoryIds?: string[];
   variants?: ProductFormValues["variants"];
+  supplierIds?: string[];
+  images?: Array<{ url: string; altText?: string }>;
+  warehouseLocationId?: string;
 };
 
 export type ProductFormProps = {
@@ -161,7 +164,7 @@ export function ProductForm({
   const [warehouseLocations, setWarehouseLocations] = useState<WarehouseOption[]>([]);
   const [allSuppliers, setAllSuppliers] = useState<{ id: string; name: string }[]>([]);
   const [selectedSupplierIds, setSelectedSupplierIds] = useState<Set<string>>(
-    new Set((initialData as any)?.supplierIds || []),
+    new Set(initialData?.supplierIds || []),
   );
 
   const [allAttributes, setAllAttributes] = useState<Attribute[]>([]);
@@ -170,7 +173,7 @@ export function ProductForm({
 
   type ImageItem = { url: string; altText?: string };
   const [images, setImages] = useState<ImageItem[]>(
-    (initialData as any)?.images || [],
+    initialData?.images || [],
   );
   const [imageUrlInput, setImageUrlInput] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -214,7 +217,7 @@ export function ProductForm({
       slug: initialData?.slug ?? "",
       description: initialData?.description ?? "",
       brandId: initialData?.brandId ?? "",
-      warehouseLocationId: (initialData as any)?.warehouseLocationId ?? "",
+      warehouseLocationId: initialData?.warehouseLocationId ?? "",
       categoryIds: initialData?.categoryIds?.length ? initialData.categoryIds : [],
       isActive: initialData?.isActive ?? true,
       isFeatured: initialData?.isFeatured ?? false,
