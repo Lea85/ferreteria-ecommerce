@@ -26,6 +26,7 @@ export type FilterOption = { id: string; name: string };
 
 export type AdminProductsFiltersValue = {
   active: string;
+  categoryIds: string[];
   brandIds: string[];
   supplierIds: string[];
 };
@@ -135,6 +136,7 @@ function FilterCheckboxList({
 type AdminProductsFiltersDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  categories: FilterOption[];
   brands: FilterOption[];
   suppliers: FilterOption[];
   showBrands: boolean;
@@ -145,6 +147,7 @@ type AdminProductsFiltersDialogProps = {
 export function AdminProductsFiltersDialog({
   open,
   onOpenChange,
+  categories,
   brands,
   suppliers,
   showBrands,
@@ -152,6 +155,9 @@ export function AdminProductsFiltersDialog({
   onApply,
 }: AdminProductsFiltersDialogProps) {
   const [active, setActive] = useState(applied.active);
+  const [categoryIds, setCategoryIds] = useState<Set<string>>(
+    () => new Set(applied.categoryIds),
+  );
   const [brandIds, setBrandIds] = useState<Set<string>>(
     () => new Set(applied.brandIds),
   );
@@ -162,12 +168,14 @@ export function AdminProductsFiltersDialog({
   useEffect(() => {
     if (!open) return;
     setActive(applied.active);
+    setCategoryIds(new Set(applied.categoryIds));
     setBrandIds(new Set(applied.brandIds));
     setSupplierIds(new Set(applied.supplierIds));
   }, [open, applied]);
 
   function handleClearDraft() {
     setActive("all");
+    setCategoryIds(new Set());
     setBrandIds(new Set());
     setSupplierIds(new Set());
   }
@@ -175,6 +183,7 @@ export function AdminProductsFiltersDialog({
   function handleApply() {
     onApply({
       active,
+      categoryIds: [...categoryIds],
       brandIds: [...brandIds],
       supplierIds: [...supplierIds],
     });
@@ -183,12 +192,12 @@ export function AdminProductsFiltersDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[90vh] max-w-2xl flex-col gap-0 overflow-hidden p-0">
+      <DialogContent className="flex max-h-[90vh] max-w-4xl flex-col gap-0 overflow-hidden p-0">
         <DialogHeader className="border-b border-border px-6 py-4">
           <DialogTitle>Filtros de productos</DialogTitle>
           <p className="text-sm text-muted-foreground">
-            Varias marcas o proveedores se combinan con OR. Entre secciones se
-            aplican todas a la vez.
+            Varias categorías, marcas o proveedores se combinan con OR. Entre
+            secciones se aplican todas a la vez.
           </p>
         </DialogHeader>
 
@@ -212,10 +221,17 @@ export function AdminProductsFiltersDialog({
           <div
             className={
               showBrands
-                ? "grid gap-6 md:grid-cols-2"
-                : "grid gap-6 md:grid-cols-1"
+                ? "grid gap-6 md:grid-cols-3"
+                : "grid gap-6 md:grid-cols-2"
             }
           >
+            <FilterCheckboxList
+              label="Categorías"
+              options={categories}
+              selected={categoryIds}
+              onChange={setCategoryIds}
+              searchPlaceholder="Buscar categoría…"
+            />
             {showBrands ? (
               <FilterCheckboxList
                 label="Marcas"

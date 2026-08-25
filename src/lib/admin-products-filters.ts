@@ -5,7 +5,9 @@ import { findProductIdsByTextSearch } from "@/lib/product-search";
 
 export type AdminProductsFilterParams = {
   search?: string;
+  /** @deprecated Prefer `categories`. Single category id or slug. */
   category?: string;
+  categories?: string[];
   /** @deprecated Prefer `brands`. Single brand id for backward compatibility. */
   brand?: string;
   /** @deprecated Prefer `suppliers`. Single supplier id for backward compatibility. */
@@ -33,12 +35,20 @@ function normalizeIdList(
 export function parseAdminProductsFilterParams(
   searchParams: URLSearchParams,
 ): AdminProductsFilterParams {
+  const categoriesRaw = searchParams.get("categories");
   const brandsRaw = searchParams.get("brands");
   const suppliersRaw = searchParams.get("suppliers");
 
   return {
     search: searchParams.get("search")?.trim() || undefined,
     category: searchParams.get("category")?.trim() || undefined,
+    categories: categoriesRaw
+      ? [
+          ...new Set(
+            categoriesRaw.split(",").map((s) => s.trim()).filter(Boolean),
+          ),
+        ]
+      : undefined,
     brand: searchParams.get("brand")?.trim() || undefined,
     supplier: searchParams.get("supplier")?.trim() || undefined,
     brands: brandsRaw
@@ -61,6 +71,7 @@ export async function buildAdminProductsWhere(
   const where: Prisma.ProductWhereInput = {};
   const search = params.search?.trim() || "";
   const active = params.active ?? "all";
+  const categoryIds = normalizeIdList(params.categories, params.category);
   const brandIds = normalizeIdList(params.brands, params.brand);
   const supplierIds = normalizeIdList(params.suppliers, params.supplier);
 
@@ -78,15 +89,20 @@ export async function buildAdminProductsWhere(
     where.isActive = false;
   }
 
-  if (params.category?.trim()) {
-    const cat = await prisma.category.findFirst({
+  if (categoryIds.length > 0) {
+    const categories = await prisma.category.findMany({
       where: {
-        OR: [{ id: params.category.trim() }, { slug: params.category.trim() }],
+        OR: [
+          { id: { in: categoryIds } },
+          { slug: { in: categoryIds } },
+        ],
       },
       select: { id: true },
     });
-    if (!cat) return null;
-    where.categories = { some: { categoryId: cat.id } };
+    if (categories.length === 0) return null;
+    where.categories = {
+      some: { categoryId: { in: categories.map((c) => c.id) } },
+    };
   }
 
   if (brandIds.length > 0) {

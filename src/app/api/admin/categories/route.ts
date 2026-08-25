@@ -2,14 +2,14 @@ import { NextResponse } from "next/server";
 
 import { Prisma } from "@/generated/prisma";
 import { prisma } from "@/lib/db";
-import { auth, isFullAdmin } from "@/lib/auth";
+import { auth, isAdminRole, isFullAdmin } from "@/lib/auth";
 
 export async function GET() {
   try {
     const session = await auth();
     if (
       !session?.user ||
-      !isFullAdmin((session.user as { role?: string }).role)
+      !isAdminRole((session.user as { role?: string }).role)
     ) {
       return NextResponse.json({ error: "No autorizado" }, { status: 403 });
     }

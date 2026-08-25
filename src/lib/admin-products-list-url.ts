@@ -2,6 +2,10 @@ export type AdminProductsListState = {
   search?: string;
   page?: number;
   active?: string;
+  /** IDs de categoría (OR entre sí). */
+  categories?: string[];
+  /** @deprecated Prefer `categories`. Single category id. */
+  category?: string;
   /** IDs de marca (OR entre sí). */
   brands?: string[];
   /** IDs de proveedor (OR entre sí). */
@@ -21,6 +25,13 @@ function appendIdList(
   }
 }
 
+function resolveCategoryIds(state: AdminProductsListState): string[] {
+  const fromPlural = [...new Set((state.categories ?? []).map((id) => id.trim()).filter(Boolean))];
+  if (fromPlural.length > 0) return fromPlural;
+  const one = state.category?.trim();
+  return one ? [one] : [];
+}
+
 export function buildAdminProductsListPath(
   state: AdminProductsListState,
 ): string {
@@ -29,6 +40,7 @@ export function buildAdminProductsListPath(
   if (search) params.set("search", search);
   if (state.page && state.page > 1) params.set("page", String(state.page));
   if (state.active && state.active !== "all") params.set("active", state.active);
+  appendIdList(params, "categories", resolveCategoryIds(state));
   appendIdList(params, "brands", state.brands);
   appendIdList(params, "suppliers", state.suppliers);
   const qs = params.toString();
@@ -57,6 +69,7 @@ export function parseAdminProductsListSearchParams(
     search: searchParams.get("search")?.trim() || "",
     page: Number.isFinite(pageRaw) && pageRaw > 0 ? pageRaw : 1,
     active: searchParams.get("active") || "all",
+    categories: parseIdList(searchParams, "categories", "category"),
     brands: parseIdList(searchParams, "brands", "brand"),
     suppliers: parseIdList(searchParams, "suppliers", "supplier"),
   };
@@ -94,6 +107,7 @@ export function resolveAdminProductsBackHref(
 export function countAdminProductsListFilters(state: AdminProductsListState): number {
   let count = 0;
   if (state.active && state.active !== "all") count += 1;
+  count += resolveCategoryIds(state).length;
   count += state.brands?.length ?? 0;
   count += state.suppliers?.length ?? 0;
   return count;

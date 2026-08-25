@@ -1,6 +1,7 @@
 "use client";
 
 import { Edit, EyeOff, FolderTree, Link2, Loader2, Plus, Trash2, Upload, X } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -26,6 +27,32 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { buildAdminProductsListPath } from "@/lib/admin-products-list-url";
+
+function CategoryProductCountBadge({
+  categoryId,
+  count,
+  variant = "secondary",
+}: {
+  categoryId: string;
+  count: number;
+  variant?: "secondary" | "outline";
+}) {
+  const href = buildAdminProductsListPath({ categories: [categoryId] });
+  return (
+    <Link href={href} title={`Ver ${count} productos en esta categoría`}>
+      <Badge
+        variant={variant}
+        className={cn(
+          "cursor-pointer transition-colors hover:bg-primary/15 hover:text-primary",
+          variant === "secondary" && "hover:bg-primary/15",
+        )}
+      >
+        {count} prod.
+      </Badge>
+    </Link>
+  );
+}
 
 type CategoryFlat = {
   id: string;
@@ -337,9 +364,11 @@ export default function AdminCategoriasPage() {
                     Suspendida
                   </Badge>
                 ) : null}
-                <Badge variant="outline" className="text-xs">
-                  {child.productCount} prod.
-                </Badge>
+                <CategoryProductCountBadge
+                  categoryId={child.id}
+                  count={child.productCount}
+                  variant="outline"
+                />
                 <Switch
                   checked={child.isActive}
                   onCheckedChange={(v) => void toggleSuspend(child, v)}
@@ -434,7 +463,10 @@ export default function AdminCategoriasPage() {
                         Suspendida
                       </Badge>
                     ) : null}
-                    <Badge variant="secondary">{root.productCount} prod.</Badge>
+                    <CategoryProductCountBadge
+                      categoryId={root.id}
+                      count={root.productCount}
+                    />
                     <div
                       className="ml-1 flex items-center gap-1 border-l border-border pl-2"
                       title={root.isActive ? "Suspender" : "Reactivar"}

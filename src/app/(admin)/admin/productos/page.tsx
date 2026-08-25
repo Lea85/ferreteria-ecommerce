@@ -94,6 +94,9 @@ function AdminProductosPageInner() {
   const [activeFilter, setActiveFilter] = useState<string>(
     initialList.active ?? "all",
   );
+  const [categoryIds, setCategoryIds] = useState<string[]>(
+    initialList.categories ?? [],
+  );
   const [brandIds, setBrandIds] = useState<string[]>(initialList.brands ?? []);
   const [supplierIds, setSupplierIds] = useState<string[]>(
     initialList.suppliers ?? [],
@@ -106,6 +109,7 @@ function AdminProductosPageInner() {
   );
   const skipFilterPageReset = useRef(true);
   const [products, setProducts] = useState<ProductRow[]>([]);
+  const [categories, setCategories] = useState<FilterOption[]>([]);
   const [brands, setBrands] = useState<FilterOption[]>([]);
   const [suppliers, setSuppliers] = useState<FilterOption[]>([]);
   const [total, setTotal] = useState(0);
@@ -145,13 +149,14 @@ function AdminProductosPageInner() {
       return;
     }
     setPage(1);
-  }, [debouncedSearch, activeFilter, brandIds, supplierIds]);
+  }, [debouncedSearch, activeFilter, categoryIds, brandIds, supplierIds]);
 
   useEffect(() => {
     const next = buildAdminProductsListPath({
       search: debouncedSearch,
       page,
       active: activeFilter,
+      categories: categoryIds,
       brands: brandIds,
       suppliers: supplierIds,
     });
@@ -165,6 +170,7 @@ function AdminProductosPageInner() {
     debouncedSearch,
     page,
     activeFilter,
+    categoryIds,
     brandIds,
     supplierIds,
     pathname,
@@ -178,20 +184,22 @@ function AdminProductosPageInner() {
         search: debouncedSearch,
         page,
         active: activeFilter,
+        categories: categoryIds,
         brands: brandIds,
         suppliers: supplierIds,
       }),
-    [debouncedSearch, page, activeFilter, brandIds, supplierIds],
+    [debouncedSearch, page, activeFilter, categoryIds, brandIds, supplierIds],
   );
 
   const filterCount = useMemo(
     () =>
       countAdminProductsListFilters({
         active: activeFilter,
+        categories: categoryIds,
         brands: brandIds,
         suppliers: supplierIds,
       }),
-    [activeFilter, brandIds, supplierIds],
+    [activeFilter, categoryIds, brandIds, supplierIds],
   );
 
   useEffect(() => {
@@ -199,14 +207,28 @@ function AdminProductosPageInner() {
 
     async function loadFilters() {
       try {
-        const suppliersRes = await fetch("/api/admin/suppliers?for=filter&limit=500");
+        const [suppliersRes, categoriesRes] = await Promise.all([
+          fetch("/api/admin/suppliers?for=filter&limit=500"),
+          fetch("/api/admin/categories"),
+        ]);
         const suppliersData = await suppliersRes.json();
+        const categoriesData = await categoriesRes.json();
 
         if (!suppliersRes.ok) {
           throw new Error("No se pudieron cargar filtros");
         }
 
         if (!cancelled) {
+          if (categoriesRes.ok) {
+            setCategories(
+              (categoriesData.categories ?? []).map(
+                (category: { id: string; name: string }) => ({
+                  id: category.id,
+                  name: category.name,
+                }),
+              ),
+            );
+          }
           if (isFullAdmin) {
             const brandsRes = await fetch("/api/admin/brands?for=filter&limit=500");
             const brandsData = await brandsRes.json();
@@ -228,7 +250,7 @@ function AdminProductosPageInner() {
         }
       } catch {
         if (!cancelled) {
-          toast.error("No se pudieron cargar marcas y proveedores");
+          toast.error("No se pudieron cargar filtros de productos");
         }
       }
     }
@@ -245,6 +267,7 @@ function AdminProductosPageInner() {
       const params = new URLSearchParams();
       if (debouncedSearch) params.set("search", debouncedSearch);
       params.set("active", activeFilter);
+      if (categoryIds.length > 0) params.set("categories", categoryIds.join(","));
       if (brandIds.length > 0) params.set("brands", brandIds.join(","));
       if (supplierIds.length > 0) params.set("suppliers", supplierIds.join(","));
       params.set("page", String(page));
@@ -269,7 +292,7 @@ function AdminProductosPageInner() {
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch, activeFilter, brandIds, supplierIds, page]);
+  }, [debouncedSearch, activeFilter, categoryIds, brandIds, supplierIds, page]);
 
   useEffect(() => {
     void loadProducts();
@@ -320,6 +343,7 @@ function AdminProductosPageInner() {
       const params = new URLSearchParams({ format: "xlsx" });
       if (debouncedSearch) params.set("search", debouncedSearch);
       params.set("active", activeFilter);
+      if (categoryIds.length > 0) params.set("categories", categoryIds.join(","));
       if (brandIds.length > 0) params.set("brands", brandIds.join(","));
       if (supplierIds.length > 0) params.set("suppliers", supplierIds.join(","));
 
@@ -562,6 +586,7 @@ function AdminProductosPageInner() {
 
   function handleApplyFilters(value: AdminProductsFiltersValue) {
     setActiveFilter(value.active);
+    setCategoryIds(value.categoryIds);
     setBrandIds(value.brandIds);
     setSupplierIds(value.supplierIds);
   }
@@ -650,12 +675,17 @@ function AdminProductosPageInner() {
 
       <AdminProductsActiveFilterChips
         active={activeFilter}
+        categoryIds={categoryIds}
         brandIds={brandIds}
         supplierIds={supplierIds}
+        categories={categories}
         brands={brands}
         suppliers={suppliers}
         showBrands={isFullAdmin}
         onRemoveActive={() => setActiveFilter("all")}
+        onRemoveCategory={(id) =>
+          setCategoryIds((prev) => prev.filter((categoryId) => categoryId !== id))
+        }
         onRemoveBrand={(id) =>
           setBrandIds((prev) => prev.filter((brandId) => brandId !== id))
         }
@@ -664,6 +694,7 @@ function AdminProductosPageInner() {
         }
         onClearAll={() => {
           setActiveFilter("all");
+          setCategoryIds([]);
           setBrandIds([]);
           setSupplierIds([]);
         }}
@@ -784,11 +815,13 @@ function AdminProductosPageInner() {
       <AdminProductsFiltersDialog
         open={filtersOpen}
         onOpenChange={setFiltersOpen}
+        categories={categories}
         brands={brands}
         suppliers={suppliers}
         showBrands={isFullAdmin}
         applied={{
           active: activeFilter,
+          categoryIds,
           brandIds,
           supplierIds,
         }}
