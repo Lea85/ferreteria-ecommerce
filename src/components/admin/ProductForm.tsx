@@ -474,239 +474,10 @@ export function ProductForm({
 
   return (
     <form
-      className={cn("space-y-8", className)}
+      className={cn("relative space-y-8 pb-28", className)}
       onSubmit={form.handleSubmit(handleFormSubmit, handleFormError)}
     >
-      <Card className="border-border shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-lg text-primary">Información general</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-6 md:grid-cols-2">
-          <div className="space-y-2 md:col-span-2">
-            <Label htmlFor="name">Nombre <span className="text-destructive">*</span></Label>
-            <Input
-              id="name"
-              {...form.register("name")}
-              className={inputErrorClass(!!nameError, "border-border")}
-            />
-            {nameError && (
-              <p className="text-sm text-destructive">{nameError}</p>
-            )}
-          </div>
-          <div className="space-y-2 md:col-span-2">
-            <Label htmlFor="slug">Slug (URL) <span className="text-destructive">*</span></Label>
-            <Input
-              id="slug"
-              {...form.register("slug")}
-              className={inputErrorClass(!!slugError, "border-border font-mono text-sm")}
-              onChange={(e) => {
-                setSlugTouched(true);
-                form.register("slug").onChange(e);
-              }}
-            />
-            {slugError && (
-              <p className="text-sm text-destructive">{slugError}</p>
-            )}
-            <p className="text-xs text-muted-foreground">
-              Se genera desde el nombre; podés editarlo manualmente.
-            </p>
-          </div>
-          <div className="space-y-2 md:col-span-2">
-            <Label htmlFor="description">Descripción</Label>
-            <Controller
-              name="description"
-              control={form.control}
-              render={({ field }) => (
-                <RichTextEditor
-                  value={field.value ?? ""}
-                  onChange={field.onChange}
-                />
-              )}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Marca</Label>
-            <Select
-              value={form.watch("brandId") || "__none__"}
-              onValueChange={(v) => form.setValue("brandId", v === "__none__" ? "" : v)}
-            >
-              <SelectTrigger className="border-border">
-                <SelectValue placeholder="Seleccionar marca" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">Sin marca</SelectItem>
-                {brands.map((b) => (
-                  <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label className="flex items-center gap-2">
-              <MapPin className="size-4 text-muted-foreground" />
-              Ubicacion en almacen
-            </Label>
-            <Select
-              value={form.watch("warehouseLocationId") || "__none__"}
-              onValueChange={(v) => form.setValue("warehouseLocationId", v === "__none__" ? "" : v)}
-            >
-              <SelectTrigger className="border-border">
-                <SelectValue placeholder="Sin ubicacion asignada" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">Sin ubicacion asignada</SelectItem>
-                {warehouseLocations.map((l) => (
-                  <SelectItem key={l.id} value={l.id}>
-                    <span className="font-mono font-bold">{l.code}</span>
-                    <span className="ml-2 text-muted-foreground">{l.display}</span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2 md:col-span-2">
-            <Label>Categorías <span className="text-destructive">*</span></Label>
-            <div
-              className={sectionErrorClass(
-                !!categoryError,
-                "grid gap-2 rounded-md border border-border bg-muted/30 p-4 sm:grid-cols-2 lg:grid-cols-3",
-              )}
-            >
-              {categories.map((c) => (
-                <label key={c.id} className="flex cursor-pointer items-center gap-2 text-sm">
-                  <Checkbox checked={categoryIds.includes(c.id)} onCheckedChange={() => toggleCategory(c.id)} />
-                  {c.name}
-                </label>
-              ))}
-            </div>
-            {categoryError && (
-              <p className="text-sm text-destructive">{categoryError}</p>
-            )}
-          </div>
-          <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
-            <div>
-              <p className="text-sm font-medium">Activo</p>
-              <p className="text-xs text-muted-foreground">Visible en la tienda</p>
-            </div>
-            <Switch checked={form.watch("isActive")} onCheckedChange={(v) => form.setValue("isActive", v)} />
-          </div>
-          <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
-            <div>
-              <p className="text-sm font-medium">Destacado</p>
-              <p className="text-xs text-muted-foreground">Home y listados</p>
-            </div>
-            <Switch checked={form.watch("isFeatured")} onCheckedChange={(v) => form.setValue("isFeatured", v)} />
-          </div>
-        </CardContent>
-      </Card>
-
-      {allSuppliers.length > 0 && (
-        <Card className="border-border shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-lg text-primary">Proveedores</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
-              {allSuppliers.map((s) => (
-                <label key={s.id} className="flex cursor-pointer items-center gap-2 text-sm">
-                  <Checkbox
-                    checked={selectedSupplierIds.has(s.id)}
-                    onCheckedChange={(checked) => {
-                      setSelectedSupplierIds((prev) => {
-                        const next = new Set(prev);
-                        if (checked) next.add(s.id);
-                        else next.delete(s.id);
-                        return next;
-                      });
-                    }}
-                  />
-                  {s.name}
-                </label>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {allAttributes.length > 0 && (
-        <Card className="border-border shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-lg text-primary">Sub Categorías (Atributos)</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Seleccioná los atributos que aplican a este producto. Luego podés generar todas las
-              combinaciones como variantes.
-            </p>
-            <div className="grid gap-2 rounded-md border border-border bg-muted/30 p-4 sm:grid-cols-2 lg:grid-cols-3">
-              {allAttributes.map((attr) => (
-                <label key={attr.id} className="flex cursor-pointer items-center gap-2 text-sm">
-                  <Checkbox
-                    checked={selectedAttrIds.has(attr.id)}
-                    onCheckedChange={() => toggleAttributeType(attr.id)}
-                  />
-                  <span className="font-medium">{attr.name}</span>
-                  <span className="text-xs text-muted-foreground">
-                    ({attr.values.length} {attr.values.length === 1 ? "valor" : "valores"})
-                  </span>
-                </label>
-              ))}
-            </div>
-
-            {selectedAttributes.length > 0 && (
-              <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
-                <p className="text-sm font-medium">Valores seleccionados:</p>
-                {selectedAttributes.map((attr) => (
-                  <div key={attr.id} className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs font-semibold text-muted-foreground">{attr.name}:</span>
-                    {attr.values.map((v) => (
-                      <Badge key={v.id} variant="secondary" className="text-xs">
-                        {v.value}
-                      </Badge>
-                    ))}
-                  </div>
-                ))}
-                <div className="flex flex-col gap-3 border-t border-border pt-3 sm:flex-row sm:items-end">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Precio de publicación base (todas las variantes)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      placeholder="0.00"
-                      className="w-40"
-                      value={basePrice}
-                      onChange={(e) => setBasePrice(e.target.value)}
-                    />
-                  </div>
-                  <Button type="button" variant="default" size="sm" className="gap-1" onClick={generateCombinations}>
-                    <RefreshCw className="size-4" /> Generar combinaciones
-                  </Button>
-                  <Button type="button" variant="outline" size="sm" className="gap-1" onClick={applyPriceToAll}>
-                    <Copy className="size-4" /> Aplicar precio a todas
-                  </Button>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      <Card className="border-border shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-lg text-primary">SEO</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2 md:col-span-2">
-            <Label htmlFor="metaTitle">Meta título</Label>
-            <Input id="metaTitle" {...form.register("metaTitle")} className="border-border" />
-          </div>
-          <div className="space-y-2 md:col-span-2">
-            <Label htmlFor="metaDesc">Meta descripción</Label>
-            <Textarea id="metaDesc" rows={3} {...form.register("metaDesc")} className="border-border" />
-          </div>
-        </CardContent>
-      </Card>
-
+      {/* 1. Variantes */}
       <Card className="border-border shadow-sm">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-lg text-primary">Variantes</CardTitle>
@@ -859,6 +630,160 @@ export function ProductForm({
         </CardContent>
       </Card>
 
+      {/* 2. Información general */}
+      <Card className="border-border shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-lg text-primary">Información general</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-6 md:grid-cols-2">
+          <div className="space-y-2 md:col-span-2">
+            <Label htmlFor="name">Nombre <span className="text-destructive">*</span></Label>
+            <Input
+              id="name"
+              {...form.register("name")}
+              className={inputErrorClass(!!nameError, "border-border")}
+            />
+            {nameError && (
+              <p className="text-sm text-destructive">{nameError}</p>
+            )}
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label htmlFor="slug">Slug (URL) <span className="text-destructive">*</span></Label>
+            <Input
+              id="slug"
+              {...form.register("slug")}
+              className={inputErrorClass(!!slugError, "border-border font-mono text-sm")}
+              onChange={(e) => {
+                setSlugTouched(true);
+                form.register("slug").onChange(e);
+              }}
+            />
+            {slugError && (
+              <p className="text-sm text-destructive">{slugError}</p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Se genera desde el nombre; podés editarlo manualmente.
+            </p>
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label htmlFor="description">Descripción</Label>
+            <Controller
+              name="description"
+              control={form.control}
+              render={({ field }) => (
+                <RichTextEditor
+                  value={field.value ?? ""}
+                  onChange={field.onChange}
+                />
+              )}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Marca</Label>
+            <Select
+              value={form.watch("brandId") || "__none__"}
+              onValueChange={(v) => form.setValue("brandId", v === "__none__" ? "" : v)}
+            >
+              <SelectTrigger className="border-border">
+                <SelectValue placeholder="Seleccionar marca" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Sin marca</SelectItem>
+                {brands.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2">
+              <MapPin className="size-4 text-muted-foreground" />
+              Ubicacion en almacen
+            </Label>
+            <Select
+              value={form.watch("warehouseLocationId") || "__none__"}
+              onValueChange={(v) => form.setValue("warehouseLocationId", v === "__none__" ? "" : v)}
+            >
+              <SelectTrigger className="border-border">
+                <SelectValue placeholder="Sin ubicacion asignada" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Sin ubicacion asignada</SelectItem>
+                {warehouseLocations.map((l) => (
+                  <SelectItem key={l.id} value={l.id}>
+                    <span className="font-mono font-bold">{l.code}</span>
+                    <span className="ml-2 text-muted-foreground">{l.display}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label>Categorías <span className="text-destructive">*</span></Label>
+            <div
+              className={sectionErrorClass(
+                !!categoryError,
+                "grid gap-2 rounded-md border border-border bg-muted/30 p-4 sm:grid-cols-2 lg:grid-cols-3",
+              )}
+            >
+              {categories.map((c) => (
+                <label key={c.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                  <Checkbox checked={categoryIds.includes(c.id)} onCheckedChange={() => toggleCategory(c.id)} />
+                  {c.name}
+                </label>
+              ))}
+            </div>
+            {categoryError && (
+              <p className="text-sm text-destructive">{categoryError}</p>
+            )}
+          </div>
+          <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
+            <div>
+              <p className="text-sm font-medium">Activo</p>
+              <p className="text-xs text-muted-foreground">Visible en la tienda</p>
+            </div>
+            <Switch checked={form.watch("isActive")} onCheckedChange={(v) => form.setValue("isActive", v)} />
+          </div>
+          <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
+            <div>
+              <p className="text-sm font-medium">Destacado</p>
+              <p className="text-xs text-muted-foreground">Home y listados</p>
+            </div>
+            <Switch checked={form.watch("isFeatured")} onCheckedChange={(v) => form.setValue("isFeatured", v)} />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 3. Proveedores */}
+      {allSuppliers.length > 0 && (
+        <Card className="border-border shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-lg text-primary">Proveedores</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
+              {allSuppliers.map((s) => (
+                <label key={s.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                  <Checkbox
+                    checked={selectedSupplierIds.has(s.id)}
+                    onCheckedChange={(checked) => {
+                      setSelectedSupplierIds((prev) => {
+                        const next = new Set(prev);
+                        if (checked) next.add(s.id);
+                        else next.delete(s.id);
+                        return next;
+                      });
+                    }}
+                  />
+                  {s.name}
+                </label>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 4. Imágenes */}
       <Card className="border-border shadow-sm">
         <CardHeader>
           <CardTitle className="text-lg text-primary">Imágenes</CardTitle>
@@ -959,27 +884,113 @@ export function ProductForm({
         </CardContent>
       </Card>
 
-      <div className="flex flex-col items-end gap-2">
-        {!canSubmit && !submitting && (
-          <p className="text-xs text-muted-foreground">
-            Completá los campos obligatorios (<span className="text-destructive">*</span>) para habilitar el botón.
-          </p>
-        )}
-        <Button type="submit" className="min-w-[160px]" disabled={!canSubmit}>
-          {submitting ? (
-            <>
-              <Spinner className="mr-2 size-4 animate-spin" />
-              Guardando...
-            </>
-          ) : (
-            submitLabel
-          )}
-        </Button>
-      </div>
+      {/* 5. Sub Categorías */}
+      {allAttributes.length > 0 && (
+        <Card className="border-border shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-lg text-primary">Sub Categorías (Atributos)</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Seleccioná los atributos que aplican a este producto. Luego podés generar todas las
+              combinaciones como variantes.
+            </p>
+            <div className="grid gap-2 rounded-md border border-border bg-muted/30 p-4 sm:grid-cols-2 lg:grid-cols-3">
+              {allAttributes.map((attr) => (
+                <label key={attr.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                  <Checkbox
+                    checked={selectedAttrIds.has(attr.id)}
+                    onCheckedChange={() => toggleAttributeType(attr.id)}
+                  />
+                  <span className="font-medium">{attr.name}</span>
+                  <span className="text-xs text-muted-foreground">
+                    ({attr.values.length} {attr.values.length === 1 ? "valor" : "valores"})
+                  </span>
+                </label>
+              ))}
+            </div>
+
+            {selectedAttributes.length > 0 && (
+              <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
+                <p className="text-sm font-medium">Valores seleccionados:</p>
+                {selectedAttributes.map((attr) => (
+                  <div key={attr.id} className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-semibold text-muted-foreground">{attr.name}:</span>
+                    {attr.values.map((v) => (
+                      <Badge key={v.id} variant="secondary" className="text-xs">
+                        {v.value}
+                      </Badge>
+                    ))}
+                  </div>
+                ))}
+                <div className="flex flex-col gap-3 border-t border-border pt-3 sm:flex-row sm:items-end">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Precio de publicación base (todas las variantes)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      className="w-40"
+                      value={basePrice}
+                      onChange={(e) => setBasePrice(e.target.value)}
+                    />
+                  </div>
+                  <Button type="button" variant="default" size="sm" className="gap-1" onClick={generateCombinations}>
+                    <RefreshCw className="size-4" /> Generar combinaciones
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" className="gap-1" onClick={applyPriceToAll}>
+                    <Copy className="size-4" /> Aplicar precio a todas
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 6. SEO */}
+      <Card className="border-border shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-lg text-primary">SEO</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2 md:col-span-2">
+            <Label htmlFor="metaTitle">Meta título</Label>
+            <Input id="metaTitle" {...form.register("metaTitle")} className="border-border" />
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label htmlFor="metaDesc">Meta descripción</Label>
+            <Textarea id="metaDesc" rows={3} {...form.register("metaDesc")} className="border-border" />
+          </div>
+        </CardContent>
+      </Card>
 
       {process.env.NODE_ENV === "development" && slugWatch && (
         <p className="text-xs text-muted-foreground">Vista previa: /{slugWatch}</p>
       )}
+
+      {/* Barra flotante de guardado */}
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 lg:left-64">
+        <div className="pointer-events-auto border-t border-border bg-background/95 px-4 py-3 shadow-[0_-8px_24px_rgba(0,0,0,0.08)] backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:px-6">
+          <div className="mx-auto flex max-w-6xl flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-4">
+            {!canSubmit && !submitting && (
+              <p className="text-xs text-muted-foreground sm:mr-auto">
+                Completá los campos obligatorios (<span className="text-destructive">*</span>) para habilitar el botón.
+              </p>
+            )}
+            <Button type="submit" className="min-w-[180px] shadow-md" disabled={!canSubmit}>
+              {submitting ? (
+                <>
+                  <Spinner className="mr-2 size-4 animate-spin" />
+                  Guardando...
+                </>
+              ) : (
+                submitLabel
+              )}
+            </Button>
+          </div>
+        </div>
+      </div>
     </form>
   );
 }
