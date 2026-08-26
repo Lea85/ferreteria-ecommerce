@@ -52,6 +52,7 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search")?.trim() || "";
+    const skuOrEan = searchParams.get("sku")?.trim() || "";
     const statusParam = searchParams.get("status")?.trim();
     const dateFrom = searchParams.get("dateFrom")?.trim() || "";
     const dateTo = searchParams.get("dateTo")?.trim() || "";
@@ -90,6 +91,29 @@ export async function GET(request: Request) {
         { customerName: { contains: search, mode: "insensitive" } },
         { customerEmail: { contains: search, mode: "insensitive" } },
       ];
+    }
+
+    if (skuOrEan) {
+      where.items = {
+        some: {
+          OR: [
+            { sku: { equals: skuOrEan, mode: "insensitive" } },
+            { sku: { contains: skuOrEan, mode: "insensitive" } },
+            {
+              variant: {
+                OR: [
+                  { sku: { equals: skuOrEan, mode: "insensitive" } },
+                  { sku: { contains: skuOrEan, mode: "insensitive" } },
+                  { ean: { equals: skuOrEan, mode: "insensitive" } },
+                  { ean: { contains: skuOrEan, mode: "insensitive" } },
+                  { barcode: { equals: skuOrEan, mode: "insensitive" } },
+                  { barcode: { contains: skuOrEan, mode: "insensitive" } },
+                ],
+              },
+            },
+          ],
+        },
+      };
     }
 
     const select = {

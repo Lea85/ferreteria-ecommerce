@@ -3,7 +3,8 @@
 import * as XLSX from "xlsx";
 import { Download, Loader2 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
@@ -12,6 +13,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  appendAdminOrdersNavParams,
+  buildAdminOrdersListPath,
+  parseAdminOrdersListSearchParams,
+} from "@/lib/admin-orders-list-url";
 import {
   ORDER_STATUS_LABELS,
   PAYMENT_METHOD_LABELS,
@@ -88,6 +94,7 @@ function buildQueryParams(opts: {
   status: string;
   dateFrom: string;
   dateTo: string;
+  sku?: string;
   page?: number;
   exportMode?: boolean;
 }) {
@@ -96,6 +103,7 @@ function buildQueryParams(opts: {
   if (opts.status !== "all") params.set("status", opts.status);
   if (opts.dateFrom) params.set("dateFrom", opts.dateFrom);
   if (opts.dateTo) params.set("dateTo", opts.dateTo);
+  if (opts.sku?.trim()) params.set("sku", opts.sku.trim());
   if (opts.exportMode) {
     params.set("export", "1");
   } else {
@@ -105,13 +113,28 @@ function buildQueryParams(opts: {
   return params;
 }
 
-export default function AdminPedidosPage() {
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [page, setPage] = useState(1);
-  const [searchInput, setSearchInput] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+function AdminPedidosPageInner() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const initialList = useMemo(
+    () => parseAdminOrdersListSearchParams(searchParams),
+    [searchParams],
+  );
+
+  const [statusFilter, setStatusFilter] = useState<string>(
+    initialList.status ?? "all",
+  );
+  const [dateFrom, setDateFrom] = useState(initialList.dateFrom ?? "");
+  const [dateTo, setDateTo] = useState(initialList.dateTo ?? "");
+  const [page, setPage] = useState(initialList.page ?? 1);
+  const [searchInput, setSearchInput] = useState(initialList.search ?? "");
+  const [debouncedSearch, setDebouncedSearch] = useState(
+    initialList.search ?? "",
+  );
+  const [skuInput, setSkuInput] = useState(initialList.sku ?? "");
+  const [debouncedSku, setDebouncedSku] = useState(initialList.sku ?? "");
+  const skipFilterPageReset = useRef(true);
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -125,8 +148,57 @@ export default function AdminPedidosPage() {
   }, [searchInput]);
 
   useEffect(() => {
+    const t = setTimeout(() => setDebouncedSku(skuInput.trim()), 300);
+    return () => clearTimeout(t);
+  }, [skuInput]);
+
+  useEffect(() => {
+    if (skipFilterPageReset.current) {
+      skipFilterPageReset.current = false;
+      return;
+    }
     setPage(1);
-  }, [debouncedSearch, statusFilter, dateFrom, dateTo]);
+  }, [debouncedSearch, debouncedSku, statusFilter, dateFrom, dateTo]);
+
+  useEffect(() => {
+    const next = buildAdminOrdersListPath({
+      search: debouncedSearch,
+      page,
+      status: statusFilter,
+      dateFrom,
+      dateTo,
+      sku: debouncedSku,
+    });
+    const current = searchParams.toString()
+      ? `${pathname}?${searchParams.toString()}`
+      : pathname;
+    if (next !== current) {
+      router.replace(next, { scroll: false });
+    }
+  }, [
+    debouncedSearch,
+    debouncedSku,
+    page,
+    statusFilter,
+    dateFrom,
+    dateTo,
+    pathname,
+    router,
+    searchParams,
+  ]);
+
+  const listReturnTo = useMemo(
+    () =>
+      buildAdminOrdersListPath({
+        search: debouncedSearch,
+        page,
+        status: statusFilter,
+        dateFrom,
+        dateTo,
+        sku: debouncedSku,
+      }),
+    [debouncedSearch, debouncedSku, page, statusFilter, dateFrom, dateTo],
+  );
 
   const loadOrders = useCallback(async () => {
     if (dateFrom && dateTo && dateFrom > dateTo) {
@@ -146,6 +218,7 @@ export default function AdminPedidosPage() {
         status: statusFilter,
         dateFrom,
         dateTo,
+        sku: debouncedSku,
         page,
       });
       const res = await fetch(`/api/admin/orders?${params.toString()}`);
@@ -168,7 +241,7 @@ export default function AdminPedidosPage() {
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch, statusFilter, dateFrom, dateTo, page]);
+  }, [debouncedSearch, debouncedSku, statusFilter, dateFrom, dateTo, page]);
 
   useEffect(() => {
     void loadOrders();
@@ -187,6 +260,7 @@ export default function AdminPedidosPage() {
         status: statusFilter,
         dateFrom,
         dateTo,
+        sku: debouncedSku,
         exportMode: true,
       });
       const res = await fetch(`/api/admin/orders?${params.toString()}`);
@@ -215,7 +289,7 @@ export default function AdminPedidosPage() {
       const ws = XLSX.utils.json_to_sheet(rows);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Ventas");
-      const suffix = [dateFrom, dateTo].filter(Boolean).join("_") || "todas";
+      const suffix = [dateFrom, dateTo, debouncedSku].filter(Boolean).join("_") || "todas";
       XLSX.writeFile(wb, `ventas_${suffix}.xlsx`);
       toast.success(`${rows.length} ventas exportadas`);
     } catch {
@@ -234,7 +308,9 @@ export default function AdminPedidosPage() {
         sortable: true,
         cell: (row) => (
           <Link
-            href={`/admin/pedidos/${row.id}`}
+            href={appendAdminOrdersNavParams(`/admin/pedidos/${row.id}`, {
+              returnTo: listReturnTo,
+            })}
             className="font-mono text-xs font-semibold text-primary underline-offset-4 hover:underline"
           >
             {row.orderNumber}
@@ -286,7 +362,7 @@ export default function AdminPedidosPage() {
         ),
       },
     ],
-    [],
+    [listReturnTo],
   );
 
   return (
@@ -340,7 +416,20 @@ export default function AdminPedidosPage() {
               className="w-full min-w-[160px] border-border sm:w-44"
             />
           </div>
-          {(dateFrom || dateTo) && (
+          <div className="space-y-1.5">
+            <Label htmlFor="sku-ean" className="text-xs text-muted-foreground">
+              SKU o EAN
+            </Label>
+            <Input
+              id="sku-ean"
+              value={skuInput}
+              onChange={(e) => setSkuInput(e.target.value)}
+              placeholder="Ej: 7790… o SKU-123"
+              className="w-full min-w-[180px] border-border font-mono sm:w-56"
+              autoComplete="off"
+            />
+          </div>
+          {(dateFrom || dateTo || skuInput) && (
             <Button
               type="button"
               variant="ghost"
@@ -348,15 +437,18 @@ export default function AdminPedidosPage() {
               onClick={() => {
                 setDateFrom("");
                 setDateTo("");
+                setSkuInput("");
               }}
             >
-              Limpiar fechas
+              Limpiar filtros
             </Button>
           )}
           <p className="text-xs text-muted-foreground sm:ml-auto sm:pb-2">
-            {dateFrom || dateTo
-              ? "Solo ventas dentro del rango seleccionado."
-              : "Sin filtro de fecha: se muestran todas las ventas."}
+            {debouncedSku
+              ? `Ventas que incluyen el producto ${debouncedSku}.`
+              : dateFrom || dateTo
+                ? "Solo ventas dentro del rango seleccionado."
+                : "Podés filtrar por fechas y/o por SKU o EAN vendido."}
           </p>
         </div>
 
@@ -400,5 +492,19 @@ export default function AdminPedidosPage() {
         }}
       />
     </div>
+  );
+}
+
+export default function AdminPedidosPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex justify-center py-16">
+          <Loader2 className="size-8 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      <AdminPedidosPageInner />
+    </Suspense>
   );
 }

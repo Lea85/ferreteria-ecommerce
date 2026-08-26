@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 
 import { OrderStatusBadge } from "@/components/admin/OrderStatusBadge";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +23,7 @@ import {
   type OrderStatus,
   type PaymentMethod,
 } from "@/lib/constants";
+import { resolveAdminOrdersBackHref } from "@/lib/admin-orders-list-url";
 import { getOrderById } from "@/lib/services/order.service";
 import { isCounterPaymentMethod } from "@/lib/services/counter-sale.service";
 import { formatPrice } from "@/lib/utils";
@@ -55,10 +57,21 @@ function formatHistoryDate(date: Date) {
   }).format(date);
 }
 
-type PageProps = { params: Promise<{ id: string }> };
+type PageProps = {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
 
-export default async function VentaDetallePage({ params }: PageProps) {
+export default async function VentaDetallePage({ params, searchParams }: PageProps) {
   const { id } = await params;
+  const query = await searchParams;
+  const returnToRaw = Array.isArray(query.returnTo)
+    ? query.returnTo[0]
+    : query.returnTo;
+  const backHref = resolveAdminOrdersBackHref({
+    get: (key: string) => (key === "returnTo" ? returnToRaw ?? null : null),
+  });
+
   const order = await getOrderById(id);
 
   if (!order) {
@@ -90,13 +103,20 @@ export default async function VentaDetallePage({ params }: PageProps) {
 
   return (
     <div className="space-y-8">
-      <nav className="text-sm text-muted-foreground">
-        <Link href="/admin/pedidos" className="hover:text-primary">
-          Ventas
-        </Link>
-        <span className="mx-2">/</span>
-        <span className="font-medium text-foreground">{order.orderNumber}</span>
-      </nav>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button variant="ghost" size="icon" asChild>
+          <Link href={backHref} aria-label="Volver al listado de ventas">
+            <ArrowLeft className="size-5" />
+          </Link>
+        </Button>
+        <nav className="text-sm text-muted-foreground">
+          <Link href={backHref} className="hover:text-primary">
+            Ventas
+          </Link>
+          <span className="mx-2">/</span>
+          <span className="font-medium text-foreground">{order.orderNumber}</span>
+        </nav>
+      </div>
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
@@ -114,6 +134,9 @@ export default async function VentaDetallePage({ params }: PageProps) {
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" asChild>
+            <Link href={backHref}>Volver al listado</Link>
+          </Button>
           {isCounterSale ? (
             <OrderPrintButton
               order={{
