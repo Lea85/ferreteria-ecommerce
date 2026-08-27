@@ -41,10 +41,16 @@ export async function GET(request: Request) {
     const where: Prisma.UserWhereInput = {};
 
     if (search) {
+      const digits = search.replace(/\D/g, "");
       where.OR = [
         { name: { contains: search, mode: "insensitive" } },
         { lastName: { contains: search, mode: "insensitive" } },
         { email: { contains: search, mode: "insensitive" } },
+        { companyName: { contains: search, mode: "insensitive" } },
+        { taxId: { contains: search, mode: "insensitive" } },
+        ...(digits.length >= 2 && digits !== search
+          ? [{ taxId: { contains: digits, mode: "insensitive" as const } }]
+          : []),
       ];
     }
 
@@ -78,6 +84,9 @@ export async function GET(request: Request) {
           customerType: true,
           role: true,
           isApproved: true,
+          taxId: true,
+          taxIdType: true,
+          companyName: true,
           createdAt: true,
           _count: { select: { orders: true, addresses: true } },
           customerCategories: {
@@ -99,6 +108,9 @@ export async function GET(request: Request) {
         customerType: u.customerType,
         role: u.role,
         isApproved: u.isApproved,
+        taxId: u.taxId,
+        taxIdType: u.taxIdType,
+        companyName: u.companyName,
         createdAt: u.createdAt,
         _count: {
           orders: u._count.orders,

@@ -14,6 +14,7 @@ function roundMoney(value: number): number {
 export async function updateQuoteItems(
   quoteId: string,
   rawItems: QuoteUpdateItemInput[],
+  options?: { userId?: string | null },
 ) {
   const quote = await prisma.quote.findUnique({
     where: { id: quoteId },
@@ -25,6 +26,19 @@ export async function updateQuoteItems(
   }
   if (quote.status !== "ACTIVE") {
     throw new Error("Solo se pueden editar presupuestos activos.");
+  }
+
+  let userId = quote.userId;
+  const nextUserId = options?.userId?.trim();
+  if (nextUserId && nextUserId !== quote.userId) {
+    const customer = await prisma.user.findUnique({
+      where: { id: nextUserId },
+      select: { id: true },
+    });
+    if (!customer) {
+      throw new Error("Cliente no encontrado.");
+    }
+    userId = customer.id;
   }
 
   const byVariant = new Map<string, number>();
@@ -101,7 +115,7 @@ export async function updateQuoteItems(
   subtotal = roundMoney(subtotal);
   const totalQuantity = quoteItems.reduce((sum, i) => sum + i.quantity, 0);
   const categoryDiscount = await resolveUserCategoryDiscount(
-    quote.userId,
+    userId,
     subtotal,
     totalQuantity,
   );
@@ -113,6 +127,7 @@ export async function updateQuoteItems(
     return tx.quote.update({
       where: { id: quoteId },
       data: {
+        userId,
         subtotal,
         total,
         notes: categoryDiscount
@@ -123,7 +138,18 @@ export async function updateQuoteItems(
         },
       },
       include: {
-        user: { select: { name: true, lastName: true, email: true, phone: true } },
+        user: {
+          select: {
+            id: true,
+            name: true,
+            lastName: true,
+            email: true,
+            phone: true,
+            taxId: true,
+            taxIdType: true,
+            companyName: true,
+          },
+        },
         items: {
           include: {
             variant: { select: { stock: true, isActive: true } },

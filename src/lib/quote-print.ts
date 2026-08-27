@@ -164,11 +164,12 @@ export function generateQuotePrintHtml(
 export function printQuote(
   quote: QuotePrintData,
   storeSettings: Record<string, string>,
-) {
+): boolean {
   const html = generateQuotePrintHtml(quote, storeSettings);
   const printWindow = window.open("", "_blank");
-  if (!printWindow) return;
+  if (!printWindow) return false;
   printWindow.document.write(html);
   printWindow.document.close();
   printWindow.onload = () => printWindow.print();
+  return true;
 }

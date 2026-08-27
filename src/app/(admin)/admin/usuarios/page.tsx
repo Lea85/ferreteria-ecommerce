@@ -28,6 +28,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { CUSTOMER_TYPE_LABELS } from "@/lib/constants";
 import type { CustomerType } from "@/lib/constants";
+import {
+  buildCustomerWhatsAppGreeting,
+  buildWhatsAppUrl,
+} from "@/lib/whatsapp";
 
 type CustCategory = {
   id: string;
@@ -59,27 +63,6 @@ function formatCuit(value: string): string {
   if (digits.length <= 2) return digits;
   if (digits.length <= 10) return `${digits.slice(0, 2)}-${digits.slice(2)}`;
   return `${digits.slice(0, 2)}-${digits.slice(2, 10)}-${digits.slice(10)}`;
-}
-
-/** Normaliza un teléfono AR para wa.me (solo dígitos con código de país). */
-function toWhatsAppDigits(phone: string | null | undefined): string | null {
-  if (!phone?.trim()) return null;
-  let digits = phone.replace(/\D/g, "");
-  if (!digits) return null;
-  if (digits.startsWith("0")) digits = digits.slice(1);
-  if (digits.startsWith("54")) return digits;
-  // Celulares locales (ej. 11xxxxxxxx) → 549…
-  if (digits.length === 10) return `549${digits}`;
-  return `54${digits}`;
-}
-
-function buildWhatsAppUrl(phone: string | null | undefined, name?: string): string | null {
-  const digits = toWhatsAppDigits(phone);
-  if (!digits) return null;
-  const greeting = name?.trim()
-    ? `Hola ${name.trim()}, te escribo de la ferretería.`
-    : "Hola, te escribo de la ferretería.";
-  return `https://wa.me/${digits}?text=${encodeURIComponent(greeting)}`;
 }
 
 function RequiredLabel({
@@ -553,7 +536,9 @@ function AdminUsuariosPageInner() {
             {(() => {
               const waUrl = buildWhatsAppUrl(
                 row.phone,
-                [row.name, row.lastName].filter(Boolean).join(" "),
+                buildCustomerWhatsAppGreeting(
+                  [row.name, row.lastName].filter(Boolean).join(" "),
+                ),
               );
               if (waUrl) {
                 return (

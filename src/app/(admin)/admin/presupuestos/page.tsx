@@ -2,24 +2,43 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { Edit, Eye, Loader2, MessageCircle, Search, X } from "lucide-react";
 
 import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  printQuote,
+  QUOTE_PRINT_STORE_KEYS,
+  type QuotePrintData,
+} from "@/lib/quote-print";
 import { formatPrice } from "@/lib/utils";
-import { Edit, Eye } from "lucide-react";
+import { buildWhatsAppUrl } from "@/lib/whatsapp";
 
 type QuoteApi = {
   id: string;
   quoteNumber: string;
   customerName: string;
   customerEmail: string;
+  customerPhone: string | null;
   status: string;
   total: number;
   itemCount: number;
   validUntil: string;
   createdAt: string;
+};
+
+type CustomerOption = {
+  id: string;
+  name: string;
+  lastName: string | null;
+  email: string;
+  taxId: string | null;
+  companyName: string | null;
 };
 
 const STATUS_TABS = [
@@ -58,6 +77,35 @@ function formatDate(iso: string) {
   }
 }
 
+function formatTaxId(taxId: string | null | undefined): string | null {
+  if (!taxId) return null;
+  const digits = taxId.replace(/\D/g, "");
+  if (digits.length !== 11) return taxId;
+  return `${digits.slice(0, 2)}-${digits.slice(2, 10)}-${digits.slice(10)}`;
+}
+
+function customerLabel(c: CustomerOption): string {
+  return [c.name, c.lastName].filter(Boolean).join(" ");
+}
+
+function buildQuoteWhatsAppMessage(opts: {
+  customerName: string;
+  quoteNumber: string;
+  total: number;
+  validUntil: string;
+}): string {
+  const firstName = opts.customerName.trim().split(/\s+/)[0] || "hola";
+  const valid = formatDate(opts.validUntil);
+  return [
+    `Hola ${firstName}, te envío el presupuesto ${opts.quoteNumber}.`,
+    "",
+    `Total: ${formatPrice(opts.total)}`,
+    `Válido hasta: ${valid}`,
+    "",
+    "Adjunto el PDF del presupuesto en este chat.",
+  ].join("\n");
+}
+
 export default function AdminPresupuestosPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
@@ -67,6 +115,20 @@ export default function AdminPresupuestosPage() {
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [whatsappBusyId, setWhatsappBusyId] = useState<string | null>(null);
+
+  const [selectedCustomers, setSelectedCustomers] = useState<CustomerOption[]>(
+    [],
+  );
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [debouncedCustomerSearch, setDebouncedCustomerSearch] = useState("");
+  const [searchingCustomers, setSearchingCustomers] = useState(false);
+  const [customerResults, setCustomerResults] = useState<CustomerOption[]>([]);
+
+  const selectedUserIds = useMemo(
+    () => selectedCustomers.map((c) => c.id),
+    [selectedCustomers],
+  );
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchInput.trim()), 300);
@@ -74,8 +136,71 @@ export default function AdminPresupuestosPage() {
   }, [searchInput]);
 
   useEffect(() => {
+    const t = setTimeout(
+      () => setDebouncedCustomerSearch(customerSearch.trim()),
+      300,
+    );
+    return () => clearTimeout(t);
+  }, [customerSearch]);
+
+  useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, statusFilter]);
+  }, [debouncedSearch, statusFilter, selectedUserIds]);
+
+  useEffect(() => {
+    if (debouncedCustomerSearch.length < 2) {
+      setCustomerResults([]);
+      return;
+    }
+
+    let cancelled = false;
+    setSearchingCustomers(true);
+    const params = new URLSearchParams({
+      search: debouncedCustomerSearch,
+      limit: "12",
+      page: "1",
+    });
+
+    fetch(`/api/admin/users?${params.toString()}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        const selected = new Set(selectedUserIds);
+        setCustomerResults(
+          Array.isArray(data.users)
+            ? data.users
+                .map(
+                  (u: {
+                    id: string;
+                    name: string;
+                    lastName: string | null;
+                    email: string;
+                    taxId: string | null;
+                    companyName: string | null;
+                  }) => ({
+                    id: u.id,
+                    name: u.name,
+                    lastName: u.lastName,
+                    email: u.email,
+                    taxId: u.taxId,
+                    companyName: u.companyName,
+                  }),
+                )
+                .filter((u: CustomerOption) => !selected.has(u.id))
+            : [],
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setCustomerResults([]);
+      })
+      .finally(() => {
+        if (!cancelled) setSearchingCustomers(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedCustomerSearch, selectedUserIds]);
 
   const loadQuotes = useCallback(async () => {
     setLoading(true);
@@ -83,6 +208,9 @@ export default function AdminPresupuestosPage() {
       const params = new URLSearchParams();
       if (debouncedSearch) params.set("search", debouncedSearch);
       if (statusFilter !== "all") params.set("status", statusFilter);
+      if (selectedUserIds.length > 0) {
+        params.set("userIds", selectedUserIds.join(","));
+      }
       params.set("page", String(page));
       params.set("limit", String(LIMIT));
       const res = await fetch(`/api/admin/quotes?${params.toString()}`);
@@ -103,11 +231,103 @@ export default function AdminPresupuestosPage() {
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch, statusFilter, page]);
+  }, [debouncedSearch, statusFilter, selectedUserIds, page]);
 
   useEffect(() => {
     void loadQuotes();
   }, [loadQuotes]);
+
+  function addCustomer(customer: CustomerOption) {
+    setSelectedCustomers((prev) =>
+      prev.some((c) => c.id === customer.id) ? prev : [...prev, customer],
+    );
+    setCustomerSearch("");
+    setCustomerResults([]);
+  }
+
+  function removeCustomer(id: string) {
+    setSelectedCustomers((prev) => prev.filter((c) => c.id !== id));
+  }
+
+  async function handleWhatsAppQuote(row: QuoteApi) {
+    if (!row.customerPhone) {
+      toast.error("Este cliente no tiene teléfono cargado");
+      return;
+    }
+
+    const message = buildQuoteWhatsAppMessage({
+      customerName: row.customerName,
+      quoteNumber: row.quoteNumber,
+      total: row.total,
+      validUntil: row.validUntil,
+    });
+    const waUrl = buildWhatsAppUrl(row.customerPhone, message);
+    if (!waUrl) {
+      toast.error("No se pudo armar el enlace de WhatsApp");
+      return;
+    }
+
+    setWhatsappBusyId(row.id);
+    try {
+      const [quoteRes, settingsRes] = await Promise.all([
+        fetch(`/api/admin/quotes/${row.id}`),
+        fetch(`/api/settings/public?keys=${QUOTE_PRINT_STORE_KEYS}`),
+      ]);
+      const quoteData = await quoteRes.json();
+      const settingsData = await settingsRes.json();
+
+      if (!quoteRes.ok || !quoteData.quote) {
+        toast.error(quoteData.error || "No se pudo cargar el presupuesto");
+        return;
+      }
+
+      const quote = quoteData.quote;
+      const printData: QuotePrintData = {
+        quoteNumber: quote.quoteNumber,
+        createdAt: quote.createdAt,
+        validUntil: quote.validUntil,
+        subtotal: Number(quote.subtotal),
+        total: Number(quote.total),
+        items: (quote.items || []).map(
+          (item: {
+            sku: string;
+            productName: string;
+            variantName?: string | null;
+            quantity: number;
+            unitPrice: unknown;
+            subtotal: unknown;
+          }) => ({
+            sku: item.sku,
+            productName: item.productName,
+            variantName: item.variantName,
+            quantity: item.quantity,
+            unitPrice: Number(item.unitPrice),
+            subtotal: Number(item.subtotal),
+          }),
+        ),
+        discountLabel: quote.notes ?? null,
+      };
+
+      const printed = printQuote(printData, settingsData.settings || {});
+      window.open(waUrl, "_blank", "noopener,noreferrer");
+
+      if (printed) {
+        toast.message("WhatsApp abierto", {
+          description:
+            "WhatsApp no permite adjuntar el PDF solo. En la ventana de impresión elegí “Guardar como PDF” y adjuntá ese archivo en el chat.",
+          duration: 8000,
+        });
+      } else {
+        toast.warning(
+          "Se abrió WhatsApp, pero el navegador bloqueó la ventana de impresión. Permití popups para guardar el PDF.",
+        );
+      }
+    } catch {
+      toast.error("Error al preparar el envío por WhatsApp");
+    } finally {
+      setWhatsappBusyId(null);
+    }
+  }
 
   const columns: DataTableColumn<QuoteApi>[] = useMemo(
     () => [
@@ -126,7 +346,7 @@ export default function AdminPresupuestosPage() {
         ),
       },
       {
-        id: "client",
+        id: "customer",
         header: "Cliente",
         accessor: "customerName",
         sortable: true,
@@ -143,14 +363,14 @@ export default function AdminPresupuestosPage() {
         accessor: "status",
         sortable: true,
         cell: (row) => (
-          <Badge variant={STATUS_COLORS[row.status] as any}>
+          <Badge variant={(STATUS_COLORS[row.status] as "default") || "secondary"}>
             {STATUS_LABELS[row.status] || row.status}
           </Badge>
         ),
       },
       {
         id: "items",
-        header: "Items",
+        header: "Ítems",
         accessor: "itemCount",
         sortable: true,
       },
@@ -168,22 +388,8 @@ export default function AdminPresupuestosPage() {
         header: "Válido hasta",
         accessor: "validUntil",
         sortable: true,
-        cell: (row) => {
-          const isExpired = new Date(row.validUntil) < new Date();
-          return (
-            <span className={isExpired ? "text-destructive" : "text-muted-foreground"}>
-              {formatDate(row.validUntil)}
-            </span>
-          );
-        },
-      },
-      {
-        id: "createdAt",
-        header: "Fecha",
-        accessor: "createdAt",
-        sortable: true,
         cell: (row) => (
-          <span className="text-muted-foreground">{formatDate(row.createdAt)}</span>
+          <span className="text-muted-foreground">{formatDate(row.validUntil)}</span>
         ),
       },
     ],
@@ -192,7 +398,7 @@ export default function AdminPresupuestosPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-bold text-foreground">Presupuestos</h1>
           <p className="text-sm text-muted-foreground">
@@ -212,6 +418,99 @@ export default function AdminPresupuestosPage() {
             ))}
           </TabsList>
         </Tabs>
+      </div>
+
+      <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
+        <div className="space-y-1.5">
+          <Label htmlFor="quote-customer-filter" className="text-xs text-muted-foreground">
+            Filtrar por cliente
+          </Label>
+          <div className="relative max-w-md">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              id="quote-customer-filter"
+              value={customerSearch}
+              onChange={(e) => setCustomerSearch(e.target.value)}
+              placeholder="Nombre, email o CUIT/CUIL…"
+              className="border-border pl-9"
+              autoComplete="off"
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Buscá y seleccioná uno o más clientes para ver solo sus presupuestos.
+          </p>
+        </div>
+
+        {debouncedCustomerSearch.length >= 2 ? (
+          <div className="max-h-48 max-w-lg space-y-1 overflow-y-auto rounded-md border border-border bg-background p-2">
+            {searchingCustomers ? (
+              <div className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" />
+                Buscando…
+              </div>
+            ) : customerResults.length === 0 ? (
+              <p className="py-4 text-center text-sm text-muted-foreground">
+                Sin resultados
+              </p>
+            ) : (
+              customerResults.map((customer) => {
+                const tax = formatTaxId(customer.taxId);
+                return (
+                  <button
+                    key={customer.id}
+                    type="button"
+                    className="flex w-full items-start justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted"
+                    onClick={() => addCustomer(customer)}
+                  >
+                    <div>
+                      <p className="font-medium">{customerLabel(customer)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {customer.email}
+                      </p>
+                      {tax ? (
+                        <p className="font-mono text-xs text-muted-foreground">
+                          {tax}
+                        </p>
+                      ) : null}
+                    </div>
+                    <span className="shrink-0 text-xs text-primary">Agregar</span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        ) : null}
+
+        {selectedCustomers.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {selectedCustomers.map((customer) => (
+              <Badge
+                key={customer.id}
+                variant="secondary"
+                className="gap-1 pr-1 font-normal"
+              >
+                {customerLabel(customer)}
+                <button
+                  type="button"
+                  className="rounded-sm p-0.5 hover:bg-muted"
+                  aria-label={`Quitar ${customerLabel(customer)}`}
+                  onClick={() => removeCustomer(customer.id)}
+                >
+                  <X className="size-3" />
+                </button>
+              </Badge>
+            ))}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => setSelectedCustomers([])}
+            >
+              Limpiar clientes
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       <DataTable
@@ -245,6 +544,34 @@ export default function AdminPresupuestosPage() {
                 </Link>
               </Button>
             ) : null}
+            {row.customerPhone ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label="Enviar por WhatsApp"
+                title={`WhatsApp: ${row.customerPhone}`}
+                disabled={whatsappBusyId === row.id}
+                onClick={() => void handleWhatsAppQuote(row)}
+              >
+                {whatsappBusyId === row.id ? (
+                  <Loader2 className="size-4 animate-spin text-emerald-600" />
+                ) : (
+                  <MessageCircle className="size-4 text-emerald-600" />
+                )}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                disabled
+                aria-label="Sin teléfono para WhatsApp"
+                title="El cliente no tiene teléfono cargado"
+              >
+                <MessageCircle className="size-4 text-muted-foreground" />
+              </Button>
+            )}
           </div>
         )}
       />

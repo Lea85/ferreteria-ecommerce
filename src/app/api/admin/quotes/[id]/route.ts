@@ -25,7 +25,18 @@ export async function GET(
     const quote = await prisma.quote.findUnique({
       where: { id },
       include: {
-        user: { select: { name: true, lastName: true, email: true, phone: true } },
+        user: {
+          select: {
+            id: true,
+            name: true,
+            lastName: true,
+            email: true,
+            phone: true,
+            taxId: true,
+            taxIdType: true,
+            companyName: true,
+          },
+        },
         items: {
           include: {
             variant: {
@@ -132,7 +143,11 @@ export async function PUT(
 
     if (action === "update") {
       const items = Array.isArray(body.items) ? body.items : [];
-      const quote = await updateQuoteItems(id, items);
+      const userId =
+        typeof body.userId === "string" && body.userId.trim()
+          ? body.userId.trim()
+          : undefined;
+      const quote = await updateQuoteItems(id, items, { userId });
       return NextResponse.json({ success: true, quote });
     }
 
