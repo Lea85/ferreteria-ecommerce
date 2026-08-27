@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   Clock,
   Eye,
+  EyeOff,
   FileWarning,
   Loader2,
   MessageCircle,
@@ -123,6 +124,9 @@ export default function AdminDashboardPage() {
   const [data, setData] = useState<DashData | null>(null);
   const [loading, setLoading] = useState(true);
   const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [dismissingQuoteId, setDismissingQuoteId] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     fetch("/api/admin/dashboard")
@@ -182,6 +186,35 @@ export default function AdminDashboardPage() {
       return;
     }
     window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  async function handleDismissExpiringQuote(id: string) {
+    setDismissingQuoteId(id);
+    try {
+      const res = await fetch(`/api/admin/quotes/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "dismissExpiring" }),
+      });
+      const resData = await res.json();
+      if (!res.ok) {
+        toast.error(resData.error ?? "No se pudo ocultar el presupuesto");
+        return;
+      }
+      toast.success("Presupuesto ocultado del listado");
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              expiringQuotes: prev.expiringQuotes.filter((q) => q.id !== id),
+            }
+          : prev,
+      );
+    } catch {
+      toast.error("Error de red");
+    } finally {
+      setDismissingQuoteId(null);
+    }
   }
 
   if (loading) {
@@ -332,7 +365,8 @@ export default function AdminDashboardPage() {
                 </CardTitle>
                 <p className="mt-1 text-sm text-orange-900/80">
                   Vencen en los próximos 1–2 días y todavía no están vendidos.
-                  Contactá al cliente o abrí el presupuesto para seguirlo.
+                  Contactá al cliente, abrí el presupuesto o ocultálo si ya no
+                  querés verlo.
                 </p>
               </div>
             </div>
@@ -414,6 +448,21 @@ export default function AdminDashboardPage() {
                         <MessageCircle className="size-4 text-muted-foreground" />
                       </Button>
                     )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label="No volver a mostrar"
+                      title="No volver a mostrar (ya contacté / nada que hacer)"
+                      onClick={() => void handleDismissExpiringQuote(q.id)}
+                      disabled={dismissingQuoteId === q.id}
+                    >
+                      {dismissingQuoteId === q.id ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <EyeOff className="size-4 text-muted-foreground" />
+                      )}
+                    </Button>
                   </div>
                 </div>
               );

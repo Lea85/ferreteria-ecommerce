@@ -141,6 +141,24 @@ export async function PUT(
       return NextResponse.json({ success: true });
     }
 
+    if (action === "dismissExpiring") {
+      const existing = await prisma.quote.findUnique({
+        where: { id },
+        select: { id: true },
+      });
+      if (!existing) {
+        return NextResponse.json(
+          { error: "Presupuesto no encontrado." },
+          { status: 404 },
+        );
+      }
+      await prisma.quote.update({
+        where: { id },
+        data: { expiringAlertDismissedAt: new Date() },
+      });
+      return NextResponse.json({ success: true });
+    }
+
     if (action === "update") {
       const items = Array.isArray(body.items) ? body.items : [];
       const userId =

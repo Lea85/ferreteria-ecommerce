@@ -111,6 +111,7 @@ export async function GET() {
     const expiringQuotes = await prisma.quote.findMany({
       where: {
         status: { notIn: ["SOLD", "CANCELLED"] },
+        expiringAlertDismissedAt: null,
         validUntil: {
           gte: now,
           lte: expiresUntil,

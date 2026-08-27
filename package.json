@@ -18,6 +18,7 @@
     "db:order-returns": "prisma db execute --file prisma/migrations/add_order_returns.sql",
     "db:supplier-order-prices": "prisma db execute --file prisma/migrations/add_supplier_order_item_prices.sql",
     "db:order-item-cost-snapshot": "prisma db execute --file prisma/migrations/add_order_item_cost_snapshot.sql",
+    "db:quote-expiring-dismiss": "prisma db execute --file prisma/migrations/add_quote_expiring_alert_dismissed.sql",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
     "start": "next start",

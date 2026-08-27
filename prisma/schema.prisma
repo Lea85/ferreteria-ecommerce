@@ -982,6 +982,8 @@ model Quote {
   notes         String?     @db.Text
   soldAt        DateTime?
   soldOrderId   String?
+  /// Oculta el presupuesto del listado "por vencer" del dashboard
+  expiringAlertDismissedAt DateTime?
 
   user  User        @relation(fields: [userId], references: [id])
   items QuoteItem[]
