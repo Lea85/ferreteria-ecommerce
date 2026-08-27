@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
 
 import { CustomerType, Prisma, UserRole } from "@/generated/prisma";
 import { prisma } from "@/lib/db";
 import { auth, isAdminRole } from "@/lib/auth";
-import { registerFormSchema } from "@/lib/validators/auth.validator";
+import { adminCreateCustomerSchema } from "@/lib/validators/auth.validator";
 
 const CUSTOMER_TYPES: CustomerType[] = ["CONSUMER", "TRADE", "WHOLESALE"];
 const USER_ROLES: UserRole[] = ["CUSTOMER", "ADMIN", "SUPER_ADMIN", "MOSTRADOR"];
@@ -139,10 +138,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const parsed = registerFormSchema.safeParse({
-      ...body,
-      termsAccepted: true,
-    });
+    const parsed = adminCreateCustomerSchema.safeParse(body);
 
     if (!parsed.success) {
       return NextResponse.json(
@@ -155,7 +151,6 @@ export async function POST(request: Request) {
       name,
       lastName,
       email,
-      password,
       phone,
       customerType,
       cuit,
@@ -175,7 +170,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const passwordHash = await bcrypt.hash(password, 12);
     const isPro = customerType === "TRADE";
     const cuitDigits = cuit?.replace(/\D/g, "") ?? null;
 
@@ -184,7 +178,8 @@ export async function POST(request: Request) {
         name,
         lastName,
         email: normalizedEmail,
-        passwordHash,
+        // Alta desde admin: sin contraseña; no puede iniciar sesión hasta setearla.
+        passwordHash: null,
         phone: phone?.trim() || null,
         customerType: isPro ? "TRADE" : "CONSUMER",
         role: "CUSTOMER",

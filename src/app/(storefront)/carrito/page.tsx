@@ -3,11 +3,12 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
-import { FileText, Loader2, ShoppingBag, Store, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { FileText, Loader2, Plus, Search, ShoppingBag, Store, Trash2 } from "lucide-react";
 
 import { QuantityControls } from "@/components/storefront/QuantityControls";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -49,6 +50,49 @@ import {
 import { useCartStore } from "@/stores/cart.store";
 import { toast } from "sonner";
 
+type QuoteCustomerOption = {
+  id: string;
+  name: string;
+  lastName: string | null;
+  email: string;
+  phone: string | null;
+  taxId: string | null;
+  taxIdType: string | null;
+  companyName: string | null;
+};
+
+function formatTaxId(taxId: string | null | undefined): string | null {
+  if (!taxId) return null;
+  const digits = taxId.replace(/\D/g, "");
+  if (digits.length !== 11) return taxId;
+  return `${digits.slice(0, 2)}-${digits.slice(2, 10)}-${digits.slice(10)}`;
+}
+
+function formatCuit(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 10) return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}-${digits.slice(2, 10)}-${digits.slice(10)}`;
+}
+
+function customerLabel(c: QuoteCustomerOption) {
+  return `${c.name}${c.lastName ? ` ${c.lastName}` : ""}`.trim() || c.email;
+}
+
+function RequiredLabel({
+  htmlFor,
+  children,
+}: {
+  htmlFor: string;
+  children: ReactNode;
+}) {
+  return (
+    <Label htmlFor={htmlFor}>
+      {children} <span className="text-destructive">*</span>
+    </Label>
+  );
+}
+
 export default function CarritoPage() {
   useCartStockSync();
   const router = useRouter();
@@ -64,8 +108,30 @@ export default function CarritoPage() {
   const [applied, setApplied] = useState(false);
   const [categoryBenefits, setCategoryBenefits] = useState<CategoryBenefit[]>([]);
   const [canGenerateQuotes, setCanGenerateQuotes] = useState(false);
+  const [requiresCustomerAssignment, setRequiresCustomerAssignment] =
+    useState(false);
   const [canCounterSale, setCanCounterSale] = useState(false);
   const [generatingQuote, setGeneratingQuote] = useState(false);
+  const [quoteCustomerModalOpen, setQuoteCustomerModalOpen] = useState(false);
+  const [quoteCustomerSearch, setQuoteCustomerSearch] = useState("");
+  const [debouncedQuoteCustomerSearch, setDebouncedQuoteCustomerSearch] =
+    useState("");
+  const [searchingQuoteCustomers, setSearchingQuoteCustomers] = useState(false);
+  const [quoteCustomerResults, setQuoteCustomerResults] = useState<
+    QuoteCustomerOption[]
+  >([]);
+  const [selectedQuoteCustomer, setSelectedQuoteCustomer] =
+    useState<QuoteCustomerOption | null>(null);
+  const [quoteModalStep, setQuoteModalStep] = useState<"select" | "create">(
+    "select",
+  );
+  const [createCustomerType, setCreateCustomerType] = useState<
+    "consumer" | "pro"
+  >("consumer");
+  const [createCuit, setCreateCuit] = useState("");
+  const [createNewsletter, setCreateNewsletter] = useState(true);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [creatingCustomer, setCreatingCustomer] = useState(false);
   const [counterModalOpen, setCounterModalOpen] = useState(false);
   const [counterPayment, setCounterPayment] = useState<CounterPaymentMethod>("COUNTER_CASH");
   const [counterDiscountPercent, setCounterDiscountPercent] = useState(0);
@@ -89,6 +155,9 @@ export default function CarritoPage() {
     ])
       .then(([quotesData, counterData, discountData]) => {
         if (quotesData?.canGenerateQuotes) setCanGenerateQuotes(true);
+        if (quotesData?.requiresCustomerAssignment) {
+          setRequiresCustomerAssignment(true);
+        }
         if (counterData?.canCounterSale) setCanCounterSale(true);
         if (Array.isArray(discountData?.benefits)) {
           setCategoryBenefits(discountData.benefits);
@@ -96,6 +165,74 @@ export default function CarritoPage() {
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const t = setTimeout(
+      () => setDebouncedQuoteCustomerSearch(quoteCustomerSearch.trim()),
+      300,
+    );
+    return () => clearTimeout(t);
+  }, [quoteCustomerSearch]);
+
+  useEffect(() => {
+    if (!quoteCustomerModalOpen || debouncedQuoteCustomerSearch.length < 2) {
+      setQuoteCustomerResults([]);
+      return;
+    }
+
+    let cancelled = false;
+    setSearchingQuoteCustomers(true);
+    const params = new URLSearchParams({
+      search: debouncedQuoteCustomerSearch,
+      role: "CUSTOMER",
+      limit: "15",
+      page: "1",
+    });
+
+    fetch(`/api/admin/users?${params.toString()}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        setQuoteCustomerResults(
+          Array.isArray(data.users)
+            ? data.users.map(
+                (u: {
+                  id: string;
+                  name: string;
+                  lastName: string | null;
+                  email: string;
+                  phone: string | null;
+                  taxId: string | null;
+                  taxIdType: string | null;
+                  companyName: string | null;
+                }) => ({
+                  id: u.id,
+                  name: u.name,
+                  lastName: u.lastName,
+                  email: u.email,
+                  phone: u.phone,
+                  taxId: u.taxId,
+                  taxIdType: u.taxIdType,
+                  companyName: u.companyName,
+                }),
+              )
+            : [],
+        );
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setQuoteCustomerResults([]);
+          toast.error("Error al buscar clientes");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setSearchingQuoteCustomers(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedQuoteCustomerSearch, quoteCustomerModalOpen]);
 
   async function handleCounterSale() {
     if (items.length === 0) return;
@@ -185,8 +322,92 @@ export default function CarritoPage() {
     }
   }
 
-  async function handleGenerateQuote() {
+  function openQuoteCustomerModal() {
     if (items.length === 0) return;
+    setSelectedQuoteCustomer(null);
+    setQuoteCustomerSearch("");
+    setQuoteCustomerResults([]);
+    setQuoteModalStep("select");
+    setCreateCustomerType("consumer");
+    setCreateCuit("");
+    setCreateNewsletter(true);
+    setCreateError(null);
+    setQuoteCustomerModalOpen(true);
+  }
+
+  function openCreateCustomerStep() {
+    setQuoteModalStep("create");
+    setCreateCustomerType("consumer");
+    setCreateCuit("");
+    setCreateNewsletter(true);
+    setCreateError(null);
+  }
+
+  function requestGenerateQuote() {
+    if (items.length === 0) return;
+    if (requiresCustomerAssignment) {
+      openQuoteCustomerModal();
+      return;
+    }
+    void handleGenerateQuote();
+  }
+
+  async function handleCreateCustomerAndQuote(
+    e: FormEvent<HTMLFormElement>,
+  ) {
+    e.preventDefault();
+    setCreateError(null);
+
+    const formData = new FormData(e.currentTarget);
+    const payload = {
+      name: String(formData.get("name") ?? ""),
+      lastName: String(formData.get("lastname") ?? ""),
+      email: String(formData.get("email") ?? ""),
+      phone: String(formData.get("phone") ?? ""),
+      customerType: createCustomerType === "pro" ? "TRADE" : "CONSUMER",
+      cuit: createCustomerType === "pro" ? createCuit : "",
+      company:
+        createCustomerType === "pro"
+          ? String(formData.get("company") ?? "")
+          : "",
+      newsletterOptIn: createNewsletter,
+    };
+
+    setCreatingCustomer(true);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setCreateError(data.error ?? "No se pudo crear el cliente");
+        return;
+      }
+
+      const newId = data.user?.id as string | undefined;
+      if (!newId) {
+        setCreateError("Cliente creado pero no se obtuvo el ID");
+        return;
+      }
+
+      toast.success("Cliente creado");
+      await handleGenerateQuote(newId);
+    } catch {
+      setCreateError("Error de red");
+    } finally {
+      setCreatingCustomer(false);
+    }
+  }
+
+  async function handleGenerateQuote(customerId?: string) {
+    if (items.length === 0) return;
+    if (requiresCustomerAssignment && !customerId) {
+      toast.error("Seleccioná un cliente para el presupuesto");
+      return;
+    }
+
     setGeneratingQuote(true);
     try {
       const res = await fetch("/api/quotes", {
@@ -197,6 +418,7 @@ export default function CarritoPage() {
             variantId: i.variantId,
             quantity: i.quantity,
           })),
+          ...(customerId ? { userId: customerId } : {}),
         }),
       });
       const data = await res.json();
@@ -205,6 +427,8 @@ export default function CarritoPage() {
         return;
       }
 
+      setQuoteCustomerModalOpen(false);
+      setQuoteModalStep("select");
       toast.success(`Presupuesto ${data.quote.quoteNumber} generado`);
 
       printQuote(
@@ -532,7 +756,7 @@ export default function CarritoPage() {
             <Button
               variant="outline"
               className="mt-3 w-full gap-2 border-blue-500 text-blue-600 hover:bg-blue-50"
-              onClick={handleGenerateQuote}
+              onClick={requestGenerateQuote}
               disabled={generatingQuote}
             >
               {generatingQuote ? (
@@ -753,6 +977,357 @@ export default function CarritoPage() {
               )}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={quoteCustomerModalOpen}
+        onOpenChange={(open) => {
+          if (!generatingQuote && !creatingCustomer) {
+            setQuoteCustomerModalOpen(open);
+            if (!open) setQuoteModalStep("select");
+          }
+        }}
+      >
+        <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+          {quoteModalStep === "select" ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Asignar presupuesto a un cliente</DialogTitle>
+              </DialogHeader>
+              <p className="text-sm text-muted-foreground">
+                Como administrador o mostrador, el presupuesto debe quedar a
+                nombre de un cliente. Buscalo o creá uno nuevo.
+              </p>
+
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={openCreateCustomerStep}
+                  disabled={generatingQuote}
+                >
+                  <Plus className="size-4" />
+                  Nuevo cliente
+                </Button>
+              </div>
+
+              {selectedQuoteCustomer ? (
+                <div className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+                  <p className="font-medium">
+                    {customerLabel(selectedQuoteCustomer)}
+                  </p>
+                  <p className="text-muted-foreground">
+                    {selectedQuoteCustomer.email}
+                  </p>
+                  {selectedQuoteCustomer.companyName ? (
+                    <p className="text-muted-foreground">
+                      {selectedQuoteCustomer.companyName}
+                    </p>
+                  ) : null}
+                  {formatTaxId(selectedQuoteCustomer.taxId) ? (
+                    <p className="font-mono text-xs text-muted-foreground">
+                      {selectedQuoteCustomer.taxIdType || "CUIT/CUIL"}:{" "}
+                      {formatTaxId(selectedQuoteCustomer.taxId)}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+
+              <div className="space-y-2">
+                <Label htmlFor="quote-customer-search">Buscar cliente</Label>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="quote-customer-search"
+                    value={quoteCustomerSearch}
+                    onChange={(e) => setQuoteCustomerSearch(e.target.value)}
+                    placeholder="Nombre, apellido, email o CUIT/CUIL…"
+                    className="pl-9"
+                    autoComplete="off"
+                    disabled={generatingQuote}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Escribí al menos 2 caracteres.
+                </p>
+              </div>
+
+              {debouncedQuoteCustomerSearch.length >= 2 ? (
+                <div className="max-h-56 space-y-2 overflow-y-auto rounded-lg border border-border p-2">
+                  {searchingQuoteCustomers ? (
+                    <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+                      <Loader2 className="size-4 animate-spin" />
+                      Buscando…
+                    </div>
+                  ) : quoteCustomerResults.length === 0 ? (
+                    <p className="py-6 text-center text-sm text-muted-foreground">
+                      No se encontraron clientes.
+                    </p>
+                  ) : (
+                    quoteCustomerResults.map((customer) => {
+                      const tax = formatTaxId(customer.taxId);
+                      const isSelected =
+                        selectedQuoteCustomer?.id === customer.id;
+                      return (
+                        <button
+                          key={customer.id}
+                          type="button"
+                          className={cn(
+                            "flex w-full items-start justify-between gap-3 rounded-md border px-3 py-2 text-left text-sm transition-colors",
+                            isSelected
+                              ? "border-primary bg-primary/5"
+                              : "border-border hover:bg-muted",
+                          )}
+                          onClick={() => {
+                            setSelectedQuoteCustomer(customer);
+                            setQuoteCustomerSearch("");
+                            setQuoteCustomerResults([]);
+                          }}
+                          disabled={generatingQuote}
+                        >
+                          <div>
+                            <p className="font-medium">
+                              {customerLabel(customer)}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {customer.email}
+                            </p>
+                            {customer.companyName ? (
+                              <p className="text-xs text-muted-foreground">
+                                {customer.companyName}
+                              </p>
+                            ) : null}
+                            {tax ? (
+                              <p className="font-mono text-xs text-muted-foreground">
+                                {customer.taxIdType || "CUIT/CUIL"}: {tax}
+                              </p>
+                            ) : null}
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              ) : null}
+
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setQuoteCustomerModalOpen(false)}
+                  disabled={generatingQuote}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() =>
+                    void handleGenerateQuote(selectedQuoteCustomer?.id)
+                  }
+                  disabled={generatingQuote || !selectedQuoteCustomer}
+                >
+                  {generatingQuote ? (
+                    <>
+                      <Loader2 className="mr-2 size-4 animate-spin" />
+                      Generando…
+                    </>
+                  ) : (
+                    "Generar presupuesto"
+                  )}
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>Nuevo cliente</DialogTitle>
+              </DialogHeader>
+              <form
+                className="space-y-4"
+                onSubmit={(e) => void handleCreateCustomerAndQuote(e)}
+              >
+                {createError ? (
+                  <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                    {createError}
+                  </div>
+                ) : null}
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <RequiredLabel htmlFor="quote-create-name">
+                      Nombre
+                    </RequiredLabel>
+                    <Input
+                      id="quote-create-name"
+                      name="name"
+                      required
+                      disabled={creatingCustomer || generatingQuote}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <RequiredLabel htmlFor="quote-create-lastname">
+                      Apellido
+                    </RequiredLabel>
+                    <Input
+                      id="quote-create-lastname"
+                      name="lastname"
+                      required
+                      disabled={creatingCustomer || generatingQuote}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <RequiredLabel htmlFor="quote-create-email">
+                    Email
+                  </RequiredLabel>
+                  <Input
+                    id="quote-create-email"
+                    name="email"
+                    type="email"
+                    required
+                    disabled={creatingCustomer || generatingQuote}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="quote-create-phone">Teléfono</Label>
+                  <Input
+                    id="quote-create-phone"
+                    name="phone"
+                    type="tel"
+                    disabled={creatingCustomer || generatingQuote}
+                  />
+                </div>
+
+                <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                  Este cliente se crea sin contraseña: sirve para presupuestos y
+                  ventas. No podrá iniciar sesión en la tienda hasta que se le
+                  asigne una.
+                </p>
+
+                <div className="space-y-2">
+                  <RequiredLabel htmlFor="quote-create-customerType">
+                    Tipo de cliente
+                  </RequiredLabel>
+                  <Select
+                    value={createCustomerType}
+                    onValueChange={(v) =>
+                      setCreateCustomerType(v as "consumer" | "pro")
+                    }
+                    disabled={creatingCustomer || generatingQuote}
+                  >
+                    <SelectTrigger id="quote-create-customerType">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="consumer">
+                        Consumidor final
+                      </SelectItem>
+                      <SelectItem value="pro">
+                        Soy profesional / gremio
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {createCustomerType === "pro" ? (
+                  <div className="space-y-4 rounded-lg border border-border bg-muted/40 p-4">
+                    <div className="space-y-2">
+                      <RequiredLabel htmlFor="quote-create-cuit">
+                        CUIT
+                      </RequiredLabel>
+                      <Input
+                        id="quote-create-cuit"
+                        name="cuit"
+                        inputMode="numeric"
+                        autoComplete="off"
+                        placeholder="20-12345678-3"
+                        value={createCuit}
+                        onChange={(e) =>
+                          setCreateCuit(formatCuit(e.target.value))
+                        }
+                        maxLength={13}
+                        required
+                        disabled={creatingCustomer || generatingQuote}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Formato: 2 dígitos - 8 dígitos - 1 dígito (ej:
+                        20-12345678-3).
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <RequiredLabel htmlFor="quote-create-company">
+                        Razón social
+                      </RequiredLabel>
+                      <Input
+                        id="quote-create-company"
+                        name="company"
+                        required
+                        disabled={creatingCustomer || generatingQuote}
+                      />
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="flex items-start gap-3">
+                  <Checkbox
+                    id="quote-create-newsletter"
+                    checked={createNewsletter}
+                    onCheckedChange={(checked) =>
+                      setCreateNewsletter(checked === true)
+                    }
+                    disabled={creatingCustomer || generatingQuote}
+                  />
+                  <Label
+                    htmlFor="quote-create-newsletter"
+                    className="cursor-pointer text-sm leading-snug"
+                  >
+                    Quiere recibir ofertas, novedades y tips por email
+                    (newsletter).
+                  </Label>
+                </div>
+
+                <p className="text-xs text-muted-foreground">
+                  Al confirmar se crea el cliente y se genera el presupuesto a
+                  su nombre. Los campos con{" "}
+                  <span className="text-destructive">*</span> son obligatorios.
+                </p>
+
+                <DialogFooter className="gap-2 sm:gap-0">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setQuoteModalStep("select");
+                      setCreateError(null);
+                    }}
+                    disabled={creatingCustomer || generatingQuote}
+                  >
+                    Volver
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={creatingCustomer || generatingQuote}
+                  >
+                    {creatingCustomer || generatingQuote ? (
+                      <>
+                        <Loader2 className="mr-2 size-4 animate-spin" />
+                        {creatingCustomer
+                          ? "Creando…"
+                          : "Generando presupuesto…"}
+                      </>
+                    ) : (
+                      "Crear y generar presupuesto"
+                    )}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>

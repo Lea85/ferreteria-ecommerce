@@ -61,6 +61,46 @@ export const registerFormSchema = registerRequestSchema
     path: ["password2"],
   });
 
+/** Alta de cliente desde admin: sin contraseña (no puede iniciar sesión hasta setearla). */
+export const adminCreateCustomerSchema = z
+  .object({
+    name: z.string().trim().min(1, "El nombre es obligatorio."),
+    lastName: z.string().trim().min(1, "El apellido es obligatorio."),
+    email: z.string().trim().email("Correo electrónico inválido."),
+    phone: z.string().trim().optional().or(z.literal("")),
+    customerType: z.enum(["CONSUMER", "TRADE"]).default("CONSUMER"),
+    cuit: z.string().trim().optional().or(z.literal("")),
+    company: z.string().trim().optional().or(z.literal("")),
+    newsletterOptIn: z.boolean().default(false),
+  })
+  .superRefine((data, ctx) => {
+    if (data.phone && data.phone.length > 0 && data.phone.length < 6) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "El teléfono no es válido.",
+        path: ["phone"],
+      });
+    }
+
+    if (data.customerType === "TRADE") {
+      const cuitDigits = (data.cuit ?? "").replace(/\D/g, "");
+      if (cuitDigits.length !== 11) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "El CUIT es obligatorio y debe tener 11 dígitos.",
+          path: ["cuit"],
+        });
+      }
+      if (!data.company || data.company.trim().length < 2) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "La razón social es obligatoria para cuentas profesionales.",
+          path: ["company"],
+        });
+      }
+    }
+  });
+
 export const changePasswordSchema = z
   .object({
     currentPassword: z.string().min(1, "La contraseña actual es obligatoria."),
@@ -86,6 +126,7 @@ export const updateProfileSchema = z.object({
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterRequestInput = z.infer<typeof registerRequestSchema>;
 export type RegisterFormInput = z.infer<typeof registerFormSchema>;
+export type AdminCreateCustomerInput = z.infer<typeof adminCreateCustomerSchema>;
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 
 export const addressSchema = z.object({

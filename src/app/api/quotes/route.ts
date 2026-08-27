@@ -53,25 +53,35 @@ export async function POST(request: Request) {
     }
 
     // Clientes (no admin/mostrador): el presupuesto queda siempre asignado a quien lo genera.
-    // Staff puede opcionalmente indicar un cliente destino (userId / customerId).
+    // Staff debe indicar un cliente destino (userId / customerId).
     let assignedUserId = sessionUserId;
     if (isStaff) {
       const requestedCustomerId = String(
         body.userId ?? body.customerId ?? "",
       ).trim();
-      if (requestedCustomerId) {
-        const customer = await prisma.user.findUnique({
-          where: { id: requestedCustomerId },
-          select: { id: true },
-        });
-        if (!customer) {
-          return NextResponse.json(
-            { error: "Cliente no encontrado." },
-            { status: 400 },
-          );
-        }
-        assignedUserId = customer.id;
+      if (!requestedCustomerId) {
+        return NextResponse.json(
+          { error: "Debés asignar el presupuesto a un cliente." },
+          { status: 400 },
+        );
       }
+      const customer = await prisma.user.findUnique({
+        where: { id: requestedCustomerId },
+        select: { id: true, role: true },
+      });
+      if (!customer) {
+        return NextResponse.json(
+          { error: "Cliente no encontrado." },
+          { status: 400 },
+        );
+      }
+      if (customer.role !== "CUSTOMER") {
+        return NextResponse.json(
+          { error: "Solo podés asignar el presupuesto a un cliente." },
+          { status: 400 },
+        );
+      }
+      assignedUserId = customer.id;
     } else if (body.userId || body.customerId) {
       const requested = String(body.userId ?? body.customerId).trim();
       if (requested && requested !== sessionUserId) {
@@ -232,13 +242,17 @@ export async function GET(request: Request) {
 
       const role =
         userWithCategories?.role ?? (session.user as { role?: string }).role;
+      const isStaff = isAdminRole(role);
       const canQuote =
-        isAdminRole(role) ||
+        isStaff ||
         userWithCategories?.customerCategories.some(
           (uc) => uc.customerCategory.canGenerateQuotes,
         );
 
-      return NextResponse.json({ canGenerateQuotes: !!canQuote });
+      return NextResponse.json({
+        canGenerateQuotes: !!canQuote,
+        requiresCustomerAssignment: isStaff,
+      });
     }
 
     const quotes = await prisma.quote.findMany({

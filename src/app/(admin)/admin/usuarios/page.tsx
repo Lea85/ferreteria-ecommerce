@@ -293,14 +293,11 @@ function AdminUsuariosPageInner() {
       lastName: String(formData.get("lastname") ?? ""),
       email: String(formData.get("email") ?? ""),
       phone: String(formData.get("phone") ?? ""),
-      password: String(formData.get("password") ?? ""),
-      password2: String(formData.get("password2") ?? ""),
       customerType: createCustomerType === "pro" ? "TRADE" : "CONSUMER",
       cuit: createCustomerType === "pro" ? createCuit : "",
       company:
         createCustomerType === "pro" ? String(formData.get("company") ?? "") : "",
       newsletterOptIn: createNewsletter,
-      termsAccepted: true,
     };
 
     setCreating(true);
@@ -815,32 +812,11 @@ function AdminUsuariosPageInner() {
               />
             </div>
 
-            <div className="space-y-2">
-              <RequiredLabel htmlFor="create-password">Contraseña</RequiredLabel>
-              <Input
-                id="create-password"
-                name="password"
-                type="password"
-                required
-                minLength={8}
-                disabled={creating}
-              />
-              <p className="text-xs text-muted-foreground">Mínimo 8 caracteres.</p>
-            </div>
-
-            <div className="space-y-2">
-              <RequiredLabel htmlFor="create-password2">
-                Confirmar contraseña
-              </RequiredLabel>
-              <Input
-                id="create-password2"
-                name="password2"
-                type="password"
-                required
-                minLength={8}
-                disabled={creating}
-              />
-            </div>
+            <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              Este cliente se crea sin contraseña: sirve para presupuestos y
+              ventas. No podrá iniciar sesión en la tienda hasta que se le
+              asigne una.
+            </p>
 
             <div className="space-y-2">
               <RequiredLabel htmlFor="create-customerType">

@@ -11,11 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  printQuote,
-  QUOTE_PRINT_STORE_KEYS,
-  type QuotePrintData,
-} from "@/lib/quote-print";
 import { formatPrice } from "@/lib/utils";
 import { buildWhatsAppUrl } from "@/lib/whatsapp";
 
@@ -97,12 +92,10 @@ function buildQuoteWhatsAppMessage(opts: {
   const firstName = opts.customerName.trim().split(/\s+/)[0] || "hola";
   const valid = formatDate(opts.validUntil);
   return [
-    `Hola ${firstName}, te envío el presupuesto ${opts.quoteNumber}.`,
+    `Hola ${firstName}, te contacto por el presupuesto ${opts.quoteNumber}.`,
     "",
     `Total: ${formatPrice(opts.total)}`,
     `Válido hasta: ${valid}`,
-    "",
-    "Adjunto el PDF del presupuesto en este chat.",
   ].join("\n");
 }
 
@@ -115,7 +108,6 @@ export default function AdminPresupuestosPage() {
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [whatsappBusyId, setWhatsappBusyId] = useState<string | null>(null);
 
   const [selectedCustomers, setSelectedCustomers] = useState<CustomerOption[]>(
     [],
@@ -249,7 +241,7 @@ export default function AdminPresupuestosPage() {
     setSelectedCustomers((prev) => prev.filter((c) => c.id !== id));
   }
 
-  async function handleWhatsAppQuote(row: QuoteApi) {
+  function handleWhatsAppQuote(row: QuoteApi) {
     if (!row.customerPhone) {
       toast.error("Este cliente no tiene teléfono cargado");
       return;
@@ -267,66 +259,7 @@ export default function AdminPresupuestosPage() {
       return;
     }
 
-    setWhatsappBusyId(row.id);
-    try {
-      const [quoteRes, settingsRes] = await Promise.all([
-        fetch(`/api/admin/quotes/${row.id}`),
-        fetch(`/api/settings/public?keys=${QUOTE_PRINT_STORE_KEYS}`),
-      ]);
-      const quoteData = await quoteRes.json();
-      const settingsData = await settingsRes.json();
-
-      if (!quoteRes.ok || !quoteData.quote) {
-        toast.error(quoteData.error || "No se pudo cargar el presupuesto");
-        return;
-      }
-
-      const quote = quoteData.quote;
-      const printData: QuotePrintData = {
-        quoteNumber: quote.quoteNumber,
-        createdAt: quote.createdAt,
-        validUntil: quote.validUntil,
-        subtotal: Number(quote.subtotal),
-        total: Number(quote.total),
-        items: (quote.items || []).map(
-          (item: {
-            sku: string;
-            productName: string;
-            variantName?: string | null;
-            quantity: number;
-            unitPrice: unknown;
-            subtotal: unknown;
-          }) => ({
-            sku: item.sku,
-            productName: item.productName,
-            variantName: item.variantName,
-            quantity: item.quantity,
-            unitPrice: Number(item.unitPrice),
-            subtotal: Number(item.subtotal),
-          }),
-        ),
-        discountLabel: quote.notes ?? null,
-      };
-
-      const printed = printQuote(printData, settingsData.settings || {});
-      window.open(waUrl, "_blank", "noopener,noreferrer");
-
-      if (printed) {
-        toast.message("WhatsApp abierto", {
-          description:
-            "WhatsApp no permite adjuntar el PDF solo. En la ventana de impresión elegí “Guardar como PDF” y adjuntá ese archivo en el chat.",
-          duration: 8000,
-        });
-      } else {
-        toast.warning(
-          "Se abrió WhatsApp, pero el navegador bloqueó la ventana de impresión. Permití popups para guardar el PDF.",
-        );
-      }
-    } catch {
-      toast.error("Error al preparar el envío por WhatsApp");
-    } finally {
-      setWhatsappBusyId(null);
-    }
+    window.open(waUrl, "_blank", "noopener,noreferrer");
   }
 
   const columns: DataTableColumn<QuoteApi>[] = useMemo(
@@ -551,14 +484,9 @@ export default function AdminPresupuestosPage() {
                 size="icon"
                 aria-label="Enviar por WhatsApp"
                 title={`WhatsApp: ${row.customerPhone}`}
-                disabled={whatsappBusyId === row.id}
-                onClick={() => void handleWhatsAppQuote(row)}
+                onClick={() => handleWhatsAppQuote(row)}
               >
-                {whatsappBusyId === row.id ? (
-                  <Loader2 className="size-4 animate-spin text-emerald-600" />
-                ) : (
-                  <MessageCircle className="size-4 text-emerald-600" />
-                )}
+                <MessageCircle className="size-4 text-emerald-600" />
               </Button>
             ) : (
               <Button
