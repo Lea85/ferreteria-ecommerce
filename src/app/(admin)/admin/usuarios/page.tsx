@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Edit, Loader2, Tag, Trash2, XCircle } from "lucide-react";
+import { CheckCircle2, Edit, Eye, Loader2, MessageCircle, Plus, Tag, Trash2, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
@@ -54,6 +54,48 @@ type UserRow = UserApi;
 
 const LIMIT = 20;
 
+function formatCuit(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 10) return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}-${digits.slice(2, 10)}-${digits.slice(10)}`;
+}
+
+/** Normaliza un teléfono AR para wa.me (solo dígitos con código de país). */
+function toWhatsAppDigits(phone: string | null | undefined): string | null {
+  if (!phone?.trim()) return null;
+  let digits = phone.replace(/\D/g, "");
+  if (!digits) return null;
+  if (digits.startsWith("0")) digits = digits.slice(1);
+  if (digits.startsWith("54")) return digits;
+  // Celulares locales (ej. 11xxxxxxxx) → 549…
+  if (digits.length === 10) return `549${digits}`;
+  return `54${digits}`;
+}
+
+function buildWhatsAppUrl(phone: string | null | undefined, name?: string): string | null {
+  const digits = toWhatsAppDigits(phone);
+  if (!digits) return null;
+  const greeting = name?.trim()
+    ? `Hola ${name.trim()}, te escribo de la ferretería.`
+    : "Hola, te escribo de la ferretería.";
+  return `https://wa.me/${digits}?text=${encodeURIComponent(greeting)}`;
+}
+
+function RequiredLabel({
+  htmlFor,
+  children,
+}: {
+  htmlFor?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Label htmlFor={htmlFor}>
+      {children} <span className="text-destructive">*</span>
+    </Label>
+  );
+}
+
 function AdminUsuariosPageInner() {
   const searchParams = useSearchParams();
   const [typeFilter, setTypeFilter] = useState<string>(
@@ -82,6 +124,14 @@ function AdminUsuariosPageInner() {
   const [editCategoryIds, setEditCategoryIds] = useState<Set<string>>(new Set());
   const [customerCategories, setCustomerCategories] = useState<CustCategory[]>([]);
   const [saving, setSaving] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createCustomerType, setCreateCustomerType] = useState<"consumer" | "pro">(
+    "consumer",
+  );
+  const [createCuit, setCreateCuit] = useState("");
+  const [createNewsletter, setCreateNewsletter] = useState(true);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/admin/customer-categories")
@@ -136,6 +186,64 @@ function AdminUsuariosPageInner() {
     void loadUsers();
   }, [loadUsers]);
 
+  useEffect(() => {
+    const editId = searchParams.get("edit");
+    if (!editId) return;
+
+    let cancelled = false;
+    fetch(`/api/admin/users/${editId}`)
+      .then(async (r) => {
+        const data = await r.json();
+        if (!r.ok || !data.user) {
+          throw new Error(data.error || "No se pudo cargar el cliente");
+        }
+        if (cancelled) return;
+        const u = data.user as {
+          id: string;
+          name: string;
+          lastName: string | null;
+          email: string;
+          phone: string | null;
+          customerType: CustomerType;
+          role: string;
+          isApproved: boolean;
+          createdAt: string;
+          customerCategories: { id: string }[];
+          _count: { orders: number; addresses: number };
+        };
+        openEdit({
+          id: u.id,
+          name: u.name,
+          lastName: u.lastName,
+          email: u.email,
+          phone: u.phone,
+          customerType: u.customerType,
+          role: u.role,
+          isApproved: u.isApproved,
+          createdAt: u.createdAt,
+          _count: {
+            orders: u._count.orders,
+            addresses: u._count.addresses,
+          },
+          customerCategoryIds: (u.customerCategories || []).map((c) => c.id),
+        });
+        window.history.replaceState(null, "", "/admin/usuarios");
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          toast.error(
+            err instanceof Error ? err.message : "No se pudo abrir la edición",
+          );
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // Solo reacciona al query edit=
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   function openEdit(user: UserRow) {
     setEditUser(user);
     setEditForm({
@@ -181,6 +289,56 @@ function AdminUsuariosPageInner() {
       toast.error("Error de red");
     } finally {
       setSaving(false);
+    }
+  }
+
+  function openCreate() {
+    setCreateCustomerType("consumer");
+    setCreateCuit("");
+    setCreateNewsletter(true);
+    setCreateError(null);
+    setCreateOpen(true);
+  }
+
+  async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setCreateError(null);
+
+    const formData = new FormData(e.currentTarget);
+    const payload = {
+      name: String(formData.get("name") ?? ""),
+      lastName: String(formData.get("lastname") ?? ""),
+      email: String(formData.get("email") ?? ""),
+      phone: String(formData.get("phone") ?? ""),
+      password: String(formData.get("password") ?? ""),
+      password2: String(formData.get("password2") ?? ""),
+      customerType: createCustomerType === "pro" ? "TRADE" : "CONSUMER",
+      cuit: createCustomerType === "pro" ? createCuit : "",
+      company:
+        createCustomerType === "pro" ? String(formData.get("company") ?? "") : "",
+      newsletterOptIn: createNewsletter,
+      termsAccepted: true,
+    };
+
+    setCreating(true);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setCreateError(data.error ?? "No se pudo crear el cliente");
+        return;
+      }
+      toast.success("Cliente creado");
+      setCreateOpen(false);
+      await loadUsers();
+    } catch {
+      setCreateError("Error de red");
+    } finally {
+      setCreating(false);
     }
   }
 
@@ -318,6 +476,15 @@ function AdminUsuariosPageInner() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <Button
+            type="button"
+            size="sm"
+            className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
+            onClick={openCreate}
+          >
+            <Plus className="size-4" />
+            Nuevo cliente
+          </Button>
           <Button asChild variant="outline" size="sm" className="gap-2">
             <Link href="/admin/categorias-clientes">
               <Tag className="size-4" />
@@ -375,6 +542,47 @@ function AdminUsuariosPageInner() {
                 Aprobar
               </Button>
             ) : null}
+            <Button variant="ghost" size="icon" asChild>
+              <Link
+                href={`/admin/usuarios/${row.id}`}
+                aria-label="Ver detalle"
+              >
+                <Eye className="size-4" />
+              </Link>
+            </Button>
+            {(() => {
+              const waUrl = buildWhatsAppUrl(
+                row.phone,
+                [row.name, row.lastName].filter(Boolean).join(" "),
+              );
+              if (waUrl) {
+                return (
+                  <Button variant="ghost" size="icon" asChild>
+                    <a
+                      href={waUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label="Enviar WhatsApp"
+                      title={`WhatsApp: ${row.phone}`}
+                    >
+                      <MessageCircle className="size-4 text-emerald-600" />
+                    </a>
+                  </Button>
+                );
+              }
+              return (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  disabled
+                  aria-label="Sin teléfono para WhatsApp"
+                  title="Este cliente no tiene teléfono cargado"
+                >
+                  <MessageCircle className="size-4 text-muted-foreground" />
+                </Button>
+              );
+            })()}
             <Button size="sm" variant="ghost" onClick={() => openEdit(row)}>
               <Edit className="size-4" />
             </Button>
@@ -565,6 +773,189 @@ function AdminUsuariosPageInner() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={createOpen}
+        onOpenChange={(open) => {
+          if (!creating) setCreateOpen(open);
+        }}
+      >
+        <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Nuevo cliente</DialogTitle>
+          </DialogHeader>
+          <form className="space-y-4 pt-2" onSubmit={(e) => void handleCreate(e)}>
+            {createError ? (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                {createError}
+              </div>
+            ) : null}
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <RequiredLabel htmlFor="create-name">Nombre</RequiredLabel>
+                <Input id="create-name" name="name" required disabled={creating} />
+              </div>
+              <div className="space-y-2">
+                <RequiredLabel htmlFor="create-lastname">Apellido</RequiredLabel>
+                <Input
+                  id="create-lastname"
+                  name="lastname"
+                  required
+                  disabled={creating}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <RequiredLabel htmlFor="create-email">Email</RequiredLabel>
+              <Input
+                id="create-email"
+                name="email"
+                type="email"
+                required
+                disabled={creating}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="create-phone">Teléfono</Label>
+              <Input
+                id="create-phone"
+                name="phone"
+                type="tel"
+                disabled={creating}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <RequiredLabel htmlFor="create-password">Contraseña</RequiredLabel>
+              <Input
+                id="create-password"
+                name="password"
+                type="password"
+                required
+                minLength={8}
+                disabled={creating}
+              />
+              <p className="text-xs text-muted-foreground">Mínimo 8 caracteres.</p>
+            </div>
+
+            <div className="space-y-2">
+              <RequiredLabel htmlFor="create-password2">
+                Confirmar contraseña
+              </RequiredLabel>
+              <Input
+                id="create-password2"
+                name="password2"
+                type="password"
+                required
+                minLength={8}
+                disabled={creating}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <RequiredLabel htmlFor="create-customerType">
+                Tipo de cliente
+              </RequiredLabel>
+              <Select
+                value={createCustomerType}
+                onValueChange={(v) => setCreateCustomerType(v as "consumer" | "pro")}
+                disabled={creating}
+              >
+                <SelectTrigger id="create-customerType">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="consumer">Consumidor final</SelectItem>
+                  <SelectItem value="pro">Soy profesional / gremio</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {createCustomerType === "pro" ? (
+              <div className="space-y-4 rounded-lg border border-border bg-muted/40 p-4">
+                <div className="space-y-2">
+                  <RequiredLabel htmlFor="create-cuit">CUIT</RequiredLabel>
+                  <Input
+                    id="create-cuit"
+                    name="cuit"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    placeholder="20-12345678-3"
+                    value={createCuit}
+                    onChange={(e) => setCreateCuit(formatCuit(e.target.value))}
+                    maxLength={13}
+                    required
+                    disabled={creating}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Formato: 2 dígitos - 8 dígitos - 1 dígito (ej: 20-12345678-3).
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <RequiredLabel htmlFor="create-company">Razón social</RequiredLabel>
+                  <Input
+                    id="create-company"
+                    name="company"
+                    required
+                    disabled={creating}
+                  />
+                </div>
+              </div>
+            ) : null}
+
+            <div className="flex items-start gap-3">
+              <Checkbox
+                id="create-newsletter"
+                checked={createNewsletter}
+                onCheckedChange={(checked) =>
+                  setCreateNewsletter(checked === true)
+                }
+                disabled={creating}
+              />
+              <Label
+                htmlFor="create-newsletter"
+                className="cursor-pointer text-sm leading-snug"
+              >
+                Quiere recibir ofertas, novedades y tips por email (newsletter).
+              </Label>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              El cliente queda aprobado y puede iniciar sesión con el email y la
+              contraseña indicados. Los campos con{" "}
+              <span className="text-destructive">*</span> son obligatorios.
+            </p>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setCreateOpen(false)}
+                disabled={creating}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                className="bg-blue-600 text-white hover:bg-blue-700"
+                disabled={creating}
+              >
+                {creating ? (
+                  <>
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                    Creando…
+                  </>
+                ) : (
+                  "Crear cliente"
+                )}
+              </Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
+import bcrypt from "bcryptjs";
 
 import { CustomerType, Prisma, UserRole } from "@/generated/prisma";
 import { prisma } from "@/lib/db";
 import { auth, isAdminRole } from "@/lib/auth";
+import { registerFormSchema } from "@/lib/validators/auth.validator";
 
 const CUSTOMER_TYPES: CustomerType[] = ["CONSUMER", "TRADE", "WHOLESALE"];
 const USER_ROLES: UserRole[] = ["CUSTOMER", "ADMIN", "SUPER_ADMIN", "MOSTRADOR"];
@@ -110,6 +112,107 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     console.error("Admin users GET error:", error);
+    return NextResponse.json({ error: "Error interno" }, { status: 500 });
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const session = await auth();
+    if (
+      !session?.user ||
+      !isAdminRole((session.user as { role?: string }).role)
+    ) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+    }
+
+    const body = await request.json();
+    const parsed = registerFormSchema.safeParse({
+      ...body,
+      termsAccepted: true,
+    });
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.issues[0]?.message ?? "Datos inválidos." },
+        { status: 400 },
+      );
+    }
+
+    const {
+      name,
+      lastName,
+      email,
+      password,
+      phone,
+      customerType,
+      cuit,
+      company,
+      newsletterOptIn,
+    } = parsed.data;
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const existingUser = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+    });
+
+    if (existingUser) {
+      return NextResponse.json(
+        { error: "Ya existe una cuenta con ese email." },
+        { status: 409 },
+      );
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+    const isPro = customerType === "TRADE";
+    const cuitDigits = cuit?.replace(/\D/g, "") ?? null;
+
+    const user = await prisma.user.create({
+      data: {
+        name,
+        lastName,
+        email: normalizedEmail,
+        passwordHash,
+        phone: phone?.trim() || null,
+        customerType: isPro ? "TRADE" : "CONSUMER",
+        role: "CUSTOMER",
+        // Alta desde admin: queda aprobado para poder operar de inmediato.
+        isApproved: true,
+        taxIdType: isPro && cuitDigits ? "CUIT" : null,
+        taxId: isPro ? cuitDigits : null,
+        companyName: isPro ? company?.trim() || null : null,
+        newsletterOptIn,
+      },
+      select: {
+        id: true,
+        name: true,
+        lastName: true,
+        email: true,
+        phone: true,
+        customerType: true,
+        role: true,
+        isApproved: true,
+        createdAt: true,
+      },
+    });
+
+    return NextResponse.json(
+      {
+        message: "Cliente creado exitosamente.",
+        user,
+      },
+      { status: 201 },
+    );
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === "P2002") {
+        return NextResponse.json(
+          { error: "Ya existe una cuenta con ese email." },
+          { status: 409 },
+        );
+      }
+    }
+    console.error("Admin users POST error:", error);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
 }
