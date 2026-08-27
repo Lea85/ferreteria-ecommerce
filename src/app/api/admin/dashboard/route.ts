@@ -104,6 +104,37 @@ export async function GET() {
         lowStockThreshold: v.lowStockThreshold,
       }));
 
+    // Presupuestos que vencen en los próximos 1–2 días (hasta 48 hs) y no están vendidos/cancelados.
+    const now = new Date();
+    const expiresUntil = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000);
+
+    const expiringQuotes = await prisma.quote.findMany({
+      where: {
+        status: { notIn: ["SOLD", "CANCELLED"] },
+        validUntil: {
+          gte: now,
+          lte: expiresUntil,
+        },
+      },
+      orderBy: { validUntil: "asc" },
+      take: 20,
+      select: {
+        id: true,
+        quoteNumber: true,
+        status: true,
+        total: true,
+        validUntil: true,
+        user: {
+          select: {
+            name: true,
+            lastName: true,
+            email: true,
+            phone: true,
+          },
+        },
+      },
+    });
+
     return NextResponse.json({
       totalRevenue,
       totalOrders,
@@ -125,6 +156,16 @@ export async function GET() {
         taxId: u.taxId,
         customerType: u.customerType,
         createdAt: u.createdAt,
+      })),
+      expiringQuotes: expiringQuotes.map((q) => ({
+        id: q.id,
+        quoteNumber: q.quoteNumber,
+        status: q.status,
+        total: Number(q.total),
+        validUntil: q.validUntil.toISOString(),
+        customerName: [q.user.name, q.user.lastName].filter(Boolean).join(" "),
+        customerEmail: q.user.email,
+        customerPhone: q.user.phone,
       })),
     });
   } catch (error) {

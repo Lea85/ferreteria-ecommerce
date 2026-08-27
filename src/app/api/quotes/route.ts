@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
+import { isAdminRole } from "@/lib/auth";
 import { getIntegracionesSettings } from "@/lib/integraciones-settings";
 import { resolveUserCategoryDiscount } from "@/lib/services/customer-discount.service";
 
@@ -12,23 +13,28 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No autenticado." }, { status: 401 });
     }
 
-    const userId = session.user.id;
+    const sessionUserId = session.user.id;
 
     const userWithCategories = await prisma.user.findUnique({
-      where: { id: userId },
-      include: {
+      where: { id: sessionUserId },
+      select: {
+        id: true,
+        role: true,
         customerCategories: {
           include: { customerCategory: { select: { canGenerateQuotes: true } } },
         },
       },
     });
 
-    const role = (session.user as { role?: string }).role;
+    if (!userWithCategories) {
+      return NextResponse.json({ error: "Usuario no encontrado." }, { status: 404 });
+    }
+
+    const role = userWithCategories.role;
+    const isStaff = isAdminRole(role);
     const canQuote =
-      role === "MOSTRADOR" ||
-      role === "ADMIN" ||
-      role === "SUPER_ADMIN" ||
-      userWithCategories?.customerCategories.some(
+      isStaff ||
+      userWithCategories.customerCategories.some(
         (uc) => uc.customerCategory.canGenerateQuotes,
       );
 
@@ -46,6 +52,36 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "El carrito está vacío." }, { status: 400 });
     }
 
+    // Clientes (no admin/mostrador): el presupuesto queda siempre asignado a quien lo genera.
+    // Staff puede opcionalmente indicar un cliente destino (userId / customerId).
+    let assignedUserId = sessionUserId;
+    if (isStaff) {
+      const requestedCustomerId = String(
+        body.userId ?? body.customerId ?? "",
+      ).trim();
+      if (requestedCustomerId) {
+        const customer = await prisma.user.findUnique({
+          where: { id: requestedCustomerId },
+          select: { id: true },
+        });
+        if (!customer) {
+          return NextResponse.json(
+            { error: "Cliente no encontrado." },
+            { status: 400 },
+          );
+        }
+        assignedUserId = customer.id;
+      }
+    } else if (body.userId || body.customerId) {
+      const requested = String(body.userId ?? body.customerId).trim();
+      if (requested && requested !== sessionUserId) {
+        return NextResponse.json(
+          { error: "No podés asignar el presupuesto a otro usuario." },
+          { status: 403 },
+        );
+      }
+    }
+
     const validityDaysSetting = await prisma.setting.findUnique({
       where: { key: "quote_validity_days" },
     });
@@ -59,9 +95,9 @@ export async function POST(request: Request) {
       if (day !== 0 && day !== 6) added++;
     }
 
-    const variantIds = items.map((i: any) => i.variantId);
+    const variantIds = items.map((i: { variantId?: string }) => i.variantId);
     const variants = await prisma.productVariant.findMany({
-      where: { id: { in: variantIds } },
+      where: { id: { in: variantIds.filter(Boolean) as string[] } },
       include: { product: { select: { name: true } } },
     });
 
@@ -102,12 +138,15 @@ export async function POST(request: Request) {
     }
 
     if (quoteItems.length === 0) {
-      return NextResponse.json({ error: "No se encontraron productos válidos." }, { status: 400 });
+      return NextResponse.json(
+        { error: "No se encontraron productos válidos." },
+        { status: 400 },
+      );
     }
 
     const totalQuantity = quoteItems.reduce((sum, i) => sum + i.quantity, 0);
     const categoryDiscount = await resolveUserCategoryDiscount(
-      userId,
+      assignedUserId,
       subtotal,
       totalQuantity,
     );
@@ -129,7 +168,7 @@ export async function POST(request: Request) {
     const quote = await prisma.quote.create({
       data: {
         quoteNumber,
-        userId,
+        userId: assignedUserId,
         subtotal,
         total,
         validUntil,
@@ -140,7 +179,17 @@ export async function POST(request: Request) {
           create: quoteItems,
         },
       },
-      include: { items: true },
+      include: {
+        items: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
     });
 
     const storeSettings = await getIntegracionesSettings();
@@ -181,11 +230,10 @@ export async function GET(request: Request) {
         },
       });
 
-      const role = (session.user as { role?: string }).role;
+      const role =
+        userWithCategories?.role ?? (session.user as { role?: string }).role;
       const canQuote =
-        role === "MOSTRADOR" ||
-        role === "ADMIN" ||
-        role === "SUPER_ADMIN" ||
+        isAdminRole(role) ||
         userWithCategories?.customerCategories.some(
           (uc) => uc.customerCategory.canGenerateQuotes,
         );
