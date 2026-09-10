@@ -52,9 +52,10 @@ import { toast } from "sonner";
 
 type QuoteCustomerOption = {
   id: string;
+  source: "operational" | "platform";
   name: string;
   lastName: string | null;
-  email: string;
+  email: string | null;
   phone: string | null;
   taxId: string | null;
   taxIdType: string | null;
@@ -184,40 +185,73 @@ export default function CarritoPage() {
     setSearchingQuoteCustomers(true);
     const params = new URLSearchParams({
       search: debouncedQuoteCustomerSearch,
+      limit: "12",
+      page: "1",
+    });
+    const userParams = new URLSearchParams({
+      search: debouncedQuoteCustomerSearch,
       role: "CUSTOMER",
-      limit: "15",
+      limit: "12",
       page: "1",
     });
 
-    fetch(`/api/admin/users?${params.toString()}`)
-      .then((r) => r.json())
-      .then((data) => {
+    Promise.all([
+      fetch(`/api/admin/operational-customers?${params.toString()}`).then((r) =>
+        r.json(),
+      ),
+      fetch(`/api/admin/users?${userParams.toString()}`).then((r) => r.json()),
+    ])
+      .then(([opData, userData]) => {
         if (cancelled) return;
-        setQuoteCustomerResults(
-          Array.isArray(data.users)
-            ? data.users.map(
-                (u: {
-                  id: string;
-                  name: string;
-                  lastName: string | null;
-                  email: string;
-                  phone: string | null;
-                  taxId: string | null;
-                  taxIdType: string | null;
-                  companyName: string | null;
-                }) => ({
-                  id: u.id,
-                  name: u.name,
-                  lastName: u.lastName,
-                  email: u.email,
-                  phone: u.phone,
-                  taxId: u.taxId,
-                  taxIdType: u.taxIdType,
-                  companyName: u.companyName,
-                }),
-              )
-            : [],
-        );
+        const ops: QuoteCustomerOption[] = Array.isArray(opData.customers)
+          ? opData.customers.map(
+              (u: {
+                id: string;
+                name: string;
+                lastName: string | null;
+                email: string | null;
+                phone: string | null;
+                taxId: string | null;
+                taxIdType: string | null;
+                companyName: string | null;
+              }) => ({
+                id: u.id,
+                source: "operational" as const,
+                name: u.name,
+                lastName: u.lastName,
+                email: u.email,
+                phone: u.phone,
+                taxId: u.taxId,
+                taxIdType: u.taxIdType,
+                companyName: u.companyName,
+              }),
+            )
+          : [];
+        const users: QuoteCustomerOption[] = Array.isArray(userData.users)
+          ? userData.users.map(
+              (u: {
+                id: string;
+                name: string;
+                lastName: string | null;
+                email: string;
+                phone: string | null;
+                taxId: string | null;
+                taxIdType: string | null;
+                companyName: string | null;
+              }) => ({
+                id: u.id,
+                source: "platform" as const,
+                name: u.name,
+                lastName: u.lastName,
+                email: u.email,
+                phone: u.phone,
+                taxId: u.taxId,
+                taxIdType: u.taxIdType,
+                companyName: u.companyName,
+              }),
+            )
+          : [];
+        setQuoteCustomerResults([...ops, ...users]);
       })
       .catch(() => {
         if (!cancelled) {
@@ -370,12 +404,11 @@ export default function CarritoPage() {
         createCustomerType === "pro"
           ? String(formData.get("company") ?? "")
           : "",
-      newsletterOptIn: createNewsletter,
     };
 
     setCreatingCustomer(true);
     try {
-      const res = await fetch("/api/admin/users", {
+      const res = await fetch("/api/admin/operational-customers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -386,14 +419,16 @@ export default function CarritoPage() {
         return;
       }
 
-      const newId = data.user?.id as string | undefined;
+      const newId = data.customer?.id as string | undefined;
       if (!newId) {
         setCreateError("Cliente creado pero no se obtuvo el ID");
         return;
       }
 
-      toast.success("Cliente creado");
-      await handleGenerateQuote(newId);
+      toast.success("Cliente operativo creado");
+      await handleGenerateQuote({
+        operationalCustomerId: newId,
+      });
     } catch {
       setCreateError("Error de red");
     } finally {
@@ -401,9 +436,16 @@ export default function CarritoPage() {
     }
   }
 
-  async function handleGenerateQuote(customerId?: string) {
+  async function handleGenerateQuote(assignment?: {
+    userId?: string;
+    operationalCustomerId?: string;
+  }) {
     if (items.length === 0) return;
-    if (requiresCustomerAssignment && !customerId) {
+    if (
+      requiresCustomerAssignment &&
+      !assignment?.userId &&
+      !assignment?.operationalCustomerId
+    ) {
       toast.error("Seleccioná un cliente para el presupuesto");
       return;
     }
@@ -418,7 +460,10 @@ export default function CarritoPage() {
             variantId: i.variantId,
             quantity: i.quantity,
           })),
-          ...(customerId ? { userId: customerId } : {}),
+          ...(assignment?.operationalCustomerId
+            ? { operationalCustomerId: assignment.operationalCustomerId }
+            : {}),
+          ...(assignment?.userId ? { userId: assignment.userId } : {}),
         }),
       });
       const data = await res.json();
@@ -1018,10 +1063,17 @@ export default function CarritoPage() {
                 <div className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
                   <p className="font-medium">
                     {customerLabel(selectedQuoteCustomer)}
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">
+                      {selectedQuoteCustomer.source === "operational"
+                        ? "(operativo)"
+                        : "(plataforma)"}
+                    </span>
                   </p>
-                  <p className="text-muted-foreground">
-                    {selectedQuoteCustomer.email}
-                  </p>
+                  {selectedQuoteCustomer.email ? (
+                    <p className="text-muted-foreground">
+                      {selectedQuoteCustomer.email}
+                    </p>
+                  ) : null}
                   {selectedQuoteCustomer.companyName ? (
                     <p className="text-muted-foreground">
                       {selectedQuoteCustomer.companyName}
@@ -1091,10 +1143,17 @@ export default function CarritoPage() {
                           <div>
                             <p className="font-medium">
                               {customerLabel(customer)}
+                              <span className="ml-2 text-xs font-normal text-muted-foreground">
+                                {customer.source === "operational"
+                                  ? "operativo"
+                                  : "plataforma"}
+                              </span>
                             </p>
-                            <p className="text-xs text-muted-foreground">
-                              {customer.email}
-                            </p>
+                            {customer.email ? (
+                              <p className="text-xs text-muted-foreground">
+                                {customer.email}
+                              </p>
+                            ) : null}
                             {customer.companyName ? (
                               <p className="text-xs text-muted-foreground">
                                 {customer.companyName}
@@ -1124,9 +1183,16 @@ export default function CarritoPage() {
                 </Button>
                 <Button
                   type="button"
-                  onClick={() =>
-                    void handleGenerateQuote(selectedQuoteCustomer?.id)
-                  }
+                  onClick={() => {
+                    if (!selectedQuoteCustomer) return;
+                    void handleGenerateQuote(
+                      selectedQuoteCustomer.source === "operational"
+                        ? {
+                            operationalCustomerId: selectedQuoteCustomer.id,
+                          }
+                        : { userId: selectedQuoteCustomer.id },
+                    );
+                  }}
                   disabled={generatingQuote || !selectedQuoteCustomer}
                 >
                   {generatingQuote ? (
@@ -1205,9 +1271,8 @@ export default function CarritoPage() {
                 </div>
 
                 <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                  Este cliente se crea sin contraseña: sirve para presupuestos y
-                  ventas. No podrá iniciar sesión en la tienda hasta que se le
-                  asigne una.
+                  Se crea como cliente operativo (sin cuenta de la tienda). Sirve
+                  para presupuestos y ventas de mostrador.
                 </p>
 
                 <div className="space-y-2">

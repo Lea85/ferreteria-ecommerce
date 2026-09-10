@@ -95,7 +95,32 @@ export async function sellQuoteAsCounterSale(data: {
     where: { id: data.quoteId },
     include: {
       items: true,
-      user: { select: { name: true, lastName: true, email: true, phone: true } },
+      user: {
+        select: {
+          id: true,
+          name: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          customerType: true,
+          taxIdType: true,
+          taxId: true,
+          companyName: true,
+        },
+      },
+      operationalCustomer: {
+        select: {
+          id: true,
+          name: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          customerType: true,
+          taxIdType: true,
+          taxId: true,
+          companyName: true,
+        },
+      },
     },
   });
 
@@ -109,9 +134,11 @@ export async function sellQuoteAsCounterSale(data: {
     throw new Error("El presupuesto no tiene productos.");
   }
 
-  const customerName =
-    [quote.user.name, quote.user.lastName].filter(Boolean).join(" ").trim() ||
-    "Cliente presupuesto";
+  const contact = quote.operationalCustomer ?? quote.user;
+  const customerName = contact
+    ? [contact.name, contact.lastName].filter(Boolean).join(" ").trim() ||
+      "Cliente presupuesto"
+    : "Cliente presupuesto";
 
   return createCounterSaleOrder({
     adminUserId: data.adminUserId,
@@ -127,8 +154,8 @@ export async function sellQuoteAsCounterSale(data: {
     quoteId: quote.id,
     quoteNumber: quote.quoteNumber,
     customerName,
-    customerEmail: quote.user.email,
-    customerPhone: quote.user.phone,
+    customerEmail: contact?.email ?? null,
+    customerPhone: contact?.phone ?? null,
   });
 }
 

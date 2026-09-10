@@ -316,13 +316,45 @@ export default function AdminPresupuestoDetallePage() {
               <CardTitle className="text-lg">Cliente</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
-              <p className="font-medium">
-                {[quote.user.name, quote.user.lastName].filter(Boolean).join(" ")}
-              </p>
-              <p className="text-muted-foreground">{quote.user.email}</p>
-              {quote.user.phone && (
-                <p className="text-muted-foreground">Tel: {quote.user.phone}</p>
-              )}
+              {(() => {
+                const contact =
+                  quote.operationalCustomer ?? quote.user ?? null;
+                if (!contact) {
+                  return (
+                    <p className="text-muted-foreground">Sin cliente</p>
+                  );
+                }
+                const name = [contact.name, contact.lastName]
+                  .filter(Boolean)
+                  .join(" ");
+                return (
+                  <>
+                    <p className="font-medium">{name || "Sin nombre"}</p>
+                    {quote.operationalCustomer ? (
+                      <p className="text-xs text-muted-foreground">
+                        Cliente operativo
+                      </p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        Cliente plataforma
+                      </p>
+                    )}
+                    {contact.email ? (
+                      <p className="text-muted-foreground">{contact.email}</p>
+                    ) : null}
+                    {contact.phone ? (
+                      <p className="text-muted-foreground">
+                        Tel: {contact.phone}
+                      </p>
+                    ) : null}
+                    {contact.companyName ? (
+                      <p className="text-muted-foreground">
+                        {contact.companyName}
+                      </p>
+                    ) : null}
+                  </>
+                );
+              })()}
             </CardContent>
           </Card>
 

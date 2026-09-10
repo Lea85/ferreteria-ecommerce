@@ -24,9 +24,10 @@ const STATUS_LABELS: Record<string, string> = {
 
 type QuoteCustomer = {
   id: string;
+  source: "operational" | "platform";
   name: string;
   lastName: string | null;
-  email: string;
+  email: string | null;
   phone?: string | null;
   taxId?: string | null;
   taxIdType?: string | null;
@@ -97,16 +98,23 @@ export default function EditarPresupuestoPage() {
           total: Number(quote.total),
           subtotal: Number(quote.subtotal),
         });
-        setSelectedCustomer({
-          id: quote.user.id,
-          name: quote.user.name,
-          lastName: quote.user.lastName,
-          email: quote.user.email,
-          phone: quote.user.phone,
-          taxId: quote.user.taxId,
-          taxIdType: quote.user.taxIdType,
-          companyName: quote.user.companyName,
-        });
+        const contact = quote.operationalCustomer ?? quote.user;
+        if (contact) {
+          setSelectedCustomer({
+            id: contact.id,
+            source: quote.operationalCustomer ? "operational" : "platform",
+            name: contact.name,
+            lastName: contact.lastName,
+            email: contact.email,
+            phone: contact.phone,
+            taxId: contact.taxId,
+            taxIdType: contact.taxIdType,
+            companyName: contact.companyName,
+            customerType: contact.customerType,
+          });
+        } else {
+          setSelectedCustomer(null);
+        }
         setItems(
           quote.items.map(
             (item: {
@@ -146,41 +154,77 @@ export default function EditarPresupuestoPage() {
     setSearchingCustomers(true);
     const params = new URLSearchParams({
       search: debouncedCustomerSearch,
-      limit: "15",
+      limit: "12",
+      page: "1",
+    });
+    const userParams = new URLSearchParams({
+      search: debouncedCustomerSearch,
+      role: "CUSTOMER",
+      limit: "12",
       page: "1",
     });
 
-    fetch(`/api/admin/users?${params.toString()}`)
-      .then((r) => r.json())
-      .then((data) => {
+    Promise.all([
+      fetch(`/api/admin/operational-customers?${params.toString()}`).then((r) =>
+        r.json(),
+      ),
+      fetch(`/api/admin/users?${userParams.toString()}`).then((r) => r.json()),
+    ])
+      .then(([opData, userData]) => {
         if (cancelled) return;
-        setCustomerResults(
-          Array.isArray(data.users)
-            ? data.users.map(
-                (u: {
-                  id: string;
-                  name: string;
-                  lastName: string | null;
-                  email: string;
-                  phone: string | null;
-                  taxId: string | null;
-                  taxIdType: string | null;
-                  companyName: string | null;
-                  customerType: CustomerType;
-                }) => ({
-                  id: u.id,
-                  name: u.name,
-                  lastName: u.lastName,
-                  email: u.email,
-                  phone: u.phone,
-                  taxId: u.taxId,
-                  taxIdType: u.taxIdType,
-                  companyName: u.companyName,
-                  customerType: u.customerType,
-                }),
-              )
-            : [],
-        );
+        const ops: QuoteCustomer[] = Array.isArray(opData.customers)
+          ? opData.customers.map(
+              (u: {
+                id: string;
+                name: string;
+                lastName: string | null;
+                email: string | null;
+                phone: string | null;
+                taxId: string | null;
+                taxIdType: string | null;
+                companyName: string | null;
+                customerType: CustomerType;
+              }) => ({
+                id: u.id,
+                source: "operational" as const,
+                name: u.name,
+                lastName: u.lastName,
+                email: u.email,
+                phone: u.phone,
+                taxId: u.taxId,
+                taxIdType: u.taxIdType,
+                companyName: u.companyName,
+                customerType: u.customerType,
+              }),
+            )
+          : [];
+        const users: QuoteCustomer[] = Array.isArray(userData.users)
+          ? userData.users.map(
+              (u: {
+                id: string;
+                name: string;
+                lastName: string | null;
+                email: string;
+                phone: string | null;
+                taxId: string | null;
+                taxIdType: string | null;
+                companyName: string | null;
+                customerType: CustomerType;
+              }) => ({
+                id: u.id,
+                source: "platform" as const,
+                name: u.name,
+                lastName: u.lastName,
+                email: u.email,
+                phone: u.phone,
+                taxId: u.taxId,
+                taxIdType: u.taxIdType,
+                companyName: u.companyName,
+                customerType: u.customerType,
+              }),
+            )
+          : [];
+        setCustomerResults([...ops, ...users]);
       })
       .catch(() => {
         if (!cancelled) {
@@ -213,7 +257,9 @@ export default function EditarPresupuestoPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "update",
-          userId: selectedCustomer.id,
+          ...(selectedCustomer.source === "operational"
+            ? { operationalCustomerId: selectedCustomer.id }
+            : { userId: selectedCustomer.id }),
           items: items.map((item) => ({
             variantId: item.variantId,
             quantity: item.quantity,
@@ -282,8 +328,17 @@ export default function EditarPresupuestoPage() {
                 <div>
                   <p className="font-medium">{customerLabel(selectedCustomer)}</p>
                   <p className="text-sm text-muted-foreground">
-                    {selectedCustomer.email}
+                    {selectedCustomer.email || "Sin email"}
                   </p>
+                  {selectedCustomer.source === "operational" ? (
+                    <p className="text-xs text-muted-foreground">
+                      Cliente operativo
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Cliente plataforma
+                    </p>
+                  )}
                   {selectedCustomer.companyName ? (
                     <p className="text-sm text-muted-foreground">
                       {selectedCustomer.companyName}
@@ -337,7 +392,9 @@ export default function EditarPresupuestoPage() {
               ) : (
                 customerResults.map((customer) => {
                   const tax = formatTaxId(customer.taxId);
-                  const isSelected = selectedCustomer?.id === customer.id;
+                  const isSelected =
+                    selectedCustomer?.id === customer.id &&
+                    selectedCustomer?.source === customer.source;
                   return (
                     <button
                       key={customer.id}

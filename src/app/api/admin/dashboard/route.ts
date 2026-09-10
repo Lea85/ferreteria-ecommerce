@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 
-import { prisma } from "@/lib/db";
 import { auth, isAdminRole, isFullAdmin } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 import { isLowStock } from "@/lib/low-stock";
+import {
+  quoteContactDisplayName,
+  resolveQuoteContact,
+} from "@/lib/quote-customer";
 
 export async function GET() {
   try {
@@ -127,10 +131,28 @@ export async function GET() {
         validUntil: true,
         user: {
           select: {
+            id: true,
             name: true,
             lastName: true,
             email: true,
             phone: true,
+            customerType: true,
+            taxIdType: true,
+            taxId: true,
+            companyName: true,
+          },
+        },
+        operationalCustomer: {
+          select: {
+            id: true,
+            name: true,
+            lastName: true,
+            email: true,
+            phone: true,
+            customerType: true,
+            taxIdType: true,
+            taxId: true,
+            companyName: true,
           },
         },
       },
@@ -158,16 +180,19 @@ export async function GET() {
         customerType: u.customerType,
         createdAt: u.createdAt,
       })),
-      expiringQuotes: expiringQuotes.map((q) => ({
-        id: q.id,
-        quoteNumber: q.quoteNumber,
-        status: q.status,
-        total: Number(q.total),
-        validUntil: q.validUntil.toISOString(),
-        customerName: [q.user.name, q.user.lastName].filter(Boolean).join(" "),
-        customerEmail: q.user.email,
-        customerPhone: q.user.phone,
-      })),
+      expiringQuotes: expiringQuotes.map((q) => {
+        const contact = resolveQuoteContact(q);
+        return {
+          id: q.id,
+          quoteNumber: q.quoteNumber,
+          status: q.status,
+          total: Number(q.total),
+          validUntil: q.validUntil.toISOString(),
+          customerName: quoteContactDisplayName(contact),
+          customerEmail: contact?.email ?? "",
+          customerPhone: contact?.phone ?? null,
+        };
+      }),
     });
   } catch (error) {
     console.error("Admin dashboard GET error:", error);

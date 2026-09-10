@@ -14,11 +14,19 @@ function roundMoney(value: number): number {
 export async function updateQuoteItems(
   quoteId: string,
   rawItems: QuoteUpdateItemInput[],
-  options?: { userId?: string | null },
+  options?: {
+    userId?: string | null;
+    operationalCustomerId?: string | null;
+  },
 ) {
   const quote = await prisma.quote.findUnique({
     where: { id: quoteId },
-    select: { id: true, userId: true, status: true },
+    select: {
+      id: true,
+      userId: true,
+      operationalCustomerId: true,
+      status: true,
+    },
   });
 
   if (!quote) {
@@ -29,16 +37,38 @@ export async function updateQuoteItems(
   }
 
   let userId = quote.userId;
+  let operationalCustomerId = quote.operationalCustomerId;
+
+  const nextOpId = options?.operationalCustomerId?.trim();
   const nextUserId = options?.userId?.trim();
-  if (nextUserId && nextUserId !== quote.userId) {
+
+  if (nextOpId) {
+    const op = await prisma.operationalCustomer.findFirst({
+      where: { id: nextOpId, isActive: true },
+      select: { id: true },
+    });
+    if (!op) {
+      throw new Error("Cliente operativo no encontrado.");
+    }
+    operationalCustomerId = op.id;
+    userId = null;
+  } else if (nextUserId) {
     const customer = await prisma.user.findUnique({
       where: { id: nextUserId },
-      select: { id: true },
+      select: { id: true, role: true },
     });
     if (!customer) {
       throw new Error("Cliente no encontrado.");
     }
+    if (customer.role !== "CUSTOMER") {
+      throw new Error("Solo podés asignar el presupuesto a un cliente.");
+    }
     userId = customer.id;
+    operationalCustomerId = null;
+  }
+
+  if (!userId && !operationalCustomerId) {
+    throw new Error("El presupuesto debe tener un cliente asignado.");
   }
 
   const byVariant = new Map<string, number>();
@@ -114,11 +144,9 @@ export async function updateQuoteItems(
 
   subtotal = roundMoney(subtotal);
   const totalQuantity = quoteItems.reduce((sum, i) => sum + i.quantity, 0);
-  const categoryDiscount = await resolveUserCategoryDiscount(
-    userId,
-    subtotal,
-    totalQuantity,
-  );
+  const categoryDiscount = userId
+    ? await resolveUserCategoryDiscount(userId, subtotal, totalQuantity)
+    : null;
   const discountAmount = categoryDiscount?.amount ?? 0;
   const total = roundMoney(Math.max(0, subtotal - discountAmount));
 
@@ -128,6 +156,7 @@ export async function updateQuoteItems(
       where: { id: quoteId },
       data: {
         userId,
+        operationalCustomerId,
         subtotal,
         total,
         notes: categoryDiscount
@@ -148,13 +177,23 @@ export async function updateQuoteItems(
             taxId: true,
             taxIdType: true,
             companyName: true,
+            customerType: true,
           },
         },
-        items: {
-          include: {
-            variant: { select: { stock: true, isActive: true } },
+        operationalCustomer: {
+          select: {
+            id: true,
+            name: true,
+            lastName: true,
+            email: true,
+            phone: true,
+            taxId: true,
+            taxIdType: true,
+            companyName: true,
+            customerType: true,
           },
         },
+        items: true,
       },
     });
   });

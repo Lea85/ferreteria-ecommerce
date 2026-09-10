@@ -3,6 +3,11 @@ import { NextResponse } from "next/server";
 import { auth, isAdminRole } from "@/auth";
 import { Prisma } from "@/generated/prisma";
 import { prisma } from "@/lib/db";
+import {
+  quoteContactDisplayName,
+  quoteCustomerSelect,
+  resolveQuoteContact,
+} from "@/lib/quote-customer";
 
 export async function GET(request: Request) {
   try {
@@ -16,6 +21,8 @@ export async function GET(request: Request) {
     const status = searchParams.get("status") || "";
     const userIdsRaw = searchParams.get("userIds")?.trim() || "";
     const userIdLegacy = searchParams.get("userId")?.trim() || "";
+    const operationalIdsRaw =
+      searchParams.get("operationalCustomerIds")?.trim() || "";
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
     const limit = Math.min(
       100,
@@ -31,6 +38,14 @@ export async function GET(request: Request) {
         ...(userIdLegacy ? [userIdLegacy] : []),
       ]),
     ];
+    const operationalCustomerIds = [
+      ...new Set(
+        operationalIdsRaw
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+      ),
+    ];
 
     const where: Prisma.QuoteWhereInput = {};
 
@@ -43,10 +58,45 @@ export async function GET(request: Request) {
         { user: { email: { contains: search, mode: "insensitive" } } },
         { user: { companyName: { contains: search, mode: "insensitive" } } },
         { user: { taxId: { contains: search, mode: "insensitive" } } },
+        {
+          operationalCustomer: {
+            name: { contains: search, mode: "insensitive" },
+          },
+        },
+        {
+          operationalCustomer: {
+            lastName: { contains: search, mode: "insensitive" },
+          },
+        },
+        {
+          operationalCustomer: {
+            email: { contains: search, mode: "insensitive" },
+          },
+        },
+        {
+          operationalCustomer: {
+            companyName: { contains: search, mode: "insensitive" },
+          },
+        },
+        {
+          operationalCustomer: {
+            phone: { contains: search, mode: "insensitive" },
+          },
+        },
+        {
+          operationalCustomer: {
+            taxId: { contains: search, mode: "insensitive" },
+          },
+        },
         ...(digits.length >= 2 && digits !== search
           ? [
               {
                 user: {
+                  taxId: { contains: digits, mode: "insensitive" as const },
+                },
+              },
+              {
+                operationalCustomer: {
                   taxId: { contains: digits, mode: "insensitive" as const },
                 },
               },
@@ -59,8 +109,13 @@ export async function GET(request: Request) {
       where.status = status as Prisma.EnumQuoteStatusFilter;
     }
 
-    if (userIds.length > 0) {
-      where.userId = { in: userIds };
+    if (userIds.length > 0 || operationalCustomerIds.length > 0) {
+      const parts: Prisma.QuoteWhereInput[] = [];
+      if (userIds.length > 0) parts.push({ userId: { in: userIds } });
+      if (operationalCustomerIds.length > 0) {
+        parts.push({ operationalCustomerId: { in: operationalCustomerIds } });
+      }
+      where.AND = [...(Array.isArray(where.AND) ? where.AND : []), { OR: parts }];
     }
 
     const [total, quotes] = await Promise.all([
@@ -71,26 +126,29 @@ export async function GET(request: Request) {
         take: limit,
         orderBy: { createdAt: "desc" },
         include: {
-          user: {
-            select: { name: true, lastName: true, email: true, phone: true },
-          },
+          user: { select: quoteCustomerSelect },
+          operationalCustomer: { select: quoteCustomerSelect },
           _count: { select: { items: true } },
         },
       }),
     ]);
 
-    const mapped = quotes.map((q) => ({
-      id: q.id,
-      quoteNumber: q.quoteNumber,
-      customerName: [q.user.name, q.user.lastName].filter(Boolean).join(" "),
-      customerEmail: q.user.email,
-      customerPhone: q.user.phone,
-      status: q.status,
-      total: Number(q.total),
-      itemCount: q._count.items,
-      validUntil: q.validUntil,
-      createdAt: q.createdAt,
-    }));
+    const mapped = quotes.map((q) => {
+      const contact = resolveQuoteContact(q);
+      return {
+        id: q.id,
+        quoteNumber: q.quoteNumber,
+        customerName: quoteContactDisplayName(contact),
+        customerEmail: contact?.email ?? "",
+        customerPhone: contact?.phone ?? null,
+        customerSource: contact?.source ?? null,
+        status: q.status,
+        total: Number(q.total),
+        itemCount: q._count.items,
+        validUntil: q.validUntil,
+        createdAt: q.createdAt,
+      };
+    });
 
     return NextResponse.json({
       quotes: mapped,

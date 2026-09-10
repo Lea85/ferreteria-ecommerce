@@ -52,44 +52,72 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "El carrito está vacío." }, { status: 400 });
     }
 
-    // Clientes (no admin/mostrador): el presupuesto queda siempre asignado a quien lo genera.
-    // Staff debe indicar un cliente destino (userId / customerId).
-    let assignedUserId = sessionUserId;
+    // Clientes (no staff): el presupuesto queda asignado a su User.
+    // Staff: operationalCustomerId (operativo) o userId (plataforma).
+    let assignedUserId: string | null = null;
+    let assignedOperationalCustomerId: string | null = null;
+
     if (isStaff) {
-      const requestedCustomerId = String(
+      const requestedOperationalId = String(
+        body.operationalCustomerId ?? "",
+      ).trim();
+      const requestedUserId = String(
         body.userId ?? body.customerId ?? "",
       ).trim();
-      if (!requestedCustomerId) {
+
+      if (requestedOperationalId) {
+        const op = await prisma.operationalCustomer.findFirst({
+          where: { id: requestedOperationalId, isActive: true },
+          select: { id: true },
+        });
+        if (!op) {
+          return NextResponse.json(
+            { error: "Cliente operativo no encontrado." },
+            { status: 400 },
+          );
+        }
+        assignedOperationalCustomerId = op.id;
+      } else if (requestedUserId) {
+        const customer = await prisma.user.findUnique({
+          where: { id: requestedUserId },
+          select: { id: true, role: true },
+        });
+        if (!customer) {
+          return NextResponse.json(
+            { error: "Cliente no encontrado." },
+            { status: 400 },
+          );
+        }
+        if (customer.role !== "CUSTOMER") {
+          return NextResponse.json(
+            { error: "Solo podés asignar el presupuesto a un cliente." },
+            { status: 400 },
+          );
+        }
+        assignedUserId = customer.id;
+      } else {
         return NextResponse.json(
           { error: "Debés asignar el presupuesto a un cliente." },
           { status: 400 },
         );
       }
-      const customer = await prisma.user.findUnique({
-        where: { id: requestedCustomerId },
-        select: { id: true, role: true },
-      });
-      if (!customer) {
+    } else {
+      if (body.operationalCustomerId) {
         return NextResponse.json(
-          { error: "Cliente no encontrado." },
-          { status: 400 },
-        );
-      }
-      if (customer.role !== "CUSTOMER") {
-        return NextResponse.json(
-          { error: "Solo podés asignar el presupuesto a un cliente." },
-          { status: 400 },
-        );
-      }
-      assignedUserId = customer.id;
-    } else if (body.userId || body.customerId) {
-      const requested = String(body.userId ?? body.customerId).trim();
-      if (requested && requested !== sessionUserId) {
-        return NextResponse.json(
-          { error: "No podés asignar el presupuesto a otro usuario." },
+          { error: "No podés asignar un cliente operativo." },
           { status: 403 },
         );
       }
+      if (body.userId || body.customerId) {
+        const requested = String(body.userId ?? body.customerId).trim();
+        if (requested && requested !== sessionUserId) {
+          return NextResponse.json(
+            { error: "No podés asignar el presupuesto a otro usuario." },
+            { status: 403 },
+          );
+        }
+      }
+      assignedUserId = sessionUserId;
     }
 
     const validityDaysSetting = await prisma.setting.findUnique({
@@ -155,11 +183,13 @@ export async function POST(request: Request) {
     }
 
     const totalQuantity = quoteItems.reduce((sum, i) => sum + i.quantity, 0);
-    const categoryDiscount = await resolveUserCategoryDiscount(
-      assignedUserId,
-      subtotal,
-      totalQuantity,
-    );
+    const categoryDiscount = assignedUserId
+      ? await resolveUserCategoryDiscount(
+          assignedUserId,
+          subtotal,
+          totalQuantity,
+        )
+      : null;
     const discountAmount = categoryDiscount?.amount ?? 0;
     const total = Math.max(0, subtotal - discountAmount);
 
@@ -179,6 +209,7 @@ export async function POST(request: Request) {
       data: {
         quoteNumber,
         userId: assignedUserId,
+        operationalCustomerId: assignedOperationalCustomerId,
         subtotal,
         total,
         validUntil,
@@ -197,6 +228,16 @@ export async function POST(request: Request) {
             name: true,
             lastName: true,
             email: true,
+            phone: true,
+          },
+        },
+        operationalCustomer: {
+          select: {
+            id: true,
+            name: true,
+            lastName: true,
+            email: true,
+            phone: true,
           },
         },
       },

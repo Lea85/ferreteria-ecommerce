@@ -118,6 +118,32 @@ model User {
   @@map("users")
 }
 
+/// Cliente operativo: ficha para presupuestos/mostrador (sin login).
+model OperationalCustomer {
+  id           String       @id @default(cuid())
+  name         String
+  lastName     String?
+  email        String?
+  phone        String?
+  customerType CustomerType @default(CONSUMER)
+  taxIdType    String?
+  taxId        String?
+  companyName  String?
+  notes        String?      @db.Text
+  isActive     Boolean      @default(true)
+
+  quotes Quote[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+  @@index([email])
+  @@index([phone])
+  @@index([taxId])
+  @@map("operational_customers")
+}
+
 // Requerido por @auth/prisma-adapter (sesión en DB si se usa estrategia database; JWT no lo usa pero el adapter lo expone)
 model Session {
   id           String   @id @default(cuid())
@@ -974,7 +1000,10 @@ enum QuoteStatus {
 model Quote {
   id            String      @id @default(cuid())
   quoteNumber   String      @unique
-  userId        String
+  /// Cliente de plataforma (cuenta User). Nullable si el presupuesto es de un operativo.
+  userId        String?
+  /// Cliente operativo (sin login). Nullable si el presupuesto es de un User.
+  operationalCustomerId String?
   status        QuoteStatus @default(ACTIVE)
   subtotal      Decimal     @db.Decimal(12, 2)
   total         Decimal     @db.Decimal(12, 2)
@@ -985,13 +1014,15 @@ model Quote {
   /// Oculta el presupuesto del listado "por vencer" del dashboard
   expiringAlertDismissedAt DateTime?
 
-  user  User        @relation(fields: [userId], references: [id])
+  user                 User?                 @relation(fields: [userId], references: [id])
+  operationalCustomer  OperationalCustomer?  @relation(fields: [operationalCustomerId], references: [id])
   items QuoteItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([userId])
+  @@index([operationalCustomerId])
   @@index([status])
   @@index([quoteNumber])
   @@map("quotes")

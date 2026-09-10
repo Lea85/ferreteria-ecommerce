@@ -35,6 +35,20 @@ export async function GET(
             taxId: true,
             taxIdType: true,
             companyName: true,
+            customerType: true,
+          },
+        },
+        operationalCustomer: {
+          select: {
+            id: true,
+            name: true,
+            lastName: true,
+            email: true,
+            phone: true,
+            taxId: true,
+            taxIdType: true,
+            companyName: true,
+            customerType: true,
           },
         },
         items: {
@@ -165,7 +179,15 @@ export async function PUT(
         typeof body.userId === "string" && body.userId.trim()
           ? body.userId.trim()
           : undefined;
-      const quote = await updateQuoteItems(id, items, { userId });
+      const operationalCustomerId =
+        typeof body.operationalCustomerId === "string" &&
+        body.operationalCustomerId.trim()
+          ? body.operationalCustomerId.trim()
+          : undefined;
+      const quote = await updateQuoteItems(id, items, {
+        userId,
+        operationalCustomerId,
+      });
       return NextResponse.json({ success: true, quote });
     }
 
