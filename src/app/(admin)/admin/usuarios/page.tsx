@@ -792,14 +792,17 @@ function AdminUsuariosPageInner() {
             </div>
 
             <div className="space-y-2">
-              <RequiredLabel htmlFor="create-email">Email</RequiredLabel>
+              <Label htmlFor="create-email">Email</Label>
               <Input
                 id="create-email"
                 name="email"
                 type="email"
-                required
                 disabled={creating}
               />
+              <p className="text-xs text-muted-foreground">
+                Opcional. Si no lo cargás, el cliente queda igual para
+                presupuestos y ventas.
+              </p>
             </div>
 
             <div className="space-y-2">

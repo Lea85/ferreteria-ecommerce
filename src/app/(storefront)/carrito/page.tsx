@@ -1181,16 +1181,17 @@ export default function CarritoPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <RequiredLabel htmlFor="quote-create-email">
-                    Email
-                  </RequiredLabel>
+                  <Label htmlFor="quote-create-email">Email</Label>
                   <Input
                     id="quote-create-email"
                     name="email"
                     type="email"
-                    required
                     disabled={creatingCustomer || generatingQuote}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Opcional. Si no lo cargás, el cliente queda igual para
+                    presupuestos y ventas.
+                  </p>
                 </div>
 
                 <div className="space-y-2">

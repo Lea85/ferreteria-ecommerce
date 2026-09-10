@@ -66,7 +66,15 @@ export const adminCreateCustomerSchema = z
   .object({
     name: z.string().trim().min(1, "El nombre es obligatorio."),
     lastName: z.string().trim().min(1, "El apellido es obligatorio."),
-    email: z.string().trim().email("Correo electrónico inválido."),
+    email: z
+      .string()
+      .trim()
+      .optional()
+      .or(z.literal(""))
+      .refine(
+        (v) => !v || z.string().email().safeParse(v).success,
+        "Correo electrónico inválido.",
+      ),
     phone: z.string().trim().optional().or(z.literal("")),
     customerType: z.enum(["CONSUMER", "TRADE"]).default("CONSUMER"),
     cuit: z.string().trim().optional().or(z.literal("")),

@@ -158,16 +158,22 @@ export async function POST(request: Request) {
       newsletterOptIn,
     } = parsed.data;
 
-    const normalizedEmail = email.toLowerCase().trim();
-    const existingUser = await prisma.user.findUnique({
-      where: { email: normalizedEmail },
-    });
+    const providedEmail = email?.trim() ? email.toLowerCase().trim() : null;
+    // email es único y obligatorio en BD: sin email real usamos un placeholder interno.
+    const normalizedEmail =
+      providedEmail ?? `sin-email.${crypto.randomUUID()}@placeholder.local`;
 
-    if (existingUser) {
-      return NextResponse.json(
-        { error: "Ya existe una cuenta con ese email." },
-        { status: 409 },
-      );
+    if (providedEmail) {
+      const existingUser = await prisma.user.findUnique({
+        where: { email: providedEmail },
+      });
+
+      if (existingUser) {
+        return NextResponse.json(
+          { error: "Ya existe una cuenta con ese email." },
+          { status: 409 },
+        );
+      }
     }
 
     const isPro = customerType === "TRADE";
@@ -188,7 +194,7 @@ export async function POST(request: Request) {
         taxIdType: isPro && cuitDigits ? "CUIT" : null,
         taxId: isPro ? cuitDigits : null,
         companyName: isPro ? company?.trim() || null : null,
-        newsletterOptIn,
+        newsletterOptIn: providedEmail ? newsletterOptIn : false,
       },
       select: {
         id: true,
