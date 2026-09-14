@@ -757,7 +757,10 @@ function AdminProductosPageInner() {
           total,
           totalPages,
           fromServer: true,
-          onPageChange: setPage,
+          onPageChange: (nextPage) => {
+            setPage(nextPage);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          },
         }}
         renderActions={(row) => (
           <div className="flex justify-end gap-1">

@@ -145,6 +145,10 @@ export function ProductosView() {
 
   const safePage = Math.min(page, totalPages);
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [page]);
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
       <nav className="mb-6 flex flex-wrap gap-2 text-sm text-muted-foreground">
