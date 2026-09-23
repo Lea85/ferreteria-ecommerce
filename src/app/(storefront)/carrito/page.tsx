@@ -133,6 +133,13 @@ export default function CarritoPage() {
   const [createNewsletter, setCreateNewsletter] = useState(true);
   const [createError, setCreateError] = useState<string | null>(null);
   const [creatingCustomer, setCreatingCustomer] = useState(false);
+  const [quoteDiscountPercent, setQuoteDiscountPercent] = useState(0);
+  const [quoteRoundingMode, setQuoteRoundingMode] =
+    useState<CounterRoundingMode>("none");
+  const [quoteRoundingMultiple, setQuoteRoundingMultiple] = useState(
+    String(DEFAULT_ROUNDING_MULTIPLE),
+  );
+  const [quoteRoundingManualTotal, setQuoteRoundingManualTotal] = useState("");
   const [counterModalOpen, setCounterModalOpen] = useState(false);
   const [counterPayment, setCounterPayment] = useState<CounterPaymentMethod>("COUNTER_CASH");
   const [counterDiscountPercent, setCounterDiscountPercent] = useState(0);
@@ -366,6 +373,10 @@ export default function CarritoPage() {
     setCreateCuit("");
     setCreateNewsletter(true);
     setCreateError(null);
+    setQuoteDiscountPercent(0);
+    setQuoteRoundingMode("none");
+    setQuoteRoundingMultiple(String(DEFAULT_ROUNDING_MULTIPLE));
+    setQuoteRoundingManualTotal("");
     setQuoteCustomerModalOpen(true);
   }
 
@@ -450,6 +461,44 @@ export default function CarritoPage() {
       return;
     }
 
+    if (requiresCustomerAssignment) {
+      try {
+        const cartSubtotal = getSubtotal();
+        const totalsPreview = computeCounterSaleTotals(
+          cartSubtotal,
+          quoteDiscountPercent,
+          {
+            mode: quoteRoundingMode,
+            multiple:
+              quoteRoundingMode === "multiple"
+                ? Number(quoteRoundingMultiple)
+                : undefined,
+            manualTotal:
+              quoteRoundingMode === "manual"
+                ? Number(quoteRoundingManualTotal)
+                : undefined,
+          },
+        );
+
+        if (
+          quoteRoundingMode === "manual" &&
+          Number(quoteRoundingManualTotal) >= totalsPreview.totalAfterDiscount
+        ) {
+          toast.error(
+            "El total manual debe ser menor al importe con el descuento aplicado.",
+          );
+          return;
+        }
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Datos de redondeo inválidos.",
+        );
+        return;
+      }
+    }
+
     setGeneratingQuote(true);
     try {
       const res = await fetch("/api/quotes", {
@@ -464,6 +513,18 @@ export default function CarritoPage() {
             ? { operationalCustomerId: assignment.operationalCustomerId }
             : {}),
           ...(assignment?.userId ? { userId: assignment.userId } : {}),
+          ...(requiresCustomerAssignment
+            ? {
+                discountPercent: quoteDiscountPercent,
+                roundingMode: quoteRoundingMode,
+                ...(quoteRoundingMode === "multiple"
+                  ? { roundingMultiple: Number(quoteRoundingMultiple) }
+                  : {}),
+                ...(quoteRoundingMode === "manual"
+                  ? { roundingManualTotal: Number(quoteRoundingManualTotal) }
+                  : {}),
+              }
+            : {}),
         }),
       });
       const data = await res.json();
@@ -484,6 +545,7 @@ export default function CarritoPage() {
           subtotal: Number(data.quote.subtotal),
           total: Number(data.quote.total),
           discountLabel: data.discount?.label ?? null,
+          notes: data.quote.notes ?? null,
           items: data.quote.items.map((item: {
             sku: string;
             productName: string;
@@ -553,6 +615,167 @@ export default function CarritoPage() {
     roundingMultiple,
     roundingManualTotal,
   ]);
+
+  const quoteSaleAmounts = useMemo(() => {
+    try {
+      return computeCounterSaleTotals(summary.subtotal, quoteDiscountPercent, {
+        mode: quoteRoundingMode,
+        multiple:
+          quoteRoundingMode === "multiple"
+            ? Number(quoteRoundingMultiple)
+            : undefined,
+        manualTotal:
+          quoteRoundingMode === "manual"
+            ? Number(quoteRoundingManualTotal)
+            : undefined,
+      });
+    } catch {
+      return computeCounterSaleTotals(summary.subtotal, quoteDiscountPercent, {
+        mode: "none",
+      });
+    }
+  }, [
+    summary.subtotal,
+    quoteDiscountPercent,
+    quoteRoundingMode,
+    quoteRoundingMultiple,
+    quoteRoundingManualTotal,
+  ]);
+
+  function applyQuoteDiscountPercent(percent: number) {
+    setQuoteDiscountPercent(percent);
+  }
+
+  function applyQuoteRoundingMode(mode: CounterRoundingMode) {
+    let manualValue = quoteRoundingManualTotal;
+    if (mode === "manual" && !manualValue) {
+      const afterDiscount = computeCounterSaleTotals(
+        summary.subtotal,
+        quoteDiscountPercent,
+        { mode: "none" },
+      ).totalAfterDiscount;
+      const suggested =
+        afterDiscount > 1
+          ? roundMoney(Math.floor(afterDiscount - 1))
+          : roundMoney(afterDiscount / 2);
+      manualValue = String(suggested);
+      setQuoteRoundingManualTotal(manualValue);
+    }
+    setQuoteRoundingMode(mode);
+  }
+
+  function renderQuoteDiscountControls() {
+    return (
+      <div className="space-y-3 border-t border-border pt-3">
+        <div className="space-y-2">
+          <Label htmlFor="quote-discount">Descuento</Label>
+          <Select
+            value={String(quoteDiscountPercent)}
+            onValueChange={(v) => applyQuoteDiscountPercent(Number(v))}
+            disabled={generatingQuote || creatingCustomer}
+          >
+            <SelectTrigger id="quote-discount" className="w-full">
+              <SelectValue placeholder="Sin descuento" />
+            </SelectTrigger>
+            <SelectContent>
+              {COUNTER_DISCOUNT_PERCENTS.map((p) => (
+                <SelectItem key={p} value={String(p)}>
+                  {p === 0 ? "0% (sin descuento)" : `${p}%`}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="quote-rounding">Redondeo</Label>
+          <Select
+            value={quoteRoundingMode}
+            onValueChange={(v) =>
+              applyQuoteRoundingMode(v as CounterRoundingMode)
+            }
+            disabled={generatingQuote || creatingCustomer}
+          >
+            <SelectTrigger id="quote-rounding" className="w-full">
+              <SelectValue placeholder="Sin redondeo" />
+            </SelectTrigger>
+            <SelectContent>
+              {COUNTER_ROUNDING_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {quoteRoundingMode === "multiple" ? (
+          <div className="space-y-2">
+            <Label htmlFor="quote-rounding-multiple">Múltiplo de redondeo</Label>
+            <Input
+              id="quote-rounding-multiple"
+              type="number"
+              min="1"
+              step="1"
+              inputMode="numeric"
+              value={quoteRoundingMultiple}
+              onChange={(e) => setQuoteRoundingMultiple(e.target.value)}
+              disabled={generatingQuote || creatingCustomer}
+            />
+            <p className="text-xs text-muted-foreground">
+              El total baja al múltiplo inferior (ej. 321,13 con 50 → 300,00).
+            </p>
+          </div>
+        ) : null}
+        {quoteRoundingMode === "manual" ? (
+          <div className="space-y-2">
+            <Label htmlFor="quote-rounding-manual">Total final a cobrar</Label>
+            <Input
+              id="quote-rounding-manual"
+              type="number"
+              min="0.01"
+              step="0.01"
+              inputMode="decimal"
+              value={quoteRoundingManualTotal}
+              onChange={(e) => setQuoteRoundingManualTotal(e.target.value)}
+              disabled={generatingQuote || creatingCustomer}
+            />
+            <p className="text-xs text-muted-foreground">
+              Debe ser menor a{" "}
+              {formatPrice(quoteSaleAmounts.totalAfterDiscount)} (importe con
+              descuento).
+            </p>
+          </div>
+        ) : null}
+        <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm space-y-2">
+          <div className="flex justify-between gap-3">
+            <span className="text-muted-foreground">Subtotal</span>
+            <span className="font-medium">{formatPrice(summary.subtotal)}</span>
+          </div>
+          {quoteDiscountPercent > 0 ? (
+            <div className="flex justify-between gap-3 text-emerald-700">
+              <span>Descuento ({quoteDiscountPercent}%)</span>
+              <span className="font-medium">
+                −{formatPrice(quoteSaleAmounts.discountAmount)}
+              </span>
+            </div>
+          ) : null}
+          {quoteSaleAmounts.roundingDiscount > 0 ? (
+            <div className="flex justify-between gap-3 text-emerald-700">
+              <span>Descuento redondeo</span>
+              <span className="font-medium">
+                −{formatPrice(quoteSaleAmounts.roundingDiscount)}
+              </span>
+            </div>
+          ) : null}
+          <div className="flex items-center justify-between gap-3 border-t border-border pt-2">
+            <span className="font-semibold text-foreground">Total a cobrar</span>
+            <span className="text-lg font-bold">
+              {formatPrice(quoteSaleAmounts.finalTotal)}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   function syncChargeTotalFromTotals(
     totals: ReturnType<typeof computeCounterSaleTotals>,
@@ -1172,6 +1395,8 @@ export default function CarritoPage() {
                 </div>
               ) : null}
 
+              {renderQuoteDiscountControls()}
+
               <DialogFooter className="gap-2 sm:gap-0">
                 <Button
                   type="button"
@@ -1362,6 +1587,8 @@ export default function CarritoPage() {
                   su nombre. Los campos con{" "}
                   <span className="text-destructive">*</span> son obligatorios.
                 </p>
+
+                {renderQuoteDiscountControls()}
 
                 <DialogFooter className="gap-2 sm:gap-0">
                   <Button

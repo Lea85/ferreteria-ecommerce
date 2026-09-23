@@ -3,6 +3,11 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { isAdminRole } from "@/lib/auth";
+import {
+  computeCounterSaleTotals,
+  parseCounterDiscountPercent,
+  parseCounterRoundingMode,
+} from "@/lib/counter-sale-discount";
 import { getIntegracionesSettings } from "@/lib/integraciones-settings";
 import { resolveUserCategoryDiscount } from "@/lib/services/customer-discount.service";
 
@@ -183,15 +188,94 @@ export async function POST(request: Request) {
     }
 
     const totalQuantity = quoteItems.reduce((sum, i) => sum + i.quantity, 0);
-    const categoryDiscount = assignedUserId
-      ? await resolveUserCategoryDiscount(
-          assignedUserId,
-          subtotal,
-          totalQuantity,
-        )
-      : null;
-    const discountAmount = categoryDiscount?.amount ?? 0;
-    const total = Math.max(0, subtotal - discountAmount);
+
+    let total = subtotal;
+    let notes: string | null = null;
+    let discountPayload: { label: string; amount: number } | null = null;
+
+    if (isStaff) {
+      // Staff: mismo descuento % + redondeo que compra mostrador (sin descuento de categoría).
+      let discountPercent = 0;
+      try {
+        discountPercent = parseCounterDiscountPercent(body.discountPercent ?? 0);
+      } catch {
+        return NextResponse.json(
+          { error: "Porcentaje de descuento inválido." },
+          { status: 400 },
+        );
+      }
+
+      let roundingMode;
+      try {
+        roundingMode = parseCounterRoundingMode(body.roundingMode ?? "none");
+      } catch {
+        return NextResponse.json(
+          { error: "Modo de redondeo inválido." },
+          { status: 400 },
+        );
+      }
+
+      let saleTotals;
+      try {
+        saleTotals = computeCounterSaleTotals(subtotal, discountPercent, {
+          mode: roundingMode,
+          multiple:
+            roundingMode === "multiple"
+              ? Number(body.roundingMultiple)
+              : undefined,
+          manualTotal:
+            roundingMode === "manual"
+              ? Number(body.roundingManualTotal)
+              : undefined,
+        });
+      } catch (error) {
+        return NextResponse.json(
+          {
+            error:
+              error instanceof Error
+                ? error.message
+                : "Datos de redondeo inválidos.",
+          },
+          { status: 400 },
+        );
+      }
+
+      total = saleTotals.finalTotal;
+
+      const noteParts: string[] = [];
+      if (discountPercent > 0) {
+        noteParts.push(
+          `descuento ${discountPercent}% (−${saleTotals.discountAmount.toFixed(2)})`,
+        );
+        discountPayload = {
+          label: `Descuento (${discountPercent}%)`,
+          amount: saleTotals.discountAmount,
+        };
+      }
+      if (saleTotals.roundingDiscount > 0) {
+        noteParts.push(
+          `descuento redondeo (−${saleTotals.roundingDiscount.toFixed(2)})`,
+        );
+      }
+      notes = noteParts.length > 0 ? noteParts.join(" — ") : null;
+    } else {
+      const categoryDiscount = assignedUserId
+        ? await resolveUserCategoryDiscount(
+            assignedUserId,
+            subtotal,
+            totalQuantity,
+          )
+        : null;
+      const discountAmount = categoryDiscount?.amount ?? 0;
+      total = Math.max(0, subtotal - discountAmount);
+      if (categoryDiscount) {
+        notes = `${categoryDiscount.label}: -${discountAmount.toFixed(2)}`;
+        discountPayload = {
+          label: categoryDiscount.label,
+          amount: discountAmount,
+        };
+      }
+    }
 
     const lastQuote = await prisma.quote.findFirst({
       orderBy: { createdAt: "desc" },
@@ -213,9 +297,7 @@ export async function POST(request: Request) {
         subtotal,
         total,
         validUntil,
-        notes: categoryDiscount
-          ? `${categoryDiscount.label}: -${discountAmount.toFixed(2)}`
-          : null,
+        notes,
         items: {
           create: quoteItems,
         },
@@ -248,9 +330,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         quote,
-        discount: categoryDiscount
-          ? { label: categoryDiscount.label, amount: discountAmount }
-          : null,
+        discount: discountPayload,
         storeSettings,
       },
       { status: 201 },

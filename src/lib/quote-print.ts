@@ -1,4 +1,5 @@
 import { resolveQuoteStoreBranding } from "@/lib/quote-branding";
+import { splitCounterSaleDiscounts } from "@/lib/counter-sale-discount";
 
 export const QUOTE_PRINT_STORE_KEYS =
   "store_name,store_logo_url,google_maps_address,store_address,whatsapp_number,contact_email,quote_validity_days";
@@ -20,6 +21,8 @@ export type QuotePrintData = {
   total: number;
   items: QuotePrintItem[];
   discountLabel?: string | null;
+  /** Notas del presupuesto: permiten separar descuento % y redondeo (como mostrador). */
+  notes?: string | null;
 };
 
 export function generateQuotePrintHtml(
@@ -34,10 +37,21 @@ export function generateQuotePrintHtml(
     validityDays,
   } = resolveQuoteStoreBranding(storeSettings);
 
-  const discountAmount = Math.max(
+  const discountTotal = Math.max(
     0,
     Number(quote.subtotal) - Number(quote.total),
   );
+  const { percentDiscountAmount, roundingDiscount, discountPercent } =
+    splitCounterSaleDiscounts(
+      Number(quote.subtotal),
+      discountTotal,
+      quote.notes,
+    );
+
+  const percentLabel =
+    discountPercent > 0
+      ? `Descuento (${discountPercent}%)`
+      : quote.discountLabel?.trim() || "Descuento";
 
   const validUntil = new Date(quote.validUntil).toLocaleDateString("es-AR", {
     day: "2-digit",
@@ -131,10 +145,18 @@ export function generateQuotePrintHtml(
         <td style="text-align:right;font-family:monospace">$${Number(quote.subtotal).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
       </tr>
       ${
-        discountAmount > 0
+        percentDiscountAmount > 0
           ? `<tr>
-        <td style="color:#059669">${quote.discountLabel || "Descuento"}</td>
-        <td style="text-align:right;font-family:monospace;color:#059669">-$${discountAmount.toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
+        <td style="color:#059669">${percentLabel}</td>
+        <td style="text-align:right;font-family:monospace;color:#059669">-$${percentDiscountAmount.toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
+      </tr>`
+          : ""
+      }
+      ${
+        roundingDiscount > 0
+          ? `<tr>
+        <td style="color:#059669">Descuento redondeo</td>
+        <td style="text-align:right;font-family:monospace;color:#059669">-$${roundingDiscount.toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
       </tr>`
           : ""
       }

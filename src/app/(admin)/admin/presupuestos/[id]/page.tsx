@@ -29,6 +29,7 @@ import { Separator } from "@/components/ui/separator";
 import {
   COUNTER_DISCOUNT_PERCENTS,
   computeCounterDiscountAmount,
+  splitCounterSaleDiscounts,
 } from "@/lib/counter-sale-discount";
 import { COUNTER_PAYMENT_OPTIONS, counterPaymentAllowsCustomTotal, type CounterPaymentMethod } from "@/lib/constants";
 import {
@@ -172,6 +173,15 @@ export default function AdminPresupuestoDetallePage() {
 
   const isActive = quote.status === "ACTIVE";
   const isExpired = new Date(quote.validUntil) < new Date() && isActive;
+  const quoteDiscountTotal = Math.max(
+    0,
+    Number(quote.subtotal) - Number(quote.total),
+  );
+  const quoteDiscountParts = splitCounterSaleDiscounts(
+    Number(quote.subtotal),
+    quoteDiscountTotal,
+    quote.notes,
+  );
 
   function openSellModal() {
     setCounterDiscountPercent(0);
@@ -197,6 +207,7 @@ export default function AdminPresupuestoDetallePage() {
         validUntil: quote.validUntil,
         subtotal: Number(quote.subtotal),
         total: Number(quote.total),
+        notes: quote.notes ?? null,
         items: quote.items.map((item: {
           sku: string;
           productName: string;
@@ -367,11 +378,23 @@ export default function AdminPresupuestoDetallePage() {
                 <span className="text-muted-foreground">Subtotal</span>
                 <span className="font-mono">{formatPrice(Number(quote.subtotal))}</span>
               </div>
-              {Number(quote.subtotal) - Number(quote.total) > 0 ? (
+              {quoteDiscountParts.percentDiscountAmount > 0 ? (
                 <div className="flex justify-between text-sm text-emerald-600">
-                  <span>{quote.notes || "Descuento"}</span>
+                  <span>
+                    {quoteDiscountParts.discountPercent > 0
+                      ? `Descuento (${quoteDiscountParts.discountPercent}%)`
+                      : quote.notes?.split(" — ")[0] || "Descuento"}
+                  </span>
                   <span className="font-mono">
-                    −{formatPrice(Number(quote.subtotal) - Number(quote.total))}
+                    −{formatPrice(quoteDiscountParts.percentDiscountAmount)}
+                  </span>
+                </div>
+              ) : null}
+              {quoteDiscountParts.roundingDiscount > 0 ? (
+                <div className="flex justify-between text-sm text-emerald-600">
+                  <span>Descuento redondeo</span>
+                  <span className="font-mono">
+                    −{formatPrice(quoteDiscountParts.roundingDiscount)}
                   </span>
                 </div>
               ) : null}

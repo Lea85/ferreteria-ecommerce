@@ -101,7 +101,9 @@ export function computeCounterSaleTotals(
   };
 }
 
-const ROUNDING_NOTE_REGEX = /descuento redondeo \(-([0-9]+(?:\.[0-9]{1,2})?)\)/i;
+/** Acepta guión ASCII (-) o signo menos tipográfico (−) en las notas. */
+const ROUNDING_NOTE_REGEX =
+  /descuento redondeo \([\u2212-]([0-9]+(?:\.[0-9]{1,2})?)\)/i;
 
 export function parseRoundingDiscountFromNotes(
   notes: string | null | undefined,
