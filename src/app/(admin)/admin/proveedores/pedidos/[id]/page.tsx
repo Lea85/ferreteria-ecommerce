@@ -13,6 +13,7 @@ import { SupplierOrderMarginCell } from "@/components/admin/SupplierOrderMarginC
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import {
   Table,
   TableBody,
@@ -21,6 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useSimulatedProgress } from "@/hooks/use-simulated-progress";
 import {
   printSupplierOrder,
   SUPPLIER_ORDER_PRINT_STORE_KEYS,
@@ -73,6 +75,20 @@ export default function PedidoDetallePage({
   );
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
+  const { progress: receiveProgress, complete: completeReceiveProgress } =
+    useSimulatedProgress(saving);
+  const { progress: sendProgress, complete: completeSendProgress } =
+    useSimulatedProgress(sending);
+  const busyProgress = sending
+    ? sendProgress
+    : saving
+      ? receiveProgress
+      : 0;
+  const busyLabel = sending
+    ? "Marcando como recibido y actualizando stock…"
+    : saving
+      ? "Registrando recepción…"
+      : null;
   const [storeSettings, setStoreSettings] = useState<Record<string, string>>(
     {},
   );
@@ -143,11 +159,12 @@ export default function PedidoDetallePage({
         const err = await res.json();
         throw new Error(err.error);
       }
+      completeReceiveProgress();
       toast.success("Recepción registrada. Stock actualizado.");
       fetchOrder();
+      window.setTimeout(() => setSaving(false), 350);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Error al registrar recepción");
-    } finally {
       setSaving(false);
     }
   }
@@ -173,15 +190,16 @@ export default function PedidoDetallePage({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+      completeSendProgress();
       toast.success(
         `Pedido marcado como recibido. Stock y precios actualizados en el catálogo.`,
       );
       fetchOrder();
+      window.setTimeout(() => setSending(false), 350);
     } catch (err: unknown) {
       toast.error(
         err instanceof Error ? err.message : "Error al marcar como enviado",
       );
-    } finally {
       setSending(false);
     }
   }
@@ -324,6 +342,21 @@ export default function PedidoDetallePage({
           )}
         </div>
       </div>
+
+      {busyLabel ? (
+        <div className="space-y-2 rounded-lg border border-border bg-muted/40 px-3 py-3">
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span className="font-medium text-foreground">{busyLabel}</span>
+            <span className="tabular-nums text-muted-foreground">
+              {Math.round(busyProgress)}%
+            </span>
+          </div>
+          <Progress value={busyProgress} />
+          <p className="text-xs text-muted-foreground">
+            Puede demorar varios segundos. No cierres esta pantalla.
+          </p>
+        </div>
+      ) : null}
 
       {isDraft ? (
         <SupplierOrderDraftEditor

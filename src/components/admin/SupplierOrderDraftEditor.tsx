@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import {
   Table,
   TableBody,
@@ -24,6 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { SupplierOrderMarginCell } from "@/components/admin/SupplierOrderMarginCell";
+import { useSimulatedProgress } from "@/hooks/use-simulated-progress";
 import { parsePriceInput, roundPrice } from "@/lib/supplier-order-pricing";
 
 export type SupplierOrderDraftItem = {
@@ -103,6 +105,8 @@ export function SupplierOrderDraftEditor({
   const [draftItems, setDraftItems] = useState<SupplierOrderDraftItem[]>(items);
   const [removedItemIds, setRemovedItemIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const { progress: saveProgress, complete: completeSaveProgress } =
+    useSimulatedProgress(saving);
   const [addOpen, setAddOpen] = useState(false);
   const [productSearch, setProductSearch] = useState("");
   const [searching, setSearching] = useState(false);
@@ -247,13 +251,14 @@ export function SupplierOrderDraftEditor({
         }),
       );
 
+      completeSaveProgress();
       setDraftItems(savedItems);
       setRemovedItemIds([]);
       onSaved(savedItems);
       toast.success("Pedido guardado correctamente.");
+      window.setTimeout(() => setSaving(false), 350);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error al guardar");
-    } finally {
       setSaving(false);
     }
   }
@@ -262,9 +267,14 @@ export function SupplierOrderDraftEditor({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap gap-2">
-          <Dialog open={addOpen} onOpenChange={setAddOpen}>
+          <Dialog
+            open={addOpen}
+            onOpenChange={(open) => {
+              if (!saving) setAddOpen(open);
+            }}
+          >
             <DialogTrigger asChild>
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" disabled={saving}>
                 <Plus className="mr-2 size-4" />
                 Agregar producto
               </Button>
@@ -338,11 +348,29 @@ export function SupplierOrderDraftEditor({
             ) : (
               <Save className="mr-2 size-4" />
             )}
-            Guardar pedido
+            {saving ? "Guardando…" : "Guardar pedido"}
           </Button>
         </div>
         {headerActions}
       </div>
+
+      {saving ? (
+        <div className="space-y-2 rounded-lg border border-border bg-muted/40 px-3 py-3">
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span className="font-medium text-foreground">
+              Guardando pedido…
+            </span>
+            <span className="tabular-nums text-muted-foreground">
+              {Math.round(saveProgress)}%
+            </span>
+          </div>
+          <Progress value={saveProgress} />
+          <p className="text-xs text-muted-foreground">
+            Con muchos productos puede demorar varios segundos. No cierres esta
+            pantalla.
+          </p>
+        </div>
+      ) : null}
 
       <div className="overflow-x-auto rounded border">
         <Table>
@@ -387,6 +415,7 @@ export function SupplierOrderDraftEditor({
                       type="number"
                       min={1}
                       inputMode="numeric"
+                      disabled={saving}
                       className="mx-auto w-20 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                       value={item.requestedQty}
                       onChange={(e) =>
@@ -403,6 +432,7 @@ export function SupplierOrderDraftEditor({
                       min={0}
                       step="0.01"
                       inputMode="decimal"
+                      disabled={saving}
                       className="mx-auto w-24 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                       value={item.costPrice}
                       onChange={(e) => updateCostPrice(item.id, e.target.value)}
@@ -414,6 +444,7 @@ export function SupplierOrderDraftEditor({
                       min={0}
                       step="0.01"
                       inputMode="decimal"
+                      disabled={saving}
                       className="mx-auto w-24 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                       value={item.salePrice}
                       onChange={(e) => updateSalePrice(item.id, e.target.value)}
@@ -430,6 +461,7 @@ export function SupplierOrderDraftEditor({
                       type="button"
                       variant="ghost"
                       size="icon"
+                      disabled={saving}
                       className="size-8 text-muted-foreground hover:text-destructive"
                       onClick={() => removeItem(item.id)}
                     >

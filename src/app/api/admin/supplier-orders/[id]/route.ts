@@ -39,78 +39,98 @@ async function applySupplierOrderReceipt(
   order: SupplierOrderWithItems,
   incomingItems: ReceiptItemInput[],
 ) {
-  return prisma.$transaction(async (tx) => {
-    for (const incoming of incomingItems) {
-      const item = order.items.find((i) => i.id === incoming.id);
-      if (!item) continue;
+  return prisma.$transaction(
+    async (tx) => {
+      const itemUpdates: Promise<unknown>[] = [];
+      const variantUpdates: Promise<unknown>[] = [];
 
-      const newReceivedQty = Math.max(0, Math.floor(incoming.receivedQty || 0));
-      const delta = newReceivedQty - item.receivedQty;
+      for (const incoming of incomingItems) {
+        const item = order.items.find((i) => i.id === incoming.id);
+        if (!item) continue;
 
-      const itemUpdate: {
-        receivedQty: number;
-        unitCostPrice?: number;
-        unitSalePrice?: number;
-      } = { receivedQty: newReceivedQty };
+        const newReceivedQty = Math.max(
+          0,
+          Math.floor(incoming.receivedQty || 0),
+        );
+        const delta = newReceivedQty - item.receivedQty;
 
-      if (incoming.costPrice != null && Number.isFinite(incoming.costPrice)) {
-        itemUpdate.unitCostPrice = Math.round(incoming.costPrice * 100) / 100;
+        const itemUpdate: {
+          receivedQty: number;
+          unitCostPrice?: number;
+          unitSalePrice?: number;
+        } = { receivedQty: newReceivedQty };
+
+        if (incoming.costPrice != null && Number.isFinite(incoming.costPrice)) {
+          itemUpdate.unitCostPrice =
+            Math.round(incoming.costPrice * 100) / 100;
+        }
+        if (incoming.salePrice != null && Number.isFinite(incoming.salePrice)) {
+          itemUpdate.unitSalePrice =
+            Math.round(incoming.salePrice * 100) / 100;
+        }
+
+        itemUpdates.push(
+          tx.supplierOrderItem.update({
+            where: { id: item.id },
+            data: itemUpdate,
+          }),
+        );
+
+        if (item.variantId) {
+          const variantUpdate: {
+            stock?: { increment: number };
+            costPrice?: number;
+            price?: number;
+          } = {};
+
+          if (delta !== 0) {
+            variantUpdate.stock = { increment: delta };
+          }
+          if (itemUpdate.unitCostPrice != null) {
+            variantUpdate.costPrice = itemUpdate.unitCostPrice;
+          }
+          if (itemUpdate.unitSalePrice != null) {
+            variantUpdate.price = itemUpdate.unitSalePrice;
+          }
+
+          if (Object.keys(variantUpdate).length > 0) {
+            variantUpdates.push(
+              tx.productVariant.update({
+                where: { id: item.variantId },
+                data: variantUpdate,
+              }),
+            );
+          }
+        }
       }
-      if (incoming.salePrice != null && Number.isFinite(incoming.salePrice)) {
-        itemUpdate.unitSalePrice = Math.round(incoming.salePrice * 100) / 100;
-      }
 
-      await tx.supplierOrderItem.update({
-        where: { id: item.id },
-        data: itemUpdate,
+      await Promise.all([...itemUpdates, ...variantUpdates]);
+
+      const updatedItems = await tx.supplierOrderItem.findMany({
+        where: { supplierOrderId: order.id },
       });
 
-      if (item.variantId) {
-        const variantUpdate: { stock?: { increment: number }; costPrice?: number; price?: number } =
-          {};
+      const allReceived = updatedItems.every(
+        (i) => i.receivedQty >= i.requestedQty,
+      );
+      const anyReceived = updatedItems.some((i) => i.receivedQty > 0);
+      const newStatus: SupplierOrderStatus = allReceived
+        ? "RECEIVED"
+        : anyReceived
+          ? "PARTIALLY_RECEIVED"
+          : order.status === "DRAFT"
+            ? "SENT"
+            : order.status;
 
-        if (delta !== 0) {
-          variantUpdate.stock = { increment: delta };
-        }
-        if (itemUpdate.unitCostPrice != null) {
-          variantUpdate.costPrice = itemUpdate.unitCostPrice;
-        }
-        if (itemUpdate.unitSalePrice != null) {
-          variantUpdate.price = itemUpdate.unitSalePrice;
-        }
+      await tx.supplierOrder.update({
+        where: { id: order.id },
+        data: { status: newStatus },
+      });
 
-        if (Object.keys(variantUpdate).length > 0) {
-          await tx.productVariant.update({
-            where: { id: item.variantId },
-            data: variantUpdate,
-          });
-        }
-      }
-    }
-
-    const updatedItems = await tx.supplierOrderItem.findMany({
-      where: { supplierOrderId: order.id },
-    });
-
-    const allReceived = updatedItems.every(
-      (i) => i.receivedQty >= i.requestedQty,
-    );
-    const anyReceived = updatedItems.some((i) => i.receivedQty > 0);
-    const newStatus: SupplierOrderStatus = allReceived
-      ? "RECEIVED"
-      : anyReceived
-        ? "PARTIALLY_RECEIVED"
-        : order.status === "DRAFT"
-          ? "SENT"
-          : order.status;
-
-    await tx.supplierOrder.update({
-      where: { id: order.id },
-      data: { status: newStatus },
-    });
-
-    return newStatus;
-  });
+      return newStatus;
+    },
+    { timeout: 30000, maxWait: 10000 },
+  );
 }
 
 export async function GET(
@@ -247,111 +267,177 @@ export async function PUT(
       }
 
       try {
-        await prisma.$transaction(async (tx) => {
-          if (removeItemIds.length > 0) {
-            await tx.supplierOrderItem.deleteMany({
-              where: {
-                supplierOrderId: order.id,
-                id: { in: removeItemIds },
-              },
-            });
-          }
-
-          const remaining = await tx.supplierOrderItem.findMany({
-            where: { supplierOrderId: order.id },
-          });
-
-          const remainingAfterDelete = remaining.filter(
-            (i) => !removeItemIds.includes(i.id),
-          );
-
-          for (const raw of items) {
-            const row = raw as Record<string, unknown>;
-            const requestedQty = Math.max(
-              1,
-              Math.floor(Number(row.requestedQty) || 1),
-            );
-
-            const costPrice =
-              row.costPrice != null && row.costPrice !== ""
-                ? Math.round(Number(row.costPrice) * 100) / 100
-                : undefined;
-            const salePrice =
-              row.salePrice != null && row.salePrice !== ""
-                ? Math.round(Number(row.salePrice) * 100) / 100
-                : undefined;
-
-            if (row.id) {
-              const existing = remainingAfterDelete.find((i) => i.id === row.id);
-              if (!existing) continue;
-              if (requestedQty < existing.receivedQty) {
-                throw new Error(
-                  `La cantidad solicitada de "${existing.productName}" no puede ser menor a lo ya recibido (${existing.receivedQty}).`,
-                );
-              }
-              await tx.supplierOrderItem.update({
-                where: { id: existing.id },
-                data: {
-                  requestedQty,
-                  ...(costPrice != null && Number.isFinite(costPrice)
-                    ? { unitCostPrice: costPrice }
-                    : {}),
-                  ...(salePrice != null && Number.isFinite(salePrice)
-                    ? { unitSalePrice: salePrice }
-                    : {}),
+        await prisma.$transaction(
+          async (tx) => {
+            if (removeItemIds.length > 0) {
+              await tx.supplierOrderItem.deleteMany({
+                where: {
+                  supplierOrderId: order.id,
+                  id: { in: removeItemIds },
                 },
               });
-              continue;
             }
 
-            const variantId = String(row.variantId ?? "");
-            if (!variantId) continue;
-
-            const duplicate = remainingAfterDelete.find(
-              (i) => i.variantId === variantId,
+            const remaining = await tx.supplierOrderItem.findMany({
+              where: { supplierOrderId: order.id },
+            });
+            const remainingById = new Map(remaining.map((i) => [i.id, i]));
+            const remainingByVariantId = new Map(
+              remaining
+                .filter((i) => i.variantId)
+                .map((i) => [i.variantId as string, i]),
             );
-            if (duplicate) {
-              throw new Error(
-                `El producto "${duplicate.productName}" ya está en el pedido.`,
+
+            type ParsedRow = {
+              id?: string;
+              variantId?: string;
+              requestedQty: number;
+              costPrice?: number;
+              salePrice?: number;
+            };
+
+            const parsed: ParsedRow[] = [];
+            for (const raw of items) {
+              const row = raw as Record<string, unknown>;
+              const requestedQty = Math.max(
+                1,
+                Math.floor(Number(row.requestedQty) || 1),
               );
+              const costPrice =
+                row.costPrice != null && row.costPrice !== ""
+                  ? Math.round(Number(row.costPrice) * 100) / 100
+                  : undefined;
+              const salePrice =
+                row.salePrice != null && row.salePrice !== ""
+                  ? Math.round(Number(row.salePrice) * 100) / 100
+                  : undefined;
+
+              if (row.id) {
+                parsed.push({
+                  id: String(row.id),
+                  requestedQty,
+                  costPrice,
+                  salePrice,
+                });
+              } else {
+                const variantId = String(row.variantId ?? "");
+                if (!variantId) continue;
+                parsed.push({
+                  variantId,
+                  requestedQty,
+                  costPrice,
+                  salePrice,
+                });
+              }
             }
 
-            const variant = await tx.productVariant.findUnique({
-              where: { id: variantId },
-              include: { product: { select: { name: true, isActive: true } } },
-            });
-            if (!variant || !variant.product.isActive) {
-              throw new Error("Producto no encontrado o inactivo.");
+            const updateOps: Promise<unknown>[] = [];
+            const createInputs: {
+              variantId: string;
+              requestedQty: number;
+              costPrice?: number;
+              salePrice?: number;
+            }[] = [];
+
+            for (const row of parsed) {
+              if (row.id) {
+                const existing = remainingById.get(row.id);
+                if (!existing) continue;
+                if (row.requestedQty < existing.receivedQty) {
+                  throw new Error(
+                    `La cantidad solicitada de "${existing.productName}" no puede ser menor a lo ya recibido (${existing.receivedQty}).`,
+                  );
+                }
+                updateOps.push(
+                  tx.supplierOrderItem.update({
+                    where: { id: existing.id },
+                    data: {
+                      requestedQty: row.requestedQty,
+                      ...(row.costPrice != null &&
+                      Number.isFinite(row.costPrice)
+                        ? { unitCostPrice: row.costPrice }
+                        : {}),
+                      ...(row.salePrice != null &&
+                      Number.isFinite(row.salePrice)
+                        ? { unitSalePrice: row.salePrice }
+                        : {}),
+                    },
+                  }),
+                );
+                continue;
+              }
+
+              const variantId = row.variantId!;
+              const duplicate = remainingByVariantId.get(variantId);
+              if (duplicate) {
+                throw new Error(
+                  `El producto "${duplicate.productName}" ya está en el pedido.`,
+                );
+              }
+              // Evitar duplicados entre filas nuevas del mismo request.
+              if (createInputs.some((c) => c.variantId === variantId)) {
+                throw new Error(
+                  "Hay productos duplicados entre los ítems a agregar.",
+                );
+              }
+              createInputs.push({
+                variantId,
+                requestedQty: row.requestedQty,
+                costPrice: row.costPrice,
+                salePrice: row.salePrice,
+              });
             }
 
-            await tx.supplierOrderItem.create({
-              data: {
-                supplierOrderId: order.id,
-                productId: variant.productId,
-                variantId: variant.id,
-                productName: variant.product.name,
-                sku: variant.sku,
-                requestedQty,
-                receivedQty: 0,
-                unitCostPrice:
-                  costPrice != null && Number.isFinite(costPrice)
-                    ? costPrice
-                    : variant.costPrice,
-                unitSalePrice:
-                  salePrice != null && Number.isFinite(salePrice)
-                    ? salePrice
-                    : variant.price,
-              },
-            });
-          }
+            if (updateOps.length > 0) {
+              await Promise.all(updateOps);
+            }
 
-          const finalCount = await tx.supplierOrderItem.count({
-            where: { supplierOrderId: order.id },
-          });
-          if (finalCount === 0) {
-            throw new Error("El pedido debe tener al menos un producto.");
-          }
-        });
+            if (createInputs.length > 0) {
+              const variantIds = createInputs.map((c) => c.variantId);
+              const variants = await tx.productVariant.findMany({
+                where: { id: { in: variantIds } },
+                include: {
+                  product: { select: { name: true, isActive: true } },
+                },
+              });
+              const variantMap = new Map(variants.map((v) => [v.id, v]));
+
+              const createData = createInputs.map((input) => {
+                const variant = variantMap.get(input.variantId);
+                if (!variant || !variant.product.isActive) {
+                  throw new Error("Producto no encontrado o inactivo.");
+                }
+                return {
+                  supplierOrderId: order.id,
+                  productId: variant.productId,
+                  variantId: variant.id,
+                  productName: variant.product.name,
+                  sku: variant.sku,
+                  requestedQty: input.requestedQty,
+                  receivedQty: 0,
+                  unitCostPrice:
+                    input.costPrice != null && Number.isFinite(input.costPrice)
+                      ? input.costPrice
+                      : variant.costPrice,
+                  unitSalePrice:
+                    input.salePrice != null && Number.isFinite(input.salePrice)
+                      ? input.salePrice
+                      : variant.price,
+                };
+              });
+
+              await tx.supplierOrderItem.createMany({ data: createData });
+            }
+
+            const finalCount = await tx.supplierOrderItem.count({
+              where: { supplierOrderId: order.id },
+            });
+            if (finalCount === 0) {
+              throw new Error("El pedido debe tener al menos un producto.");
+            }
+          },
+          { timeout: 30000, maxWait: 10000 },
+        );
       } catch (saveError) {
         const message =
           saveError instanceof Error
