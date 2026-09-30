@@ -1,7 +1,7 @@
 "use client";
 
-import { Loader2, Plus, Save, Search, Trash2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { ChevronDown, ChevronUp, Loader2, Plus, Save, Search, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -26,7 +26,12 @@ import {
 } from "@/components/ui/table";
 import { SupplierOrderMarginCell } from "@/components/admin/SupplierOrderMarginCell";
 import { useSimulatedProgress } from "@/hooks/use-simulated-progress";
-import { parsePriceInput, roundPrice } from "@/lib/supplier-order-pricing";
+import {
+  computeMarginPercent,
+  parsePriceInput,
+  roundPrice,
+} from "@/lib/supplier-order-pricing";
+import { cn } from "@/lib/utils";
 
 export type SupplierOrderDraftItem = {
   id: string;
@@ -116,6 +121,65 @@ function cloneBaseline(items: SupplierOrderDraftItem[]) {
     }));
 }
 
+type DraftSortKey =
+  | "productName"
+  | "sku"
+  | "currentStock"
+  | "requestedQty"
+  | "costPrice"
+  | "salePrice"
+  | "margin";
+
+type DraftSortDir = "asc" | "desc";
+
+function sortValue(
+  item: SupplierOrderDraftItem,
+  key: DraftSortKey,
+): string | number | null {
+  switch (key) {
+    case "productName":
+      return item.productName;
+    case "sku":
+      return item.sku;
+    case "currentStock":
+      return item.currentStock;
+    case "requestedQty":
+      return item.requestedQty;
+    case "costPrice":
+      return item.costPrice;
+    case "salePrice":
+      return item.salePrice;
+    case "margin":
+      return computeMarginPercent(item.costPrice, item.salePrice);
+    default:
+      return null;
+  }
+}
+
+function compareDraftItems(
+  a: SupplierOrderDraftItem,
+  b: SupplierOrderDraftItem,
+  key: DraftSortKey,
+  dir: DraftSortDir,
+): number {
+  const av = sortValue(a, key);
+  const bv = sortValue(b, key);
+  const mul = dir === "asc" ? 1 : -1;
+
+  if (av == null && bv == null) return 0;
+  if (av == null) return 1;
+  if (bv == null) return -1;
+
+  if (typeof av === "string" && typeof bv === "string") {
+    return (
+      mul *
+      av.localeCompare(bv, "es", { sensitivity: "base", numeric: true })
+    );
+  }
+
+  return mul * (Number(av) - Number(bv));
+}
+
 export function SupplierOrderDraftEditor({
   orderId,
   supplierId,
@@ -127,6 +191,8 @@ export function SupplierOrderDraftEditor({
   const [draftItems, setDraftItems] = useState<SupplierOrderDraftItem[]>(items);
   const [removedItemIds, setRemovedItemIds] = useState<string[]>([]);
   const baselineRef = useRef(cloneBaseline(items));
+  const [sortKey, setSortKey] = useState<DraftSortKey>("productName");
+  const [sortDir, setSortDir] = useState<DraftSortDir>("asc");
   const [saving, setSaving] = useState(false);
   const { progress: saveProgress, complete: completeSaveProgress } =
     useSimulatedProgress(saving);
@@ -149,6 +215,72 @@ export function SupplierOrderDraftEditor({
   useEffect(() => {
     onItemsChange?.(draftItems);
   }, [draftItems, onItemsChange]);
+
+  const sortedDraftItems = useMemo(
+    () =>
+      [...draftItems].sort((a, b) =>
+        compareDraftItems(a, b, sortKey, sortDir),
+      ),
+    [draftItems, sortKey, sortDir],
+  );
+
+  function applySort(key: DraftSortKey, dir: DraftSortDir) {
+    setSortKey(key);
+    setSortDir(dir);
+  }
+
+  function SortableHead({
+    label,
+    column,
+    className,
+  }: {
+    label: string;
+    column: DraftSortKey;
+    className?: string;
+  }) {
+    const activeAsc = sortKey === column && sortDir === "asc";
+    const activeDesc = sortKey === column && sortDir === "desc";
+
+    return (
+      <TableHead className={className}>
+        <div
+          className={cn(
+            "flex items-center gap-1",
+            className?.includes("text-center") && "justify-center",
+          )}
+        >
+          <span>{label}</span>
+          <span className="inline-flex flex-col leading-none">
+            <button
+              type="button"
+              aria-label={`Ordenar ${label} de menor a mayor`}
+              className={cn(
+                "rounded p-0.5 text-muted-foreground/50 hover:text-foreground",
+                activeAsc && "text-foreground",
+              )}
+              onClick={() => applySort(column, "asc")}
+            >
+              <ChevronUp className="size-3.5" strokeWidth={activeAsc ? 2.75 : 2} />
+            </button>
+            <button
+              type="button"
+              aria-label={`Ordenar ${label} de mayor a menor`}
+              className={cn(
+                "-mt-1 rounded p-0.5 text-muted-foreground/50 hover:text-foreground",
+                activeDesc && "text-foreground",
+              )}
+              onClick={() => applySort(column, "desc")}
+            >
+              <ChevronDown
+                className="size-3.5"
+                strokeWidth={activeDesc ? 2.75 : 2}
+              />
+            </button>
+          </span>
+        </div>
+      </TableHead>
+    );
+  }
 
   function updateRequestedQty(itemId: string, value: number) {
     setDraftItems((prev) =>
@@ -433,18 +565,38 @@ export function SupplierOrderDraftEditor({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Producto</TableHead>
-              <TableHead>SKU</TableHead>
-              <TableHead className="text-center">Stock actual</TableHead>
-              <TableHead className="text-center">Solicitado</TableHead>
-              <TableHead className="text-center">P. compra</TableHead>
-              <TableHead className="text-center">P. venta</TableHead>
-              <TableHead className="text-center">% ganancia</TableHead>
+              <SortableHead label="Producto" column="productName" />
+              <SortableHead label="SKU" column="sku" />
+              <SortableHead
+                label="Stock actual"
+                column="currentStock"
+                className="text-center"
+              />
+              <SortableHead
+                label="Solicitado"
+                column="requestedQty"
+                className="text-center"
+              />
+              <SortableHead
+                label="P. compra"
+                column="costPrice"
+                className="text-center"
+              />
+              <SortableHead
+                label="P. venta"
+                column="salePrice"
+                className="text-center"
+              />
+              <SortableHead
+                label="% ganancia"
+                column="margin"
+                className="text-center"
+              />
               <TableHead className="w-12" />
             </TableRow>
           </TableHeader>
           <TableBody>
-            {draftItems.length === 0 ? (
+            {sortedDraftItems.length === 0 ? (
               <TableRow>
                 <TableCell
                   colSpan={8}
@@ -454,7 +606,7 @@ export function SupplierOrderDraftEditor({
                 </TableCell>
               </TableRow>
             ) : (
-              draftItems.map((item) => (
+              sortedDraftItems.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>{item.productName}</TableCell>
                   <TableCell className="font-mono text-sm">{item.sku}</TableCell>
