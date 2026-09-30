@@ -35,6 +35,43 @@ type ReceiptItemInput = {
   salePrice?: number;
 };
 
+function moneyClose(a: unknown, b: number | undefined): boolean {
+  if (b == null || !Number.isFinite(b)) return true;
+  if (a == null) return false;
+  return Math.abs(Number(a) - b) < 0.005;
+}
+
+function supplierOrderItemNeedsUpdate(
+  existing: {
+    requestedQty: number;
+    unitCostPrice: unknown;
+    unitSalePrice: unknown;
+  },
+  row: {
+    requestedQty: number;
+    costPrice?: number;
+    salePrice?: number;
+  },
+): boolean {
+  if (row.requestedQty !== existing.requestedQty) return true;
+
+  if (
+    row.costPrice != null &&
+    Number.isFinite(row.costPrice) &&
+    !moneyClose(existing.unitCostPrice, row.costPrice)
+  ) {
+    return true;
+  }
+  if (
+    row.salePrice != null &&
+    Number.isFinite(row.salePrice) &&
+    !moneyClose(existing.unitSalePrice, row.salePrice)
+  ) {
+    return true;
+  }
+  return false;
+}
+
 async function applySupplierOrderReceipt(
   order: SupplierOrderWithItems,
   incomingItems: ReceiptItemInput[],
@@ -348,6 +385,9 @@ export async function PUT(
                     `La cantidad solicitada de "${existing.productName}" no puede ser menor a lo ya recibido (${existing.receivedQty}).`,
                   );
                 }
+                if (!supplierOrderItemNeedsUpdate(existing, row)) {
+                  continue;
+                }
                 updateOps.push(
                   tx.supplierOrderItem.update({
                     where: { id: existing.id },
@@ -389,7 +429,11 @@ export async function PUT(
             }
 
             if (updateOps.length > 0) {
-              await Promise.all(updateOps);
+              // Lotes chicos: evita un batch enorme que expire la transacción.
+              const UPDATE_CHUNK = 25;
+              for (let i = 0; i < updateOps.length; i += UPDATE_CHUNK) {
+                await Promise.all(updateOps.slice(i, i + UPDATE_CHUNK));
+              }
             }
 
             if (createInputs.length > 0) {
@@ -436,7 +480,7 @@ export async function PUT(
               throw new Error("El pedido debe tener al menos un producto.");
             }
           },
-          { timeout: 30000, maxWait: 10000 },
+          { timeout: 60000, maxWait: 15000 },
         );
       } catch (saveError) {
         const message =

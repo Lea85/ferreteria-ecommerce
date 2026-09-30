@@ -1,7 +1,7 @@
 "use client";
 
 import { Loader2, Plus, Save, Search, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -94,6 +94,28 @@ function sameDraftItems(
   return true;
 }
 
+function itemValuesEqual(
+  a: Pick<SupplierOrderDraftItem, "requestedQty" | "costPrice" | "salePrice">,
+  b: Pick<SupplierOrderDraftItem, "requestedQty" | "costPrice" | "salePrice">,
+) {
+  return (
+    a.requestedQty === b.requestedQty &&
+    Math.abs(a.costPrice - b.costPrice) < 0.005 &&
+    Math.abs(a.salePrice - b.salePrice) < 0.005
+  );
+}
+
+function cloneBaseline(items: SupplierOrderDraftItem[]) {
+  return items
+    .filter((item) => !isTempId(item.id))
+    .map((item) => ({
+      id: item.id,
+      requestedQty: item.requestedQty,
+      costPrice: item.costPrice,
+      salePrice: item.salePrice,
+    }));
+}
+
 export function SupplierOrderDraftEditor({
   orderId,
   supplierId,
@@ -104,6 +126,7 @@ export function SupplierOrderDraftEditor({
 }: SupplierOrderDraftEditorProps) {
   const [draftItems, setDraftItems] = useState<SupplierOrderDraftItem[]>(items);
   const [removedItemIds, setRemovedItemIds] = useState<string[]>([]);
+  const baselineRef = useRef(cloneBaseline(items));
   const [saving, setSaving] = useState(false);
   const { progress: saveProgress, complete: completeSaveProgress } =
     useSimulatedProgress(saving);
@@ -115,7 +138,11 @@ export function SupplierOrderDraftEditor({
   // Solo sincroniza si el contenido cambió de verdad. Evita un loop de
   // re-renders cuando el padre recrea el array `items` en cada render.
   useEffect(() => {
-    setDraftItems((prev) => (sameDraftItems(prev, items) ? prev : items));
+    setDraftItems((prev) => {
+      if (sameDraftItems(prev, items)) return prev;
+      baselineRef.current = cloneBaseline(items);
+      return items;
+    });
     setRemovedItemIds((prev) => (prev.length === 0 ? prev : []));
   }, [items, orderId]);
 
@@ -216,6 +243,28 @@ export function SupplierOrderDraftEditor({
       return;
     }
 
+    const baselineById = new Map(
+      baselineRef.current.map((item) => [item.id, item]),
+    );
+
+    const changedExisting = draftItems.filter((item) => {
+      if (isTempId(item.id)) return false;
+      const base = baselineById.get(item.id);
+      if (!base) return true;
+      return !itemValuesEqual(item, base);
+    });
+
+    const newItems = draftItems.filter((item) => isTempId(item.id));
+
+    if (
+      changedExisting.length === 0 &&
+      newItems.length === 0 &&
+      removedItemIds.length === 0
+    ) {
+      toast.info("No hay cambios para guardar.");
+      return;
+    }
+
     setSaving(true);
     try {
       const res = await fetch(`/api/admin/supplier-orders/${orderId}`, {
@@ -223,14 +272,21 @@ export function SupplierOrderDraftEditor({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "save",
-          items: draftItems.map((item) => ({
-            ...(isTempId(item.id)
-              ? { variantId: item.variantId }
-              : { id: item.id }),
-            requestedQty: item.requestedQty,
-            costPrice: item.costPrice,
-            salePrice: item.salePrice,
-          })),
+          // Solo enviamos ítems nuevos o modificados (no todo el pedido).
+          items: [
+            ...changedExisting.map((item) => ({
+              id: item.id,
+              requestedQty: item.requestedQty,
+              costPrice: item.costPrice,
+              salePrice: item.salePrice,
+            })),
+            ...newItems.map((item) => ({
+              variantId: item.variantId,
+              requestedQty: item.requestedQty,
+              costPrice: item.costPrice,
+              salePrice: item.salePrice,
+            })),
+          ],
           removeItemIds: removedItemIds,
         }),
       });
@@ -252,6 +308,7 @@ export function SupplierOrderDraftEditor({
       );
 
       completeSaveProgress();
+      baselineRef.current = cloneBaseline(savedItems);
       setDraftItems(savedItems);
       setRemovedItemIds([]);
       onSaved(savedItems);
