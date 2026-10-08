@@ -78,9 +78,6 @@ async function applySupplierOrderReceipt(
 ) {
   return prisma.$transaction(
     async (tx) => {
-      const itemUpdates: Promise<unknown>[] = [];
-      const variantUpdates: Promise<unknown>[] = [];
-
       for (const incoming of incomingItems) {
         const item = order.items.find((i) => i.id === incoming.id);
         if (!item) continue;
@@ -89,59 +86,55 @@ async function applySupplierOrderReceipt(
           0,
           Math.floor(incoming.receivedQty || 0),
         );
-        const delta = newReceivedQty - item.receivedQty;
 
-        const itemUpdate: {
-          receivedQty: number;
-          unitCostPrice?: number;
-          unitSalePrice?: number;
-        } = { receivedQty: newReceivedQty };
+        // En borrador el stock nunca se aplicó: no confiar en receivedQty previo
+        // (si quedó marcado por un intento fallido, el delta sería 0 y no suma stock).
+        const priorReceivedForStock =
+          order.status === "DRAFT" ? 0 : item.receivedQty;
+        const stockDelta = newReceivedQty - priorReceivedForStock;
 
-        if (incoming.costPrice != null && Number.isFinite(incoming.costPrice)) {
-          itemUpdate.unitCostPrice =
-            Math.round(incoming.costPrice * 100) / 100;
+        const unitCostPrice =
+          incoming.costPrice != null && Number.isFinite(incoming.costPrice)
+            ? Math.round(incoming.costPrice * 100) / 100
+            : undefined;
+        const unitSalePrice =
+          incoming.salePrice != null && Number.isFinite(incoming.salePrice)
+            ? Math.round(incoming.salePrice * 100) / 100
+            : undefined;
+
+        // 1) Stock primero, en update aparte (evita perder el increment si va
+        //    mezclado con precios en el mismo UPDATE).
+        if (item.variantId && stockDelta !== 0) {
+          await tx.productVariant.update({
+            where: { id: item.variantId },
+            data: { stock: { increment: stockDelta } },
+          });
         }
-        if (incoming.salePrice != null && Number.isFinite(incoming.salePrice)) {
-          itemUpdate.unitSalePrice =
-            Math.round(incoming.salePrice * 100) / 100;
+
+        // 2) Precios de catálogo
+        if (
+          item.variantId &&
+          (unitCostPrice != null || unitSalePrice != null)
+        ) {
+          await tx.productVariant.update({
+            where: { id: item.variantId },
+            data: {
+              ...(unitCostPrice != null ? { costPrice: unitCostPrice } : {}),
+              ...(unitSalePrice != null ? { price: unitSalePrice } : {}),
+            },
+          });
         }
 
-        itemUpdates.push(
-          tx.supplierOrderItem.update({
-            where: { id: item.id },
-            data: itemUpdate,
-          }),
-        );
-
-        if (item.variantId) {
-          const variantUpdate: {
-            stock?: { increment: number };
-            costPrice?: number;
-            price?: number;
-          } = {};
-
-          if (delta !== 0) {
-            variantUpdate.stock = { increment: delta };
-          }
-          if (itemUpdate.unitCostPrice != null) {
-            variantUpdate.costPrice = itemUpdate.unitCostPrice;
-          }
-          if (itemUpdate.unitSalePrice != null) {
-            variantUpdate.price = itemUpdate.unitSalePrice;
-          }
-
-          if (Object.keys(variantUpdate).length > 0) {
-            variantUpdates.push(
-              tx.productVariant.update({
-                where: { id: item.variantId },
-                data: variantUpdate,
-              }),
-            );
-          }
-        }
+        // 3) Ítem del pedido (recibido + precios del renglón)
+        await tx.supplierOrderItem.update({
+          where: { id: item.id },
+          data: {
+            receivedQty: newReceivedQty,
+            ...(unitCostPrice != null ? { unitCostPrice } : {}),
+            ...(unitSalePrice != null ? { unitSalePrice } : {}),
+          },
+        });
       }
-
-      await Promise.all([...itemUpdates, ...variantUpdates]);
 
       const updatedItems = await tx.supplierOrderItem.findMany({
         where: { supplierOrderId: order.id },
@@ -166,7 +159,7 @@ async function applySupplierOrderReceipt(
 
       return newStatus;
     },
-    { timeout: 30000, maxWait: 10000 },
+    { timeout: 60000, maxWait: 15000 },
   );
 }
 
@@ -568,7 +561,7 @@ export async function PUT(
     ) {
       const priceById = new Map<
         string,
-        { costPrice?: number; salePrice?: number }
+        { costPrice?: number; salePrice?: number; requestedQty?: number }
       >();
       if (Array.isArray(body.items)) {
         for (const raw of body.items) {
@@ -580,7 +573,26 @@ export async function PUT(
               row.costPrice != null ? Number(row.costPrice) : undefined,
             salePrice:
               row.salePrice != null ? Number(row.salePrice) : undefined,
+            requestedQty:
+              row.requestedQty != null
+                ? Math.max(1, Math.floor(Number(row.requestedQty) || 1))
+                : undefined,
           });
+        }
+      }
+
+      // Persistir cantidades del borrador (si vinieron) antes de recibir.
+      for (const item of order.items) {
+        const fromBody = priceById.get(item.id);
+        if (
+          fromBody?.requestedQty != null &&
+          fromBody.requestedQty !== item.requestedQty
+        ) {
+          await prisma.supplierOrderItem.update({
+            where: { id: item.id },
+            data: { requestedQty: fromBody.requestedQty },
+          });
+          item.requestedQty = fromBody.requestedQty;
         }
       }
 

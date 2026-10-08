@@ -179,6 +179,7 @@ export default function PedidoDetallePage({
         .filter((item) => !item.id.startsWith("temp-"))
         .map((item) => ({
           id: item.id,
+          requestedQty: item.requestedQty,
           costPrice: item.costPrice,
           salePrice: item.salePrice,
         }));
