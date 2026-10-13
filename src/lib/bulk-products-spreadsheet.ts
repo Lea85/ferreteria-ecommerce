@@ -152,9 +152,15 @@ export function normalizeSkuFromCell(value: unknown): string {
 
 export function normalizeBulkProductRows(
   rows: Record<string, unknown>[],
-  options?: { requireSku?: boolean },
+  options?: { requireSku?: boolean; mode?: "import" | "update" },
 ): NormalizedBulkProductRow[] {
-  const requireSku = options?.requireSku !== false;
+  const mode = options?.mode;
+  const requireSku =
+    mode === "update"
+      ? false
+      : mode === "import"
+        ? false
+        : options?.requireSku !== false;
 
   return rows
     .map((row, index) => {
@@ -204,6 +210,9 @@ export function normalizeBulkProductRows(
     return normalized;
   })
     .filter((row) => {
+      if (mode === "update") {
+        return row.sku.length > 0 || Boolean(row.ean?.trim());
+      }
       if (requireSku) return row.sku.length > 0;
       return row.sku.length > 0 || Boolean(row.name?.trim());
     });
@@ -222,9 +231,7 @@ export function previewBulkSpreadsheetRows(
   rows: Record<string, unknown>[],
   mode: "import" | "update",
 ): BulkParsePreview {
-  const normalized = normalizeBulkProductRows(rows, {
-    requireSku: mode === "update",
-  });
+  const normalized = normalizeBulkProductRows(rows, { mode });
   let withSku = 0;
   let withName = 0;
   let withEan = 0;
@@ -249,6 +256,7 @@ export type BulkVariantRef = {
   id: string;
   productId: string;
   sku: string;
+  ean?: string | null;
 };
 
 /** Mapa SKU (exacto, minúsculas y sin separadores) → variante. */
@@ -283,6 +291,53 @@ export function resolveVariantFromSkuIndex(
   );
 }
 
+/** Mapa EAN → variante. Si hay más de una variante con el mismo EAN, marca DUPLICATE. */
+export function indexVariantsByEan(
+  variants: BulkVariantRef[],
+): Map<string, BulkVariantRef | "DUPLICATE"> {
+  const map = new Map<string, BulkVariantRef | "DUPLICATE">();
+
+  function addKey(key: string, variant: BulkVariantRef) {
+    if (!key) return;
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, variant);
+      return;
+    }
+    if (existing === "DUPLICATE") return;
+    if (existing.id !== variant.id) {
+      map.set(key, "DUPLICATE");
+    }
+  }
+
+  for (const variant of variants) {
+    const normalized = normalizeSkuFromCell(variant.ean);
+    if (!normalized) continue;
+    const lower = normalized.toLowerCase();
+    const compact = lower.replace(/[\s\-_.]/g, "");
+    addKey(normalized, variant);
+    addKey(lower, variant);
+    addKey(compact, variant);
+  }
+  return map;
+}
+
+export function resolveVariantFromEanIndex(
+  ean: string,
+  index: Map<string, BulkVariantRef | "DUPLICATE">,
+): BulkVariantRef | "DUPLICATE" | null {
+  const normalized = normalizeSkuFromCell(ean);
+  if (!normalized) return null;
+  const lower = normalized.toLowerCase();
+  const compact = lower.replace(/[\s\-_.]/g, "");
+  return (
+    index.get(normalized) ??
+    index.get(lower) ??
+    (compact ? index.get(compact) : null) ??
+    null
+  );
+}
+
 export function parseCategoryNames(raw?: string): string[] {
   if (!raw?.trim()) return [];
   return [...new Set(raw.split(";").map((s) => s.trim()).filter(Boolean))];
@@ -304,8 +359,8 @@ export const BULK_IMPORT_TEMPLATE_ROW = {
 };
 
 export const BULK_UPDATE_TEMPLATE_ROW = {
-  [BULK_PRODUCT_TEMPLATE_COLUMNS.sku]: "SKU-001",
-  [BULK_PRODUCT_TEMPLATE_COLUMNS.ean]: "",
+  [BULK_PRODUCT_TEMPLATE_COLUMNS.sku]: "",
+  [BULK_PRODUCT_TEMPLATE_COLUMNS.ean]: "7791234567890",
   [BULK_PRODUCT_TEMPLATE_COLUMNS.nombre]: "",
   [BULK_PRODUCT_TEMPLATE_COLUMNS.precio_compra]: "",
   [BULK_PRODUCT_TEMPLATE_COLUMNS.precio_venta]: 12000,

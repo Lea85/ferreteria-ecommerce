@@ -3,11 +3,13 @@ import { NextResponse } from "next/server";
 
 import { auth, isFullAdmin } from "@/auth";
 import {
+  indexVariantsByEan,
   indexVariantsBySku,
   normalizeBulkProductRows,
   normalizeSkuFromCell,
   parseBulkNumericValue,
   parseCategoryNames,
+  resolveVariantFromEanIndex,
   resolveVariantFromSkuIndex,
   type BulkVariantRef,
   type NormalizedBulkProductRow,
@@ -76,8 +78,17 @@ async function generateUniqueSku(name: string): Promise<string> {
 function rowLabel(p: NormalizedBulkProductRow): string {
   if (p.sourceRow) return `Fila ${p.sourceRow}`;
   if (p.sku) return `SKU ${p.sku}`;
+  if (p.ean) return `EAN ${p.ean}`;
   if (p.name) return `"${p.name.slice(0, 40)}"`;
   return "Fila sin identificar";
+}
+
+function rowIdentity(p: NormalizedBulkProductRow): string {
+  const sku = normalizeSkuFromCell(p.sku);
+  const ean = normalizeSkuFromCell(p.ean);
+  if (sku) return `SKU ${sku}`;
+  if (ean) return `EAN ${ean}`;
+  return rowLabel(p);
 }
 
 async function loadLookupMaps() {
@@ -268,31 +279,68 @@ async function importProduct(
   ctx.results.created++;
 }
 
-async function loadVariantsForBulkSkus(
+async function loadVariantsForBulkUpdate(
   skus: string[],
-): Promise<Map<string, BulkVariantRef>> {
-  const lookupKeys = new Set<string>();
+  eans: string[],
+): Promise<{
+  bySku: Map<string, BulkVariantRef>;
+  byEan: Map<string, BulkVariantRef | "DUPLICATE">;
+}> {
+  const skuKeys = new Set<string>();
   for (const raw of skus) {
     const sku = normalizeSkuFromCell(raw);
     if (!sku) continue;
-    lookupKeys.add(sku.trim().toLowerCase());
+    skuKeys.add(sku.trim().toLowerCase());
     const compact = normalizeProductCode(sku);
-    if (compact) lookupKeys.add(compact);
+    if (compact) skuKeys.add(compact);
   }
 
-  if (lookupKeys.size === 0) {
-    return new Map();
+  const eanKeys = new Set<string>();
+  for (const raw of eans) {
+    const ean = normalizeSkuFromCell(raw);
+    if (!ean) continue;
+    eanKeys.add(ean.trim().toLowerCase());
+    const compact = normalizeProductCode(ean);
+    if (compact) eanKeys.add(compact);
   }
 
-  const keys = [...lookupKeys];
-  const rows = await prisma.$queryRaw<BulkVariantRef[]>`
-    SELECT id, "productId", sku
-    FROM product_variants
-    WHERE LOWER(TRIM(sku)) IN (${Prisma.join(keys)})
-       OR REGEXP_REPLACE(LOWER(TRIM(sku)), '[\\s\\-_.]', '', 'g') IN (${Prisma.join(keys)})
-  `;
+  const rows: BulkVariantRef[] = [];
 
-  return indexVariantsBySku(rows);
+  if (skuKeys.size > 0) {
+    const keys = [...skuKeys];
+    const bySkuRows = await prisma.$queryRaw<BulkVariantRef[]>`
+      SELECT id, "productId", sku, ean
+      FROM product_variants
+      WHERE LOWER(TRIM(sku)) IN (${Prisma.join(keys)})
+         OR REGEXP_REPLACE(LOWER(TRIM(sku)), '[\\s\\-_.]', '', 'g') IN (${Prisma.join(keys)})
+    `;
+    rows.push(...bySkuRows);
+  }
+
+  if (eanKeys.size > 0) {
+    const keys = [...eanKeys];
+    const byEanRows = await prisma.$queryRaw<BulkVariantRef[]>`
+      SELECT id, "productId", sku, ean
+      FROM product_variants
+      WHERE ean IS NOT NULL
+        AND ean <> ''
+        AND (
+          LOWER(TRIM(ean)) IN (${Prisma.join(keys)})
+          OR REGEXP_REPLACE(LOWER(TRIM(ean)), '[\\s\\-_.]', '', 'g') IN (${Prisma.join(keys)})
+        )
+    `;
+    rows.push(...byEanRows);
+  }
+
+  // Deduplicar por id (puede matchear por sku y ean).
+  const unique = new Map<string, BulkVariantRef>();
+  for (const row of rows) unique.set(row.id, row);
+  const variants = [...unique.values()];
+
+  return {
+    bySku: indexVariantsBySku(variants),
+    byEan: indexVariantsByEan(variants),
+  };
 }
 
 async function updateProduct(
@@ -300,19 +348,40 @@ async function updateProduct(
   ctx: {
     supplierByName: Map<string, string>;
     categoryByName: Map<string, string>;
-    variantIndex: Map<string, BulkVariantRef>;
+    variantBySku: Map<string, BulkVariantRef>;
+    variantByEan: Map<string, BulkVariantRef | "DUPLICATE">;
     results: BulkResults;
   },
 ): Promise<void> {
   const sku = normalizeSkuFromCell(p.sku);
-  if (!sku) {
-    ctx.results.errors.push("Fila sin SKU, no se puede actualizar");
-    return;
-  }
+  const ean = normalizeSkuFromCell(p.ean);
+  const identity = rowIdentity(p);
 
-  const variant = resolveVariantFromSkuIndex(sku, ctx.variantIndex);
-  if (!variant) {
-    ctx.results.errors.push(`SKU ${sku} no encontrado`);
+  let variant: BulkVariantRef | null = null;
+
+  if (sku) {
+    variant = resolveVariantFromSkuIndex(sku, ctx.variantBySku);
+    if (!variant) {
+      ctx.results.errors.push(`${identity} no encontrado`);
+      return;
+    }
+  } else if (ean) {
+    const resolved = resolveVariantFromEanIndex(ean, ctx.variantByEan);
+    if (resolved === "DUPLICATE") {
+      ctx.results.errors.push(
+        `${identity}: hay más de un producto con ese EAN; usá SKU para identificarlo.`,
+      );
+      return;
+    }
+    if (!resolved) {
+      ctx.results.errors.push(`${identity} no encontrado`);
+      return;
+    }
+    variant = resolved;
+  } else {
+    ctx.results.errors.push(
+      `${rowLabel(p)}: indicá SKU o EAN para identificar el producto.`,
+    );
     return;
   }
 
@@ -332,8 +401,10 @@ async function updateProduct(
   if (lowStockThreshold !== undefined) {
     variantData.lowStockThreshold = lowStockThreshold;
   }
-  if (p.ean !== undefined && normalizeSkuFromCell(p.ean) !== "") {
-    variantData.ean = normalizeSkuFromCell(p.ean);
+  // Si se identificó por SKU y viene EAN, se puede actualizar el EAN.
+  // Si se identificó por EAN, no hace falta reescribir el mismo código.
+  if (sku && ean) {
+    variantData.ean = ean;
   }
 
   if (Object.keys(variantData).length > 0) {
@@ -365,7 +436,7 @@ async function updateProduct(
     const supplierId = resolveSupplier(
       p.supplier,
       ctx.supplierByName,
-      sku,
+      variant.sku,
       ctx.results.warnings,
     );
     await applySupplier(variant.productId, supplierId, p.supplier);
@@ -376,7 +447,7 @@ async function updateProduct(
     const categoryIds = resolveCategories(
       p.categories,
       ctx.categoryByName,
-      sku,
+      variant.sku,
       ctx.results.warnings,
     );
     if (categoryIds.length > 0) {
@@ -389,7 +460,7 @@ async function updateProduct(
     ctx.results.updated++;
   } else {
     ctx.results.warnings.push(
-      `SKU ${sku}: sin campos para actualizar (dejá vacías las columnas que no querés cambiar).`,
+      `${identity}: sin campos para actualizar (dejá vacías las columnas que no querés cambiar).`,
     );
   }
 }
@@ -417,13 +488,13 @@ export async function POST(request: Request) {
     const isImport = action === "import";
     const products = normalizeBulkProductRows(
       rawProducts as Record<string, unknown>[],
-      { requireSku: !isImport },
+      { mode: isImport ? "import" : "update" },
     );
 
     if (products.length === 0) {
       const hint = isImport
         ? 'Completá al menos la columna "nombre". El SKU es opcional en altas nuevas (se genera automáticamente).'
-        : 'La modificación masiva requiere la columna "sku" en cada fila a actualizar.';
+        : 'La modificación masiva requiere SKU o EAN en cada fila para identificar el producto.';
       return NextResponse.json(
         {
           error: `No se pudo procesar ninguna fila (${rawProducts.length} leídas). ${hint}`,
@@ -460,24 +531,29 @@ export async function POST(request: Request) {
         }
       }
     } else if (action === "update") {
-      const variantIndex = await loadVariantsForBulkSkus(
+      const { bySku, byEan } = await loadVariantsForBulkUpdate(
         products.map((p) => p.sku),
+        products.map((p) => p.ean ?? ""),
       );
-      const updateCtx = { ...ctx, variantIndex };
+      const updateCtx = {
+        ...ctx,
+        variantBySku: bySku,
+        variantByEan: byEan,
+      };
 
       for (const p of products) {
         try {
           await updateProduct(p, updateCtx);
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : "Error desconocido";
-          const sku = normalizeSkuFromCell(p.sku) || "?";
+          const identity = rowIdentity(p);
           if (message.includes("Unique constraint")) {
             results.errors.push(
-              `Error en SKU ${sku}: valor duplicado (revisá EAN o SKU).`,
+              `Error en ${identity}: valor duplicado (revisá EAN o SKU).`,
             );
           } else {
             results.errors.push(
-              `Error en SKU ${sku}: ${message.slice(0, 120)}`,
+              `Error en ${identity}: ${message.slice(0, 120)}`,
             );
           }
         }

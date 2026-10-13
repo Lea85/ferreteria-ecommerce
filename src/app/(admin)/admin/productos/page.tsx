@@ -427,7 +427,7 @@ function AdminProductosPageInner() {
         const msg =
           bulkMode === "import"
             ? `Se leyeron ${preview.totalRows} filas pero ninguna tiene nombre. Completá la columna "nombre" (el SKU es opcional).`
-            : `Se leyeron ${preview.totalRows} filas pero ninguna tiene SKU. La modificación masiva requiere SKU en cada fila.`;
+            : `Se leyeron ${preview.totalRows} filas pero ninguna tiene SKU ni EAN. La modificación masiva necesita SKU o EAN para identificar cada producto.`;
         toast.error(msg);
         setBulkResults({
           errors: [msg],
@@ -868,7 +868,7 @@ function AdminProductosPageInner() {
             <p className="text-sm text-muted-foreground">
               {bulkMode === "import"
                 ? "Subí un Excel (.xlsx) con productos nuevos. Columnas: nombre (obligatorio), sku (opcional, se genera solo), ean, precio_compra, precio_venta, stock, stock_minimo, marca, proveedor, categorias (separadas por ;), descripcion, descripcion_corta."
-                : "Subí un Excel (.xlsx) para modificar. El sku es obligatorio. Solo se actualizan las columnas con valor. Mismos nombres de columna que en el alta (incluye stock_minimo)."}
+                : "Subí un Excel (.xlsx) para modificar. Identificá cada fila con sku o, si no hay sku, con ean. Solo se actualizan las columnas con valor. Mismos nombres de columna que en el alta (incluye stock_minimo)."}
             </p>
             <Button
               variant="outline"
@@ -918,6 +918,9 @@ function AdminProductosPageInner() {
                   : bulkMode === "import"
                     ? " · sin SKU (se generarán automáticamente)"
                     : ""}
+                {bulkMode === "update" && bulkPreview.withEan > 0
+                  ? ` · ${bulkPreview.withEan} con EAN`
+                  : ""}
               </p>
             ) : null}
             {bulkResults ? (
