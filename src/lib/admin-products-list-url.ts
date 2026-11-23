@@ -75,10 +75,20 @@ export function parseAdminProductsListSearchParams(
   };
 }
 
-/** Solo rutas internas del listado de productos. */
+const RETURN_PREFIXES = [LIST_PATH, "/admin/almacen"];
+
+function isAllowedReturnPath(path: string) {
+  return RETURN_PREFIXES.some(
+    (prefix) => path === prefix || path.startsWith(`${prefix}/`),
+  );
+}
+
+/** Listado de productos o la grilla de almacén desde la que se abrió el detalle. */
 export function sanitizeAdminProductsReturnTo(value: string | null): string | null {
-  if (!value?.startsWith(LIST_PATH)) return null;
-  if (value.includes("://") || value.startsWith("//")) return null;
+  if (!value?.startsWith("/")) return null;
+  if (value.includes("://") || value.startsWith("//") || value.includes("\\")) return null;
+  const path = value.split("?")[0]?.split("#")[0] ?? "";
+  if (!isAllowedReturnPath(path)) return null;
   return value;
 }
 

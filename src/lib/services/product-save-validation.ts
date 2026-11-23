@@ -19,7 +19,35 @@ type ProductSaveInput = {
   slug?: string;
   categoryIds?: string[];
   variants?: VariantInput[];
+  warehouseLocationId?: string | null;
+  warehouseRow?: unknown;
+  warehouseCol?: unknown;
 };
+
+function parseCellIndex(value: unknown): number | null {
+  if (typeof value === "number" && Number.isInteger(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const n = Number(value.trim());
+    if (Number.isInteger(n)) return n;
+  }
+  return null;
+}
+
+export function warehouseCellFromBody(body: {
+  warehouseLocationId?: string | null;
+  warehouseRow?: unknown;
+  warehouseCol?: unknown;
+}) {
+  const warehouseLocationId = String(body.warehouseLocationId ?? "").trim() || null;
+  if (!warehouseLocationId) {
+    return { warehouseLocationId: null, warehouseRow: null, warehouseCol: null };
+  }
+  return {
+    warehouseLocationId,
+    warehouseRow: parseCellIndex(body.warehouseRow),
+    warehouseCol: parseCellIndex(body.warehouseCol),
+  };
+}
 
 
 async function findExistingSku(
@@ -79,6 +107,37 @@ export async function validateProductForSave(
   if (!body.categoryIds || body.categoryIds.length === 0) {
     errors.push("Categorías: elegí al menos una categoría");
     fieldErrors.categoryIds = "Elegí al menos una categoría";
+  }
+
+  const cell = warehouseCellFromBody(body);
+  if (cell.warehouseLocationId) {
+    const location = await prisma.warehouseLocation.findUnique({
+      where: { id: cell.warehouseLocationId },
+      select: { name: true, maxRows: true, maxCols: true },
+    });
+    if (!location) {
+      errors.push("Almacén: la ubicación elegida no existe");
+      fieldErrors.warehouseLocationId = "La ubicación no existe";
+    } else {
+      if (
+        cell.warehouseRow == null ||
+        cell.warehouseRow < 1 ||
+        cell.warehouseRow > location.maxRows
+      ) {
+        const message = `La fila debe ser un entero entre 1 y ${location.maxRows}.`;
+        errors.push(`Fila: ${message}`);
+        fieldErrors.warehouseRow = message;
+      }
+      if (
+        cell.warehouseCol == null ||
+        cell.warehouseCol < 1 ||
+        cell.warehouseCol > location.maxCols
+      ) {
+        const message = `La columna debe ser un entero entre 1 y ${location.maxCols}.`;
+        errors.push(`Columna: ${message}`);
+        fieldErrors.warehouseCol = message;
+      }
+    }
   }
 
   const variants = body.variants ?? [];

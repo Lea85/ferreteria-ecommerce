@@ -6,6 +6,7 @@ import { buildAdminProductsWhere, parseAdminProductsFilterParams } from "@/lib/a
 import {
   prismaErrorToProductSavePayload,
   validateProductForSave,
+  warehouseCellFromBody,
 } from "@/lib/services/product-save-validation";
 
 export async function GET(request: Request) {
@@ -136,7 +137,7 @@ export async function POST(request: Request) {
         slug: body.slug.trim(),
         description: body.description || null,
         brandId: body.brandId || null,
-        warehouseLocationId: body.warehouseLocationId || null,
+        ...warehouseCellFromBody(body),
         isActive: body.isActive ?? true,
         isFeatured: body.isFeatured ?? false,
         metaTitle: body.metaTitle || null,

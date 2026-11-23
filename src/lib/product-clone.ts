@@ -7,6 +7,8 @@ export type ProductApiCloneSource = {
   description?: string | null;
   brandId?: string;
   warehouseLocationId?: string;
+  warehouseRow?: number | null;
+  warehouseCol?: number | null;
   categoryIds?: string[];
   supplierIds?: string[];
   isActive?: boolean;
@@ -42,6 +44,8 @@ export function prepareProductCloneInitialData(
     description: source.description ?? "",
     brandId: source.brandId ?? "",
     warehouseLocationId: source.warehouseLocationId ?? "",
+    warehouseRow: source.warehouseRow ?? null,
+    warehouseCol: source.warehouseCol ?? null,
     categoryIds: source.categoryIds ?? [],
     supplierIds: source.supplierIds ?? [],
     isActive: source.isActive ?? true,

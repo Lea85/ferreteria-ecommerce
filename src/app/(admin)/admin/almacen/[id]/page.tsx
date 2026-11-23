@@ -2,11 +2,12 @@
 
 import { ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { appendAdminProductsNavParams } from "@/lib/admin-products-list-url";
 import { formatPrice } from "@/lib/utils";
 
 type CellProduct = {
@@ -30,6 +31,7 @@ type LocationDetail = {
 
 export default function AlmacenDetallePage() {
   const params = useParams<{ id: string }>();
+  const pathname = usePathname();
   const id = params.id;
   const [location, setLocation] = useState<LocationDetail | null>(null);
   const [cells, setCells] = useState<CellProduct[]>([]);
@@ -150,8 +152,17 @@ export default function AlmacenDetallePage() {
                       ) : (
                         <div className="space-y-3">
                           {items.map((item) => (
-                            <div key={item.productId} className="space-y-1">
-                              <p className="font-medium">{item.productName}</p>
+                            <Link
+                              key={item.productId}
+                              href={appendAdminProductsNavParams(
+                                `/admin/productos/detalle/${item.productId}`,
+                                { returnTo: pathname },
+                              )}
+                              className="block space-y-1 rounded-md outline-none ring-offset-background hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+                            >
+                              <p className="font-medium text-primary underline-offset-2 hover:underline">
+                                {item.productName}
+                              </p>
                               <p className="text-xs text-muted-foreground">
                                 Stock: {item.stock}
                               </p>
@@ -163,7 +174,7 @@ export default function AlmacenDetallePage() {
                                     ? `desde ${formatPrice(item.salePrice)}`
                                     : formatPrice(item.salePrice)}
                               </p>
-                            </div>
+                            </Link>
                           ))}
                         </div>
                       )}

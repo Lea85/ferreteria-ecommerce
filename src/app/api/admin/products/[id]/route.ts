@@ -5,6 +5,7 @@ import { auth, isAdminRole, isFullAdmin, canViewProductCostPrice } from "@/lib/a
 import {
   prismaErrorToProductSavePayload,
   validateProductForSave,
+  warehouseCellFromBody,
 } from "@/lib/services/product-save-validation";
 import {
   deleteProductById,
@@ -59,6 +60,8 @@ export async function GET(
       description: product.description || "",
       brandId: product.brand?.id || "",
       warehouseLocationId: product.warehouseLocationId || "",
+      warehouseRow: product.warehouseRow,
+      warehouseCol: product.warehouseCol,
       categoryIds: product.categories.map((c) => c.categoryId),
       supplierIds: product.suppliers.map((s) => s.supplierId),
       isActive: product.isActive,
@@ -127,7 +130,7 @@ export async function PUT(
         slug: body.slug,
         description: body.description || null,
         brandId: body.brandId || null,
-        warehouseLocationId: body.warehouseLocationId || null,
+        ...warehouseCellFromBody(body),
         isActive: body.isActive ?? true,
         isFeatured: body.isFeatured ?? false,
         metaTitle: body.metaTitle || null,

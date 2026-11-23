@@ -76,6 +76,8 @@ const productSchema = z.object({
   description: z.string().optional(),
   brandId: z.string().optional(),
   warehouseLocationId: z.string().optional(),
+  warehouseRow: z.string().optional(),
+  warehouseCol: z.string().optional(),
   categoryIds: z.array(z.string()).min(1, "Elegí al menos una categoría"),
   isActive: z.boolean(),
   isFeatured: z.boolean(),
@@ -83,6 +85,22 @@ const productSchema = z.object({
   metaDesc: z.string().optional(),
   variants: z.array(variantSchema).min(1, "Agregá al menos una variante"),
   images: z.array(imageSchema).optional(),
+}).superRefine((data, ctx) => {
+  if (!data.warehouseLocationId?.trim()) return;
+  for (const [path, label] of [
+    ["warehouseRow", "La fila"],
+    ["warehouseCol", "La columna"],
+  ] as const) {
+    const raw = data[path]?.trim() ?? "";
+    const n = Number(raw);
+    if (!raw || !Number.isInteger(n) || n < 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `${label} debe ser un número entero mayor a 0.`,
+        path: [path],
+      });
+    }
+  }
 });
 
 export type ProductFormValues = z.infer<typeof productSchema>;
@@ -90,13 +108,18 @@ export type ProductFormValues = z.infer<typeof productSchema>;
 export type ProductFormOption = { id: string; name: string };
 
 export type ProductFormInitial = Partial<
-  Omit<ProductFormValues, "variants" | "categoryIds" | "images">
+  Omit<
+    ProductFormValues,
+    "variants" | "categoryIds" | "images" | "warehouseRow" | "warehouseCol"
+  >
 > & {
   categoryIds?: string[];
   variants?: ProductFormValues["variants"];
   supplierIds?: string[];
   images?: Array<{ url: string; altText?: string }>;
   warehouseLocationId?: string;
+  warehouseRow?: string | number | null;
+  warehouseCol?: string | number | null;
 };
 
 export type ProductFormProps = {
@@ -160,7 +183,13 @@ export function ProductForm({
   const [slugTouched, setSlugTouched] = useState(!!initialData?.slug);
   const [submitting, setSubmitting] = useState(false);
 
-  type WarehouseOption = { id: string; code: string; display: string };
+  type WarehouseOption = {
+    id: string;
+    code: string;
+    display: string;
+    maxRows: number;
+    maxCols: number;
+  };
   const [warehouseLocations, setWarehouseLocations] = useState<WarehouseOption[]>([]);
   const [allSuppliers, setAllSuppliers] = useState<{ id: string; name: string }[]>([]);
   const [selectedSupplierIds, setSelectedSupplierIds] = useState<Set<string>>(
@@ -218,6 +247,14 @@ export function ProductForm({
       description: initialData?.description ?? "",
       brandId: initialData?.brandId ?? "",
       warehouseLocationId: initialData?.warehouseLocationId ?? "",
+      warehouseRow:
+        initialData?.warehouseRow != null && initialData.warehouseRow !== ""
+          ? String(initialData.warehouseRow)
+          : "",
+      warehouseCol:
+        initialData?.warehouseCol != null && initialData.warehouseCol !== ""
+          ? String(initialData.warehouseCol)
+          : "",
       categoryIds: initialData?.categoryIds?.length ? initialData.categoryIds : [],
       isActive: initialData?.isActive ?? true,
       isFeatured: initialData?.isFeatured ?? false,
@@ -422,6 +459,35 @@ export function ProductForm({
   }
 
   async function handleFormSubmit(data: ProductFormValues) {
+    const locationId = data.warehouseLocationId?.trim();
+    if (locationId) {
+      const location = warehouseLocations.find((item) => item.id === locationId);
+      if (location) {
+        const row = Number(data.warehouseRow);
+        const col = Number(data.warehouseCol);
+        const fieldErrors: Record<string, string> = {};
+        const messages: string[] = [];
+        if (row > location.maxRows) {
+          const message = `La fila debe ser un entero entre 1 y ${location.maxRows}.`;
+          fieldErrors.warehouseRow = message;
+          messages.push(`Fila: ${message}`);
+        }
+        if (col > location.maxCols) {
+          const message = `La columna debe ser un entero entre 1 y ${location.maxCols}.`;
+          fieldErrors.warehouseCol = message;
+          messages.push(`Columna: ${message}`);
+        }
+        if (messages.length > 0) {
+          applyProductFieldErrors(
+            form as unknown as UseFormReturn<Record<string, unknown>>,
+            fieldErrors,
+          );
+          showProductFormErrorsToast("Revisá la ubicación en el almacén", messages);
+          return;
+        }
+      }
+    }
+
     setSubmitting(true);
     try {
       const result = await onSubmit({
@@ -463,6 +529,12 @@ export function ProductForm({
   const nameError = getProductFieldError(formErrors, "name");
   const slugError = getProductFieldError(formErrors, "slug");
   const categoryError = getProductFieldError(formErrors, "categoryIds");
+  const warehouseRowError = getProductFieldError(formErrors, "warehouseRow");
+  const warehouseColError = getProductFieldError(formErrors, "warehouseCol");
+  const warehouseLocationId = form.watch("warehouseLocationId");
+  const selectedWarehouse =
+    warehouseLocations.find((location) => location.id === warehouseLocationId) ??
+    null;
 
   const { isValid } = form.formState;
   const nameVal = form.watch("name");
@@ -704,8 +776,16 @@ export function ProductForm({
               Ubicacion en almacen
             </Label>
             <Select
-              value={form.watch("warehouseLocationId") || "__none__"}
-              onValueChange={(v) => form.setValue("warehouseLocationId", v === "__none__" ? "" : v)}
+              value={warehouseLocationId || "__none__"}
+              onValueChange={(v) => {
+                const nextId = v === "__none__" ? "" : v;
+                form.setValue("warehouseLocationId", nextId);
+                if (!nextId) {
+                  form.setValue("warehouseRow", "");
+                  form.setValue("warehouseCol", "");
+                  form.clearErrors(["warehouseRow", "warehouseCol"]);
+                }
+              }}
             >
               <SelectTrigger className="border-border">
                 <SelectValue placeholder="Sin ubicacion asignada" />
@@ -720,6 +800,58 @@ export function ProductForm({
                 ))}
               </SelectContent>
             </Select>
+            {warehouseLocationId ? (
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <div className="space-y-2">
+                  <Label htmlFor="warehouseRow">
+                    Fila <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="warehouseRow"
+                    type="number"
+                    min={1}
+                    max={selectedWarehouse?.maxRows}
+                    step={1}
+                    inputMode="numeric"
+                    {...form.register("warehouseRow")}
+                    className={inputErrorClass(!!warehouseRowError, "border-border")}
+                  />
+                  {warehouseRowError ? (
+                    <p className="text-sm text-destructive">{warehouseRowError}</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      {selectedWarehouse
+                        ? `De 1 a ${selectedWarehouse.maxRows}`
+                        : "Número de fila"}
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="warehouseCol">
+                    Columna <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="warehouseCol"
+                    type="number"
+                    min={1}
+                    max={selectedWarehouse?.maxCols}
+                    step={1}
+                    inputMode="numeric"
+                    {...form.register("warehouseCol")}
+                    className={inputErrorClass(!!warehouseColError, "border-border")}
+                  />
+                  {warehouseColError ? (
+                    <p className="text-sm text-destructive">{warehouseColError}</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      {selectedWarehouse
+                        ? `De 1 a ${selectedWarehouse.maxCols}`
+                        : "Número de columna"}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : null}
           </div>
           <div className="space-y-2 md:col-span-2">
             <Label>Categorías <span className="text-destructive">*</span></Label>

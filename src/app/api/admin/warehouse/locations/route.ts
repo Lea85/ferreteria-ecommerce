@@ -21,6 +21,8 @@ export async function GET() {
         code: `${location.maxRows} × ${location.maxCols}`,
         label: location.label,
         display: location.name,
+        maxRows: location.maxRows,
+        maxCols: location.maxCols,
       })),
     });
   } catch (error) {
