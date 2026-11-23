@@ -31,13 +31,35 @@ export async function GET(
       where: { id },
       include: {
         brand: { select: { id: true, name: true } },
-        categories: { select: { categoryId: true } },
-        suppliers: { select: { supplierId: true } },
+        warehouseLocation: { select: { name: true } },
+        categories: {
+          select: {
+            categoryId: true,
+            category: { select: { name: true } },
+          },
+        },
+        suppliers: {
+          select: {
+            supplierId: true,
+            supplier: { select: { name: true } },
+          },
+        },
         variants: {
           select: {
             id: true, name: true, sku: true, ean: true, price: true, costPrice: true, comparePrice: true,
             stock: true, lowStockThreshold: true, weight: true, isActive: true,
-            attributes: { select: { attributeValueId: true } },
+            attributes: {
+              select: {
+                attributeValueId: true,
+                attributeValue: {
+                  select: {
+                    value: true,
+                    position: true,
+                    attribute: { select: { name: true, position: true } },
+                  },
+                },
+              },
+            },
           },
           orderBy: { price: "asc" },
         },
@@ -59,11 +81,21 @@ export async function GET(
       slug: product.slug,
       description: product.description || "",
       brandId: product.brand?.id || "",
+      brandName: product.brand?.name || "",
       warehouseLocationId: product.warehouseLocationId || "",
+      warehouseLocationName: product.warehouseLocation?.name || "",
       warehouseRow: product.warehouseRow,
       warehouseCol: product.warehouseCol,
       categoryIds: product.categories.map((c) => c.categoryId),
+      categoryNames: product.categories
+        .map((c) => c.category.name)
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b, "es")),
       supplierIds: product.suppliers.map((s) => s.supplierId),
+      supplierNames: product.suppliers
+        .map((s) => s.supplier.name)
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b, "es")),
       isActive: product.isActive,
       isFeatured: product.isFeatured,
       metaTitle: product.metaTitle || "",
@@ -80,6 +112,18 @@ export async function GET(
         weight: v.weight ? Number(v.weight) : null,
         name: v.name || "",
         attributeValueIds: v.attributes.map((a) => a.attributeValueId),
+        attributes: v.attributes
+          .map((a) => ({
+            name: a.attributeValue.attribute.name,
+            value: a.attributeValue.value,
+            attributePosition: a.attributeValue.attribute.position,
+            valuePosition: a.attributeValue.position,
+          }))
+          .sort(
+            (a, b) =>
+              a.attributePosition - b.attributePosition ||
+              a.valuePosition - b.valuePosition,
+          ),
       })),
       images: product.images.map((i) => ({
         url: i.url,
