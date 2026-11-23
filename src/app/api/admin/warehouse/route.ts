@@ -3,7 +3,33 @@ import { NextResponse } from "next/server";
 import { auth, isAdminRole } from "@/auth";
 import { prisma } from "@/lib/db";
 
-// GET: listar sectores con sus ubicaciones
+function locationCode(row: string, col: string) {
+  return `${row.trim()}-${col.trim()}`;
+}
+
+function parseLocationBody(body: Record<string, unknown>) {
+  const name = String(body.name ?? "").trim();
+  const row = String(body.row ?? "").trim();
+  const col = String(body.col ?? "").trim();
+  const label =
+    body.label === undefined ? undefined : String(body.label ?? "").trim();
+
+  if (!name) {
+    return { error: "El nombre es obligatorio." as const };
+  }
+  if (!row || !col) {
+    return { error: "Fila y columna son obligatorias." as const };
+  }
+
+  return {
+    name,
+    row,
+    col,
+    code: locationCode(row, col),
+    label,
+  };
+}
+
 export async function GET() {
   try {
     const session = await auth();
@@ -11,24 +37,18 @@ export async function GET() {
       return NextResponse.json({ error: "No autorizado." }, { status: 403 });
     }
 
-    const sectors = await prisma.warehouseSector.findMany({
-      orderBy: { name: "asc" },
-      include: {
-        locations: {
-          orderBy: [{ shelf: "asc" }, { row: "asc" }, { col: "asc" }],
-          include: { _count: { select: { products: true } } },
-        },
-      },
+    const locations = await prisma.warehouseLocation.findMany({
+      orderBy: [{ name: "asc" }, { row: "asc" }, { col: "asc" }],
+      include: { _count: { select: { products: true } } },
     });
 
-    return NextResponse.json({ sectors });
+    return NextResponse.json({ locations });
   } catch (error) {
     console.error("Warehouse GET:", error);
     return NextResponse.json({ error: "Error interno." }, { status: 500 });
   }
 }
 
-// POST: crear sector o ubicacion
 export async function POST(request: Request) {
   try {
     const session = await auth();
@@ -37,40 +57,35 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-
-    if (body.type === "sector") {
-      const sector = await prisma.warehouseSector.create({
-        data: { name: body.name, description: body.description || null },
-      });
-      return NextResponse.json({ sector }, { status: 201 });
+    const parsed = parseLocationBody(body);
+    if ("error" in parsed) {
+      return NextResponse.json({ error: parsed.error }, { status: 400 });
     }
 
-    if (body.type === "location") {
-      const code = `${body.shelf}-${body.row}-${body.col}`.toUpperCase();
-      const location = await prisma.warehouseLocation.create({
-        data: {
-          sectorId: body.sectorId,
-          code,
-          shelf: body.shelf.toUpperCase(),
-          row: body.row,
-          col: body.col,
-          label: body.label || null,
-        },
-      });
-      return NextResponse.json({ location }, { status: 201 });
-    }
+    const location = await prisma.warehouseLocation.create({
+      data: {
+        name: parsed.name,
+        code: parsed.code,
+        row: parsed.row,
+        col: parsed.col,
+        label: parsed.label || null,
+      },
+    });
 
-    return NextResponse.json({ error: "Tipo invalido." }, { status: 400 });
-  } catch (error: any) {
-    if (error?.code === "P2002") {
-      return NextResponse.json({ error: "Ya existe un registro con ese nombre/codigo." }, { status: 409 });
+    return NextResponse.json({ location }, { status: 201 });
+  } catch (error: unknown) {
+    const code = (error as { code?: string })?.code;
+    if (code === "P2002") {
+      return NextResponse.json(
+        { error: "Ya existe esa ubicación con la misma fila y columna." },
+        { status: 409 },
+      );
     }
     console.error("Warehouse POST:", error);
     return NextResponse.json({ error: "Error interno." }, { status: 500 });
   }
 }
 
-// PUT: editar sector o ubicacion
 export async function PUT(request: Request) {
   try {
     const session = await auth();
@@ -79,49 +94,41 @@ export async function PUT(request: Request) {
     }
 
     const body = await request.json();
-
-    if (body.type === "sector") {
-      const sector = await prisma.warehouseSector.update({
-        where: { id: body.id },
-        data: {
-          name: body.name ?? undefined,
-          description: body.description ?? undefined,
-          isActive: body.isActive ?? undefined,
-        },
-      });
-      return NextResponse.json({ sector });
+    const id = String(body.id ?? "").trim();
+    if (!id) {
+      return NextResponse.json({ error: "Falta el id." }, { status: 400 });
     }
 
-    if (body.type === "location") {
-      const data: any = {};
-      if (body.shelf) data.shelf = body.shelf.toUpperCase();
-      if (body.row) data.row = body.row;
-      if (body.col) data.col = body.col;
-      if (body.shelf || body.row || body.col) {
-        data.code = `${body.shelf || ""}-${body.row || ""}-${body.col || ""}`.toUpperCase();
-      }
-      if (body.label !== undefined) data.label = body.label || null;
-      if (body.sectorId) data.sectorId = body.sectorId;
-      if (body.isActive !== undefined) data.isActive = body.isActive;
-
-      const location = await prisma.warehouseLocation.update({
-        where: { id: body.id },
-        data,
-      });
-      return NextResponse.json({ location });
+    const parsed = parseLocationBody(body);
+    if ("error" in parsed) {
+      return NextResponse.json({ error: parsed.error }, { status: 400 });
     }
 
-    return NextResponse.json({ error: "Tipo invalido." }, { status: 400 });
-  } catch (error: any) {
-    if (error?.code === "P2002") {
-      return NextResponse.json({ error: "Ya existe un registro con ese codigo." }, { status: 409 });
+    const location = await prisma.warehouseLocation.update({
+      where: { id },
+      data: {
+        name: parsed.name,
+        code: parsed.code,
+        row: parsed.row,
+        col: parsed.col,
+        label: parsed.label ? parsed.label : null,
+      },
+    });
+
+    return NextResponse.json({ location });
+  } catch (error: unknown) {
+    const code = (error as { code?: string })?.code;
+    if (code === "P2002") {
+      return NextResponse.json(
+        { error: "Ya existe esa ubicación con la misma fila y columna." },
+        { status: 409 },
+      );
     }
     console.error("Warehouse PUT:", error);
     return NextResponse.json({ error: "Error interno." }, { status: 500 });
   }
 }
 
-// DELETE: eliminar sector o ubicacion
 export async function DELETE(request: Request) {
   try {
     const session = await auth();
@@ -130,23 +137,16 @@ export async function DELETE(request: Request) {
     }
 
     const { searchParams } = new URL(request.url);
-    const type = searchParams.get("type");
     const id = searchParams.get("id");
-
-    if (!type || !id) {
-      return NextResponse.json({ error: "Tipo e ID requeridos." }, { status: 400 });
+    if (!id) {
+      return NextResponse.json({ error: "ID requerido." }, { status: 400 });
     }
 
-    if (type === "sector") {
-      await prisma.warehouseSector.delete({ where: { id } });
-    } else if (type === "location") {
-      // Desasociar productos primero
-      await prisma.product.updateMany({
-        where: { warehouseLocationId: id },
-        data: { warehouseLocationId: null },
-      });
-      await prisma.warehouseLocation.delete({ where: { id } });
-    }
+    await prisma.product.updateMany({
+      where: { warehouseLocationId: id },
+      data: { warehouseLocationId: null },
+    });
+    await prisma.warehouseLocation.delete({ where: { id } });
 
     return NextResponse.json({ success: true });
   } catch (error) {

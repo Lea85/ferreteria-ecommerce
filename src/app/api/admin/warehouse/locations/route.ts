@@ -11,9 +11,8 @@ export async function GET() {
     }
 
     const locations = await prisma.warehouseLocation.findMany({
-      where: { isActive: true, sector: { isActive: true } },
-      orderBy: [{ sector: { name: "asc" } }, { shelf: "asc" }, { row: "asc" }, { col: "asc" }],
-      include: { sector: { select: { name: true } } },
+      where: { isActive: true },
+      orderBy: [{ name: "asc" }, { row: "asc" }, { col: "asc" }],
     });
 
     return NextResponse.json({
@@ -21,7 +20,7 @@ export async function GET() {
         id: l.id,
         code: l.code,
         label: l.label,
-        display: `${l.sector.name} > Est. ${l.shelf} - Fila ${l.row} - Col ${l.col}`,
+        display: l.name,
       })),
     });
   } catch (error) {

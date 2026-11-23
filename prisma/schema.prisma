@@ -824,37 +824,24 @@ model UserCustomerCategory {
 // ALMACEN / WAREHOUSE
 // ============================================================================
 
-model WarehouseSector {
-  id          String  @id @default(cuid())
-  name        String  @unique
-  description String?
-  isActive    Boolean @default(true)
-
-  locations   WarehouseLocation[]
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@map("warehouse_sectors")
-}
-
 model WarehouseLocation {
-  id        String  @id @default(cuid())
-  sectorId  String
-  code      String  @unique
-  shelf     String
-  row       String
-  col       String
-  label     String?
-  isActive  Boolean @default(true)
+  id       String  @id @default(cuid())
+  /** Nombre del lugar, por ejemplo "Estantería derecha". */
+  name     String
+  /** Coordenada de dos partes, como una celda: fila-columna (ej. 3-4). */
+  code     String
+  row      String
+  col      String
+  label    String?
+  isActive Boolean @default(true)
 
-  sector    WarehouseSector @relation(fields: [sectorId], references: [id], onDelete: Cascade)
-  products  Product[]
+  products Product[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([sectorId])
+  @@unique([name, row, col])
+  @@index([name])
   @@map("warehouse_locations")
 }
 
