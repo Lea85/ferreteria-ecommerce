@@ -5,17 +5,31 @@ import { prisma } from "@/lib/db";
 
 const MAX_GRID = 40;
 
-function parseCount(value: unknown, label: string) {
+type LocationInput = {
+  name: string;
+  maxRows: number;
+  maxCols: number;
+  code: string;
+  label: string | undefined;
+};
+
+function parseCount(
+  value: unknown,
+  label: string,
+): { ok: true; value: number } | { ok: false; error: string } {
   const n = Number(value);
   if (!Number.isInteger(n) || n < 1 || n > MAX_GRID) {
     return {
-      error: `${label} debe ser un número entero entre 1 y ${MAX_GRID}.` as const,
+      ok: false,
+      error: `${label} debe ser un número entero entre 1 y ${MAX_GRID}.`,
     };
   }
-  return { value: n };
+  return { ok: true, value: n };
 }
 
-function parseLocationBody(body: Record<string, unknown>) {
+function parseLocationBody(
+  body: Record<string, unknown>,
+): { error: string } | LocationInput {
   const name = String(body.name ?? "").trim();
   const rows = parseCount(body.maxRows ?? body.row, "La cantidad de filas");
   const cols = parseCount(body.maxCols ?? body.col, "La cantidad de columnas");
@@ -23,10 +37,10 @@ function parseLocationBody(body: Record<string, unknown>) {
     body.label === undefined ? undefined : String(body.label ?? "").trim();
 
   if (!name) {
-    return { error: "El nombre es obligatorio." as const };
+    return { error: "El nombre es obligatorio." };
   }
-  if ("error" in rows) return rows;
-  if ("error" in cols) return cols;
+  if (!rows.ok) return { error: rows.error };
+  if (!cols.ok) return { error: cols.error };
 
   return {
     name,
