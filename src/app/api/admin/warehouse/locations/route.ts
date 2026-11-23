@@ -12,15 +12,15 @@ export async function GET() {
 
     const locations = await prisma.warehouseLocation.findMany({
       where: { isActive: true },
-      orderBy: [{ name: "asc" }, { row: "asc" }, { col: "asc" }],
+      orderBy: { name: "asc" },
     });
 
     return NextResponse.json({
-      locations: locations.map((l) => ({
-        id: l.id,
-        code: l.code,
-        label: l.label,
-        display: l.name,
+      locations: locations.map((location) => ({
+        id: location.id,
+        code: `${location.maxRows} × ${location.maxCols}`,
+        label: location.label,
+        display: location.name,
       })),
     });
   } catch (error) {

@@ -288,6 +288,9 @@ model Product {
   shortDesc    String?
   brandId      String?
   warehouseLocationId String?
+  /** Celda dentro de la grilla de la ubicación (1..maxRows / 1..maxCols). */
+  warehouseRow Int?
+  warehouseCol Int?
   isActive     Boolean @default(true)
   isFeatured   Boolean @default(false)
   metaTitle    String?
@@ -310,6 +313,7 @@ model Product {
   @@index([slug])
   @@index([brandId])
   @@index([warehouseLocationId])
+  @@index([warehouseLocationId, warehouseRow, warehouseCol])
   @@index([isFeatured])
   @@map("products")
 }
@@ -827,11 +831,11 @@ model UserCustomerCategory {
 model WarehouseLocation {
   id       String  @id @default(cuid())
   /** Nombre del lugar, por ejemplo "Estantería derecha". */
-  name     String
-  /** Coordenada de dos partes, como una celda: fila-columna (ej. 3-4). */
+  name     String  @unique
+  /** Tamaño declarado de la grilla, por ejemplo 3x4. */
   code     String
-  row      String
-  col      String
+  maxRows  Int
+  maxCols  Int
   label    String?
   isActive Boolean @default(true)
 
@@ -840,8 +844,6 @@ model WarehouseLocation {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([name, row, col])
-  @@index([name])
   @@map("warehouse_locations")
 }
 

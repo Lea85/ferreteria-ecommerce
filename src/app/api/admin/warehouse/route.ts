@@ -3,29 +3,36 @@ import { NextResponse } from "next/server";
 import { auth, isAdminRole } from "@/auth";
 import { prisma } from "@/lib/db";
 
-function locationCode(row: string, col: string) {
-  return `${row.trim()}-${col.trim()}`;
+const MAX_GRID = 40;
+
+function parseCount(value: unknown, label: string) {
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 1 || n > MAX_GRID) {
+    return {
+      error: `${label} debe ser un número entero entre 1 y ${MAX_GRID}.` as const,
+    };
+  }
+  return { value: n };
 }
 
 function parseLocationBody(body: Record<string, unknown>) {
   const name = String(body.name ?? "").trim();
-  const row = String(body.row ?? "").trim();
-  const col = String(body.col ?? "").trim();
+  const rows = parseCount(body.maxRows ?? body.row, "La cantidad de filas");
+  const cols = parseCount(body.maxCols ?? body.col, "La cantidad de columnas");
   const label =
     body.label === undefined ? undefined : String(body.label ?? "").trim();
 
   if (!name) {
     return { error: "El nombre es obligatorio." as const };
   }
-  if (!row || !col) {
-    return { error: "Fila y columna son obligatorias." as const };
-  }
+  if ("error" in rows) return rows;
+  if ("error" in cols) return cols;
 
   return {
     name,
-    row,
-    col,
-    code: locationCode(row, col),
+    maxRows: rows.value,
+    maxCols: cols.value,
+    code: `${rows.value}x${cols.value}`,
     label,
   };
 }
@@ -38,7 +45,7 @@ export async function GET() {
     }
 
     const locations = await prisma.warehouseLocation.findMany({
-      orderBy: [{ name: "asc" }, { row: "asc" }, { col: "asc" }],
+      orderBy: { name: "asc" },
       include: { _count: { select: { products: true } } },
     });
 
@@ -66,8 +73,8 @@ export async function POST(request: Request) {
       data: {
         name: parsed.name,
         code: parsed.code,
-        row: parsed.row,
-        col: parsed.col,
+        maxRows: parsed.maxRows,
+        maxCols: parsed.maxCols,
         label: parsed.label || null,
       },
     });
@@ -77,7 +84,7 @@ export async function POST(request: Request) {
     const code = (error as { code?: string })?.code;
     if (code === "P2002") {
       return NextResponse.json(
-        { error: "Ya existe esa ubicación con la misma fila y columna." },
+        { error: "Ya existe una ubicación con ese nombre." },
         { status: 409 },
       );
     }
@@ -104,13 +111,32 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: parsed.error }, { status: 400 });
     }
 
+    const outside = await prisma.product.count({
+      where: {
+        warehouseLocationId: id,
+        OR: [
+          { warehouseRow: { gt: parsed.maxRows } },
+          { warehouseCol: { gt: parsed.maxCols } },
+        ],
+      },
+    });
+    if (outside > 0) {
+      return NextResponse.json(
+        {
+          error:
+            "Hay productos en filas o columnas que quedarían fuera de la grilla.",
+        },
+        { status: 400 },
+      );
+    }
+
     const location = await prisma.warehouseLocation.update({
       where: { id },
       data: {
         name: parsed.name,
         code: parsed.code,
-        row: parsed.row,
-        col: parsed.col,
+        maxRows: parsed.maxRows,
+        maxCols: parsed.maxCols,
         label: parsed.label ? parsed.label : null,
       },
     });
@@ -120,7 +146,7 @@ export async function PUT(request: Request) {
     const code = (error as { code?: string })?.code;
     if (code === "P2002") {
       return NextResponse.json(
-        { error: "Ya existe esa ubicación con la misma fila y columna." },
+        { error: "Ya existe una ubicación con ese nombre." },
         { status: 409 },
       );
     }
@@ -144,7 +170,11 @@ export async function DELETE(request: Request) {
 
     await prisma.product.updateMany({
       where: { warehouseLocationId: id },
-      data: { warehouseLocationId: null },
+      data: {
+        warehouseLocationId: null,
+        warehouseRow: null,
+        warehouseCol: null,
+      },
     });
     await prisma.warehouseLocation.delete({ where: { id } });
 

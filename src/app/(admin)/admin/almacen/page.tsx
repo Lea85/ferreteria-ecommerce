@@ -1,6 +1,7 @@
 "use client";
 
-import { Edit, Loader2, MapPin, Package, Plus, Trash2 } from "lucide-react";
+import { Edit, Eye, Loader2, MapPin, Package, Plus, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -20,16 +21,26 @@ type Location = {
   id: string;
   name: string;
   code: string;
-  row: string;
-  col: string;
+  maxRows: number;
+  maxCols: number;
   label: string | null;
   isActive: boolean;
   _count: { products: number };
 };
 
-type LocationForm = { name: string; row: string; col: string; label: string };
+type LocationForm = {
+  name: string;
+  maxRows: string;
+  maxCols: string;
+  label: string;
+};
 
-const EMPTY_LOCATION: LocationForm = { name: "", row: "", col: "", label: "" };
+const EMPTY_LOCATION: LocationForm = {
+  name: "",
+  maxRows: "",
+  maxCols: "",
+  label: "",
+};
 
 export default function AdminAlmacenPage() {
   const [locations, setLocations] = useState<Location[]>([]);
@@ -66,8 +77,8 @@ export default function AdminAlmacenPage() {
     setEditingId(loc.id);
     setForm({
       name: loc.name,
-      row: loc.row,
-      col: loc.col,
+      maxRows: String(loc.maxRows),
+      maxCols: String(loc.maxCols),
       label: loc.label || "",
     });
     setDialogOpen(true);
@@ -78,8 +89,15 @@ export default function AdminAlmacenPage() {
       toast.error("El nombre es obligatorio");
       return;
     }
-    if (!form.row.trim() || !form.col.trim()) {
-      toast.error("Fila y columna son obligatorias");
+    const maxRows = Number(form.maxRows);
+    const maxCols = Number(form.maxCols);
+    if (
+      !Number.isInteger(maxRows) ||
+      !Number.isInteger(maxCols) ||
+      maxRows < 1 ||
+      maxCols < 1
+    ) {
+      toast.error("Indicá la cantidad máxima de filas y de columnas");
       return;
     }
 
@@ -91,8 +109,8 @@ export default function AdminAlmacenPage() {
         body: JSON.stringify({
           ...(editingId ? { id: editingId } : {}),
           name: form.name.trim(),
-          row: form.row.trim(),
-          col: form.col.trim(),
+          maxRows,
+          maxCols,
           label: form.label.trim(),
         }),
       });
@@ -145,10 +163,15 @@ export default function AdminAlmacenPage() {
     (acc, loc) => acc + loc._count.products,
     0,
   );
-  const previewCode =
-    form.row.trim() && form.col.trim()
-      ? `${form.row.trim()}-${form.col.trim()}`
-      : "fila-columna";
+  const previewRows = Number(form.maxRows);
+  const previewCols = Number(form.maxCols);
+  const previewSize =
+    Number.isInteger(previewRows) &&
+    Number.isInteger(previewCols) &&
+    previewRows > 0 &&
+    previewCols > 0
+      ? `${previewRows} × ${previewCols}`
+      : "filas × columnas";
 
   return (
     <div className="space-y-6">
@@ -156,8 +179,8 @@ export default function AdminAlmacenPage() {
         <div>
           <h1 className="text-xl font-bold text-foreground">Almacén</h1>
           <p className="text-sm text-muted-foreground">
-            Cada lugar tiene un nombre y una celda de fila y columna, como en
-            una hoja de cálculo.
+            Cada lugar tiene un nombre y declara cuántas filas y columnas tiene
+            su grilla.
           </p>
         </div>
         <Button onClick={openNew} className="gap-2">
@@ -197,8 +220,8 @@ export default function AdminAlmacenPage() {
             <MapPin className="mx-auto mb-3 size-12 text-muted-foreground/50" />
             <p className="font-medium">No hay ubicaciones</p>
             <p className="text-sm">
-              Creá una con nombre, fila y columna. Por ejemplo, Estantería
-              derecha en 3-4.
+              Creá una con nombre y el tamaño de la grilla. Por ejemplo,
+              Estantería derecha con 3 filas y 4 columnas.
             </p>
           </CardContent>
         </Card>
@@ -215,10 +238,10 @@ export default function AdminAlmacenPage() {
               <div className="min-w-0">
                 <p className="truncate font-medium">{loc.name}</p>
                 <p className="font-mono text-sm font-bold text-primary">
-                  {loc.code}
+                  {loc.maxRows} × {loc.maxCols}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Fila {loc.row} · Columna {loc.col}
+                  {loc.maxRows} filas · {loc.maxCols} columnas
                 </p>
                 {loc.label ? (
                   <p className="truncate text-xs text-muted-foreground">
@@ -230,6 +253,17 @@ export default function AdminAlmacenPage() {
                 </p>
               </div>
               <div className="flex shrink-0 gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  asChild
+                  title="Ver grilla"
+                >
+                  <Link href={`/admin/almacen/${loc.id}`}>
+                    <Eye className="size-3.5" />
+                  </Link>
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -275,12 +309,18 @@ export default function AdminAlmacenPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>
-                  Fila <span className="text-destructive">*</span>
+                  Cantidad de filas <span className="text-destructive">*</span>
                 </Label>
                 <Input
-                  value={form.row}
+                  type="number"
+                  min={1}
+                  max={40}
+                  value={form.maxRows}
                   onChange={(e) =>
-                    setForm((current) => ({ ...current, row: e.target.value }))
+                    setForm((current) => ({
+                      ...current,
+                      maxRows: e.target.value,
+                    }))
                   }
                   placeholder="3"
                   className="text-center font-mono font-bold"
@@ -288,22 +328,32 @@ export default function AdminAlmacenPage() {
               </div>
               <div className="space-y-2">
                 <Label>
-                  Columna <span className="text-destructive">*</span>
+                  Cantidad de columnas{" "}
+                  <span className="text-destructive">*</span>
                 </Label>
                 <Input
-                  value={form.col}
+                  type="number"
+                  min={1}
+                  max={40}
+                  value={form.maxCols}
                   onChange={(e) =>
-                    setForm((current) => ({ ...current, col: e.target.value }))
+                    setForm((current) => ({
+                      ...current,
+                      maxCols: e.target.value,
+                    }))
                   }
                   placeholder="4"
                   className="text-center font-mono font-bold"
                 />
               </div>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Es el tamaño máximo de la grilla de este lugar.
+            </p>
             <div className="rounded-lg border border-dashed border-border bg-muted/30 p-3 text-center">
-              <p className="text-xs text-muted-foreground">Código</p>
+              <p className="text-xs text-muted-foreground">Grilla</p>
               <p className="font-mono text-lg font-bold text-primary">
-                {previewCode}
+                {previewSize}
               </p>
             </div>
             <div className="space-y-2">
